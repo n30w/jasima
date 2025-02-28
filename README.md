@@ -1,3 +1,5 @@
-# NYU Shanghai Undergraduate Capstone II Monorepo
+# Jasima
 
-Contains code for NYUSH Undergraduate Cpastone II class project.
+Capstone II project for IMA at NYU Shanghai.
+
+Jasima is Toki Pona for "reflect", "echo", "mirror", or "duplicate". Similarly, the agents in this simulation reflect reality.
