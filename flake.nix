@@ -69,9 +69,9 @@
             fish
           ];
           
-          shellHook = ''
-            exec fish
-          '';
+          # shellHook = ''
+          #   exec fish
+          # '';
         };
       });
 
