@@ -20,10 +20,15 @@ _Picture of state machine_
 
 #### Message Queue
 
-Message queue is useful when there are more than two agents. In real life, a conversation among three interlocutors is mediated by power dynamic, status, and most importantly, relationship. The relationship between interlocutors is implicitly understood, agreed upon, and validated. Of course, the relationships can change over the course of the conversation. 
+Message queue is useful when there are more than two agents. In real life, a conversation among three interlocutors is mediated by power dynamic, status, and most importantly, relationship. The relationship between interlocutors is implicitly understood, agreed upon, and validated. Of course, the relationships can change over the course of the conversation.
 
 The relationships between interlocutors determines the number of addressees, the number of addressers, and the concurrent establishment of truths related to the conversational puzzle. A single interlocutor may first listen to the conversation of two other speakers and wait to chime in. Their interjection may address zero to `n - 1` speakers in the conversation (`n - 1` excludes themselves). It is individual choice, up to the discretion of the listener.
 
 A message queue like Kafka or a subscription service like Redis can be implemented and used by a central server. Agents consume messages from the message queue, which is essentially just a queue, with elements duplicated, the duplicated messages total `n - 1`.
 
 _Picture of state machine_
+
+## Useful Links
+
+- <https://ai.google.dev/gemini-api/docs/text-generation?lang=go>
+- <https://aistudio.google.com/plan_information>
