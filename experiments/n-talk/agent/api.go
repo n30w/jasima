@@ -13,6 +13,9 @@ type client struct {
 	model       string
 	genaiClient *genai.Client
 	genaiConfig *genai.GenerateContentConfig
+
+	// listening determines whether an agent is listening for input
+	listening bool
 }
 
 func NewClient(ctx context.Context, apiKey string, model string, mem Memory) (*client, error) {

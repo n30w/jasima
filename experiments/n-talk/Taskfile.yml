@@ -1,6 +1,14 @@
 version: '3'
 
 tasks:
+  # Run commands
   run-agent:
     cmds:
       - go run ./agent
+  run-server:
+    cmds:
+      - go run ./server
+
+  gen-proto-chat:
+    cmds:
+      - protoc --go_out=. --go-grpc_out=. chat.proto

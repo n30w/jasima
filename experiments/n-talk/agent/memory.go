@@ -1,10 +1,17 @@
 package main
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 type Message struct {
-	Role string
-	Text string
+	Role      string
+	Text      string
+	Timestamp time.Time
+	Id        int64
+	Sender    string
+	Receiver  string
 }
 
 func NewMessage(role string, text string) *Message {
