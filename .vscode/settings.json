@@ -8,6 +8,7 @@
         "gotestsum",
         "gqlgen",
         "joho",
+        "llms",
         "protoc",
         "treefmt"
     ]
