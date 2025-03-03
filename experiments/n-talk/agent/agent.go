@@ -11,3 +11,9 @@ type LLMService interface {
 	// of a string.
 	Request(ctx context.Context, messages []*memory.Message, prompt string) (string, error)
 }
+
+type ConnectionService interface {
+	Send()
+	Receive()
+	Open()
+}

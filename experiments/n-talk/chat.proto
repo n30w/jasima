@@ -6,7 +6,8 @@ option go_package = "./chat";
 
 message Message {
   string sender = 1;
-  string content = 2;
+  string receiver = 2;
+  string content = 3;
 }
 
 service ChatService {

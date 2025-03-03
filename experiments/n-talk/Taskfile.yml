@@ -11,4 +11,4 @@ tasks:
 
   gen-proto-chat:
     cmds:
-      - protoc --go_out=. --go-grpc_out=. chat.proto
+      - protoc --go_out=./chat/ --go-grpc_out=./chat/ chat.proto
