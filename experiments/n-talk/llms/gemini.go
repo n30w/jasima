@@ -22,7 +22,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 		return nil, err
 	}
 
-	systemInstruction := ""
+	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM."
 	// systemInstruction := "you are a cat named neko"
 
 	c := &GoogleGemini{

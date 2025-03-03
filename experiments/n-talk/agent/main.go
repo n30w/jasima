@@ -6,13 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/memory"
+	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -63,12 +64,8 @@ func main() {
 
 	// fmt.Println(res)
 
-	// conn, err := client.Connect(ctx)
-	// if err != nil {
-	// 	log.Fatalf("did not connect: %v", err)
-	// }
+	log.Info("Making new client...", "name", *name, "server", *server, "model", *model)
 
-	fmt.Println("Making new client...")
 	connection, err := grpc.NewClient(client.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -76,36 +73,37 @@ func main() {
 
 	defer connection.Close()
 
-	fmt.Println("new client created")
+	log.Info("New client created")
+
 	c := pb.NewChatServiceClient(connection)
+
+	// The implementation of `Chat` is in the server code. This is where the
+	// client establishes a first connection to the server.
 	conn, err := c.Chat(ctx)
 	if err != nil {
 		log.Fatalf("could not create stream: %v", err)
 	}
-	fmt.Println("stream	client created")
+
+	log.Info("stream client created")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Handshake
-	err = conn.Send(&pb.Message{
-		Sender: *name,
-		// Receiver: *recipient,
-		Content: "HANDSHAKE",
-	})
-	if err != nil {
-		log.Fatalf("failed handshake %v", err)
-	}
+	responseChan := make(chan string)
 
 	// Send messages
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
+
 			fmt.Print("> ") // Prompt for user input
+
 			if scanner.Scan() {
+
 				text := scanner.Text()
+
 				if text == "exit" {
-					fmt.Println("Closing connection...")
+					log.Info("Closing connection...")
 					conn.CloseSend()
 					return
 				}
@@ -118,6 +116,7 @@ func main() {
 				if err != nil {
 					log.Fatalf("Failed to send message: %v", err)
 				}
+
 			} else {
 				// Handle scanner errors
 				if err := scanner.Err(); err != nil {
@@ -127,27 +126,66 @@ func main() {
 		}
 	}()
 
+	go func() {
+		for response := range responseChan {
+			err := conn.Send(&pb.Message{
+				Sender:   *name,
+				Receiver: *recipient,
+				Content:  response,
+			})
+			if err != nil {
+				log.Fatalf("Failed to send response: %v", err)
+			}
+
+			log.Printf("YOU: %s\n", response)
+		}
+	}()
+
 	// Receive messages
 	// Anything that is received is sent to the LLM.
 	go func() {
 		for {
-			msg, err := conn.Recv()
-			if err == io.EOF {
-				break
-				// Send the data to the LLM.
 
-				// When data is received back from the query,
-				// fill the channel.
+			msg, err := conn.Recv()
+
+			if err == io.EOF {
+				// This exits the program when the connection is terminated
+				// by the server.
+				break
 			}
+
 			if err != nil {
 				log.Fatalf("failed to receive message: %v", err)
 			}
-			fmt.Printf("%s: %s\n> ", msg.Sender, msg.Content)
+
+			log.Printf("%s: %s\n> ", msg.Sender, msg.Content)
+
+			// Send the data to the LLM.
+			go func(receivedMsg string) {
+
+				// When data is received back from the query,
+				// fill the channel.
+
+				time.Sleep(time.Second * 30)
+
+				log.Info("Dispatched message to LLM")
+
+				res, err := client.Request(ctx, receivedMsg)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				time.Sleep(time.Second * 30)
+
+				responseChan <- res
+
+			}(msg.Content)
+
 		}
 	}()
 
 	<-stop
 
-	fmt.Println("shutting down")
+	log.Info("shutting down")
 	conn.CloseSend()
 }

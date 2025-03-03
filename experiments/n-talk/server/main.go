@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
+	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
 )
 
@@ -28,31 +28,47 @@ func newChatServer() *chatServer {
 	}
 }
 
+// Chat is called by the `client`. The lifetime of this function is for as
+// long as the client using this function is connected.
 func (s *chatServer) Chat(stream pb.ChatService_ChatServer) error {
 	firstMsg, err := stream.Recv()
 	if err != nil {
 		return err
 	}
+
 	clientName := firstMsg.Sender
 	if clientName == "" {
 		return fmt.Errorf("client name cannot be empty")
 	}
 
+	// Add the client to the list of current clients. Multiple connections may
+	// happen all at once, so we need to lock and unlock the mutex to avoid
+	// race conditions.
+
 	s.mu.Lock()
 	s.clients[clientName] = &client{stream: stream, name: clientName}
 	s.mu.Unlock()
 
-	fmt.Printf("Client %s connected\n", clientName)
+	log.Info("Client connected", "client", clientName)
+
+	// Enter an infinite listening session when the client is connected.
 
 	for {
 		msg, err := stream.Recv()
+
 		if err == io.EOF {
+
+			// Delete the client from the list of current clients.
+
 			s.mu.Lock()
 			delete(s.clients, clientName)
 			s.mu.Unlock()
-			fmt.Printf("Client %s disconnected\n", clientName)
+
+			log.Info("Client disconnected\n", "client", clientName)
+
 			return nil
 		}
+
 		if err != nil {
 			return err
 		}
@@ -65,29 +81,41 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if destClient, ok := s.clients[msg.Receiver]; ok {
+	destClient, ok := s.clients[msg.Receiver]
+
+	if ok {
+
 		if err := destClient.stream.Send(msg); err != nil {
-			fmt.Printf("Failed to send message to %s: %v\n", msg.Receiver, err)
+			log.Error("Failed to send message to %s: %v\n", msg.Receiver, err)
 		} else {
-			fmt.Printf("Routed message from %s to %s\n", msg.Sender, msg.Receiver)
+			log.Info("Routed message", "sender", msg.Sender, "recipient", msg.Receiver)
 		}
+
 	} else {
-		fmt.Printf("Client %s not found\n", msg.Receiver)
+
+		log.Warnf("Client %s not found\n", msg.Receiver)
+
 		if sender, ok := s.clients[msg.Sender]; ok {
 			sender.stream.Send(&pb.Message{Sender: "Server", Content: fmt.Sprintf("Client %s not found", msg.Receiver)})
 		}
+
 	}
 }
 
 func main() {
+
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+
 	s := grpc.NewServer()
+
 	chatServer := newChatServer()
 	pb.RegisterChatServiceServer(s, chatServer)
-	if err := s.Serve(lis); err != nil {
+
+	err = s.Serve(lis)
+	if err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
