@@ -11,7 +11,9 @@
         "jasima",
         "joho",
         "llms",
+        "pona",
         "protoc",
+        "toki",
         "treefmt"
     ]
 }
