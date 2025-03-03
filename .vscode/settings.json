@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "codeberg",
         "genai",
         "godotenv",
         "golangci",
@@ -7,6 +8,7 @@
         "goreleaser",
         "gotestsum",
         "gqlgen",
+        "jasima",
         "joho",
         "llms",
         "protoc",
