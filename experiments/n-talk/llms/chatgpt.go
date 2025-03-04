@@ -1,1 +1,80 @@
 package llms
+
+import (
+	"context"
+
+	"codeberg.org/n30w/jasima/n-talk/memory"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+)
+
+type OpenAIChatGPT struct {
+	*llm
+	chatGptClient                      *openai.Client
+	chatGptCompletionParams            *openai.ChatCompletionNewParams
+	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
+}
+
+func NewOpenAIChatGPT(model string, apiKey string) (*OpenAIChatGPT, error) {
+
+	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
+	messages = append(messages, openai.SystemMessage(""))
+
+	gpt := &OpenAIChatGPT{
+		llm: &llm{
+			model: model,
+		},
+		chatGptClient: openai.NewClient(option.WithAPIKey(apiKey)),
+		chatGptCompletionParams: &openai.ChatCompletionNewParams{
+			Seed:                openai.Int(1),
+			Model:               openai.F(openai.ChatModelGPT4o),
+			MaxCompletionTokens: openai.Int(2000),
+			Temperature:         openai.Float(1.85),
+			Messages:            openai.F(messages),
+		},
+	}
+
+	return gpt, nil
+}
+
+func (c *OpenAIChatGPT) Request(ctx context.Context, messages []*memory.Message, prompt string) (string, error) {
+
+	contents := c.prepare(messages)
+
+	c.chatGptCompletionParams.Messages = openai.F(contents)
+
+	result, err := c.chatGptClient.Chat.Completions.New(ctx, *c.chatGptCompletionParams)
+	if err != nil {
+		return "", err
+	}
+
+	return result.Choices[0].Message.Content, nil
+}
+
+func (c *OpenAIChatGPT) prepare(messages []*memory.Message) []openai.ChatCompletionMessageParamUnion {
+
+	contents := make([]openai.ChatCompletionMessageParamUnion, 0)
+
+	// Append the current System Message to contents.
+
+	contents = append(contents, c.chatGptCompletionMessageParamUnion[0])
+
+	l := len(messages)
+
+	if l != 0 {
+		for _, v := range messages {
+
+			var content openai.ChatCompletionMessageParamUnion
+
+			content = openai.UserMessage(v.Text)
+
+			if v.Role == "model" {
+				content = openai.AssistantMessage(v.Text)
+			}
+
+			contents = append(contents, content)
+		}
+	}
+
+	return contents
+}
