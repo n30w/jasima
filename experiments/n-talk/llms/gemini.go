@@ -22,8 +22,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 		return nil, err
 	}
 
-	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM."
-	// systemInstruction := "you are a cat named neko"
+	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM. Length of text is up to your discretion. Don't be too agreeable, be reasonable. Your conversational exchange does not need to be back and forth. You can let the other speaker know that you'll listen to what they'll have to say."
 
 	c := &GoogleGemini{
 		llm: &llm{
@@ -31,7 +30,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(1.5),
+			Temperature:     genai.Ptr(1.91),
 			MaxOutputTokens: genai.Ptr(int64(2000)),
 		},
 	}
@@ -43,7 +42,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 	return c, nil
 }
 
-func (c *GoogleGemini) Request(ctx context.Context, messages []*memory.Message, prompt string) (string, error) {
+func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
 
 	contents := c.prepare(messages)
 	contents = append(contents, genai.NewUserContentFromText(prompt))
@@ -69,7 +68,7 @@ func (c *GoogleGemini) Request(ctx context.Context, messages []*memory.Message, 
 }
 
 // getContent makes adheres memories to the `genai` library `content` type.
-func (c *GoogleGemini) prepare(messages []*memory.Message) []*genai.Content {
+func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	contents := make([]*genai.Content, 0)
 
 	l := len(messages)

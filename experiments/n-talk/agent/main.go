@@ -23,8 +23,6 @@ const ModelName = "gemini-2.0-flash"
 
 // const Prompt = "I'm using the Google Gemini API. I'm trying to make sure that every time I send a query, the model remembers what we were talking about before. How do I do this? I'm using Go, not Python."
 
-const Prompt = "Give me a list of cool verbs."
-
 func main() {
 	name := flag.String("name", "toki", "name of the agent")
 	recipient := flag.String("recipient", "pona", "name of the recipient agent")
@@ -47,22 +45,20 @@ func main() {
 		log.Fatal(err)
 	}
 
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		ReportCaller:    true,
+		ReportTimestamp: true,
+	})
+
 	cfg := &config{
 		name:   *name,
 		server: *server,
 	}
 
-	client, err := NewClient(ctx, llm, memory, cfg)
+	client, err := NewClient(ctx, llm, memory, cfg, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// res, err := client.Request(ctx, Prompt)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// fmt.Println(res)
 
 	log.Info("Making new client...", "name", *name, "server", *server, "model", *model)
 
@@ -108,6 +104,14 @@ func main() {
 					return
 				}
 
+				// Save as model, as we are "talking" as the model.
+				// If the user presses "enter" with nothing written, don't
+				// save anything!
+
+				if text != "" {
+					client.memory.Save(1, text)
+				}
+
 				err := conn.Send(&pb.Message{
 					Sender:   *name,
 					Receiver: *recipient,
@@ -128,6 +132,7 @@ func main() {
 
 	go func() {
 		for response := range responseChan {
+
 			err := conn.Send(&pb.Message{
 				Sender:   *name,
 				Receiver: *recipient,
@@ -166,7 +171,9 @@ func main() {
 				// When data is received back from the query,
 				// fill the channel.
 
-				time.Sleep(time.Second * 30)
+				client.memory.Save(0, receivedMsg)
+
+				time.Sleep(time.Second * 20)
 
 				log.Info("Dispatched message to LLM")
 
@@ -175,12 +182,15 @@ func main() {
 					log.Fatal(err)
 				}
 
-				time.Sleep(time.Second * 30)
+				// Save the response to memory.
+
+				client.memory.Save(1, res)
+
+				time.Sleep(time.Second * 20)
 
 				responseChan <- res
 
 			}(msg.Content)
-
 		}
 	}()
 
