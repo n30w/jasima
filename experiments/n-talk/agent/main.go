@@ -134,7 +134,7 @@ func main() {
 				log.Fatalf("Failed to send response: %v", err)
 			}
 
-			log.Printf("YOU: %s\n", response)
+			log.Printf("YOU%s: %s\n", client.model, response)
 		}
 	}()
 

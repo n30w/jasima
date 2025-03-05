@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
+	"codeberg.org/n30w/jasima/n-talk/llms"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -13,6 +14,7 @@ import (
 type config struct {
 	name   string
 	server string
+	model  llms.LLMProvider
 }
 
 type client struct {
@@ -32,7 +34,7 @@ func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *c
 
 	a, _ := c.memory.Retrieve(0)
 
-	c.logger.Printf("In Memory: %v\n", a)
+	c.logger.Printf("In Memory: %v", a)
 
 	return c, nil
 }
