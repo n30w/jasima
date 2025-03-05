@@ -67,6 +67,7 @@
             ent
 
             go-task
+            mprocs
             fish
           ];
         };
