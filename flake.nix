@@ -68,6 +68,7 @@
 
             go-task
             mprocs
+            zellij
             fish
           ];
         };
