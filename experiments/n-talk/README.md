@@ -4,7 +4,7 @@ The purpose of this experiment is to develop a system that facilitates the talki
 
 ## Implementation
 
-The AI services used should be service-agnostic. However, for the sake of our purposes, we will use _Google Gemini Flash Lite_, which has practical free-use token constraints.
+The LLM services are service-agnostic. As long as adapters for a service are implemented, it can be used in the agent. LLM adapters are found in the `llms` package.
 
 ### Facilitation Methods
 
