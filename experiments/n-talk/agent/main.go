@@ -165,7 +165,7 @@ func main() {
 				log.Fatalf("failed to receive message: %v", err)
 			}
 
-			log.Printf("%s: %s\n> ", msg.Sender, msg.Content)
+			// log.Printf("%s: %s\n> ", msg.Sender, msg.Content)
 
 			// Send the data to the LLM.
 			go func(receivedMsg string) {

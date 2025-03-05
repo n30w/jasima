@@ -29,7 +29,7 @@ func selectModel(ctx context.Context, model int) (LLMService, error) {
 	case llms.ProviderDeepseek:
 		panic("not implemented")
 	case llms.ProviderOllama:
-		llm = llms.NewOllama("qwen2.5:14b", "http://localhost:11434/api/chat")
+		llm = llms.NewOllama("qwen2.5:32b", "http://localhost:11434/api/chat")
 	default:
 		log.Fatal("invalid model")
 	}
