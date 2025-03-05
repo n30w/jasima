@@ -2,12 +2,19 @@ version: '3'
 
 tasks:
   # Run commands
-  run-agent-toki:
+  run-agent-toki-gemini:
     cmds:
-      - go run ./agent -name=toki -recipient=pona
-  run-agent-pona:
+      - go run ./agent -name=toki -recipient=pona -model=0
+  run-agent-pona-gemini:
     cmds:
-      - go run ./agent -name=pona -recipient=toki
+      - go run ./agent -name=pona -recipient=toki -model=0
+  run-agent-toki-ollama:
+    cmds:
+      - go run ./agent -name=toki -recipient=pona -model=3
+  run-agent-pona-ollama:
+    cmds:
+      - go run ./agent -name=pona -recipient=toki -model=3
+
   run-server:
     cmds:
       - go run ./server
