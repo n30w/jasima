@@ -16,13 +16,13 @@ type config struct {
 }
 
 type client struct {
-	memory Memory
+	memory MemoryService
 	llm    LLMService
 	logger *log.Logger
 	*config
 }
 
-func NewClient(ctx context.Context, llm LLMService, memory Memory, cfg *config, logger *log.Logger) (*client, error) {
+func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *config, logger *log.Logger) (*client, error) {
 	c := &client{
 		memory: memory,
 		llm:    llm,

@@ -14,33 +14,25 @@ import (
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
-	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const ModelName = "gemini-2.0-flash"
-
-// const Prompt = "I'm using the Google Gemini API. I'm trying to make sure that every time I send a query, the model remembers what we were talking about before. How do I do this? I'm using Go, not Python."
-
 func main() {
+
+	var err error
+
 	name := flag.String("name", "toki", "name of the agent")
 	recipient := flag.String("recipient", "pona", "name of the recipient agent")
 	server := flag.String("server", "localhost:50051", "communication server")
-	model := flag.Int("model", 1, "LLM model to use")
+	model := flag.Int("model", 0, "LLM model to use")
 
 	flag.Parse()
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	apiKey := os.Getenv("LLM_API_KEY")
-	memory := memory.NewMemoryStore()
 	ctx := context.Background()
+	memory := memory.NewMemoryStore()
 
-	llm, err := selectModel(ctx, apiKey, *model)
+	llm, err := selectModel(ctx, *model)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,8 +52,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Info("Making new client...", "name", *name, "server", *server, "model", *model)
-
 	connection, err := grpc.NewClient(client.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -69,7 +59,7 @@ func main() {
 
 	defer connection.Close()
 
-	log.Info("New client created")
+	log.Info("Created new agent!", "name", *name, "server", *server, "model", llm)
 
 	c := pb.NewChatServiceClient(connection)
 
@@ -80,7 +70,7 @@ func main() {
 		log.Fatalf("could not create stream: %v", err)
 	}
 
-	log.Info("stream client created")
+	log.Info("Established connection to server")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

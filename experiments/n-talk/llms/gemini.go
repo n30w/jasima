@@ -2,6 +2,7 @@ package llms
 
 import (
 	"context"
+	"fmt"
 
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"google.golang.org/genai"
@@ -30,7 +31,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(1.91),
+			Temperature:     genai.Ptr(1.65),
 			MaxOutputTokens: genai.Ptr(int64(2000)),
 		},
 	}
@@ -69,9 +70,9 @@ func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, p
 
 // getContent makes adheres memories to the `genai` library `content` type.
 func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
-	contents := make([]*genai.Content, 0)
-
 	l := len(messages)
+
+	contents := make([]*genai.Content, l)
 
 	// If the memory isn't empty, append the memory to the content
 	// for the request.
@@ -82,7 +83,7 @@ func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 
 			content = genai.NewUserContentFromText(v.Text)
 
-			if v.Role == "model" {
+			if v.Role.String() == "model" {
 				content = genai.NewModelContentFromText(v.Text)
 			}
 
@@ -91,4 +92,8 @@ func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	}
 
 	return contents
+}
+
+func (c GoogleGemini) String() string {
+	return fmt.Sprintf("Google Gemini %s", c.model)
 }

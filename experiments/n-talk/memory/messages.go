@@ -6,8 +6,28 @@ import (
 	"time"
 )
 
+type ChatRole uint8
+
+const (
+	UserRole ChatRole = iota
+	ModelRole
+)
+
+func (c ChatRole) String() string {
+	s := "user"
+
+	switch c {
+	case 0:
+		s = "user"
+	case 1:
+		s = "model"
+	}
+
+	return s
+}
+
 type Message struct {
-	Role      string
+	Role      ChatRole
 	Text      string
 	Timestamp time.Time
 	Id        int64
@@ -15,7 +35,7 @@ type Message struct {
 	Receiver  string
 }
 
-func NewMessage(role string, text string) Message {
+func NewMessage(role ChatRole, text string) Message {
 	return Message{
 		Role: role,
 		Text: text,
@@ -38,20 +58,11 @@ func NewMemoryStore() *InMemoryStore {
 	}
 }
 
-func (in *InMemoryStore) Save(role int, text string) error {
+func (in *InMemoryStore) Save(role ChatRole, text string) error {
 
 	t := time.Now()
 
-	var msg Message
-
-	switch role {
-	case 0:
-		msg = NewMessage("user", text)
-	case 1:
-		msg = NewMessage("model", text)
-	default:
-		msg = NewMessage("model", text)
-	}
+	msg := NewMessage(role, text)
 
 	msg.Timestamp = t
 

@@ -2,6 +2,7 @@ package llms
 
 import (
 	"context"
+	"fmt"
 
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/openai/openai-go"
@@ -37,7 +38,7 @@ func NewOpenAIChatGPT(model string, apiKey string) (*OpenAIChatGPT, error) {
 	return gpt, nil
 }
 
-func (c *OpenAIChatGPT) Request(ctx context.Context, messages []*memory.Message, prompt string) (string, error) {
+func (c *OpenAIChatGPT) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
 
 	contents := c.prepare(messages)
 
@@ -51,7 +52,7 @@ func (c *OpenAIChatGPT) Request(ctx context.Context, messages []*memory.Message,
 	return result.Choices[0].Message.Content, nil
 }
 
-func (c *OpenAIChatGPT) prepare(messages []*memory.Message) []openai.ChatCompletionMessageParamUnion {
+func (c *OpenAIChatGPT) prepare(messages []memory.Message) []openai.ChatCompletionMessageParamUnion {
 
 	contents := make([]openai.ChatCompletionMessageParamUnion, 0)
 
@@ -68,7 +69,7 @@ func (c *OpenAIChatGPT) prepare(messages []*memory.Message) []openai.ChatComplet
 
 			content = openai.UserMessage(v.Text)
 
-			if v.Role == "model" {
+			if v.Role.String() == "model" {
 				content = openai.AssistantMessage(v.Text)
 			}
 
@@ -77,4 +78,8 @@ func (c *OpenAIChatGPT) prepare(messages []*memory.Message) []openai.ChatComplet
 	}
 
 	return contents
+}
+
+func (c OpenAIChatGPT) String() string {
+	return fmt.Sprintf("OpenAI ChatGPT %s", c.model)
 }
