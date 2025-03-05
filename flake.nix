@@ -65,14 +65,10 @@
             # gqlgen
             openapi-generator-cli
             ent
-            
+
             go-task
             fish
           ];
-          
-          # shellHook = ''
-          #   exec fish
-          # '';
         };
       });
 
