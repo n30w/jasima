@@ -72,6 +72,16 @@ func main() {
 		log.Fatalf("could not create stream: %v", err)
 	}
 
+	// Initialize a connection.
+	err = conn.Send(&pb.Message{
+		Sender:   *name,
+		Receiver: *recipient,
+		Content:  client.model.String(),
+	})
+	if err != nil {
+		log.Fatalf("Failed to send message: %v", err)
+	}
+
 	log.Info("Established connection to server")
 
 	stop := make(chan os.Signal, 1)
@@ -134,7 +144,7 @@ func main() {
 				log.Fatalf("Failed to send response: %v", err)
 			}
 
-			log.Printf("YOU%s: %s\n", client.model, response)
+			// log.Printf("YOU%s: %s\n", client.model, response)
 		}
 	}()
 
