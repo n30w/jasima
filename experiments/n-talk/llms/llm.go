@@ -3,7 +3,11 @@ package llms
 // import "codeberg.org/n30w/jasima/n-talk/memory"
 
 type llm struct {
+	// model is the name of the model.
 	model string
+
+	// instruction is a system instruction.
+	instructions string
 }
 
 type LLMProvider int

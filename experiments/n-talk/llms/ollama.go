@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	ol "github.com/ollama/ollama/api"
@@ -19,23 +18,28 @@ type Ollama struct {
 	// stream is whether to stream responses.
 	stream *bool
 	// url is the URL of the ollama server. By default, it should be
-	// http://localhost:11434/api/generate.
+	// http://localhost:11434/api/chat.
 	url        string
 	httpClient http.Client
 }
 
 func NewOllama(model string, url string) *Ollama {
+
 	s := false
+
+	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM. Length of text is up to your discretion. Don't be too agreeable, be reasonable. Your conversational exchange does not need to be back and forth. You can let the other speaker know that you'll listen to what they'll have to say."
+
 	return &Ollama{
 		llm: &llm{
-			model: model,
+			model:        model,
+			instructions: systemInstruction,
 		},
 		options: &ol.Options{
-			Temperature: 1.68,
+			Temperature: 1.88,
 		},
 		stream:     &s,
 		url:        url,
-		httpClient: http.Client{Timeout: 10 * time.Second},
+		httpClient: http.Client{Timeout: 0},
 	}
 }
 
@@ -58,6 +62,8 @@ func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt 
 	if err != nil {
 		return "", err
 	}
+
+	// fmt.Println(string(body))
 
 	// Make a POST request to the server with parameters.
 
@@ -90,19 +96,24 @@ func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt 
 
 func (c *Ollama) prepare(messages []memory.Message) []ol.Message {
 
-	l := len(messages)
+	// Add 1 for system instructions.
+	l := len(messages) + 1
 
 	contents := make([]ol.Message, l)
 
-	if l != 0 {
-		for i, v := range messages {
-			content := ol.Message{
-				Role:    v.Role.String(),
-				Content: v.Text,
-			}
+	contents[0] = ol.Message{
+		Role:    "system",
+		Content: c.instructions,
+	}
 
-			contents[i] = content
+	for i, v := range messages {
+		content := ol.Message{
+			Role:    v.Role.String(),
+			Content: v.Text,
 		}
+
+		// +1 because we added +1 to `l` to accommodate for system instructions.
+		contents[i+1] = content
 	}
 
 	return contents

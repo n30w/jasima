@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
+	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
@@ -45,6 +46,7 @@ func main() {
 	cfg := &config{
 		name:   *name,
 		server: *server,
+		model:  llms.LLMProvider(*model),
 	}
 
 	client, err := NewClient(ctx, llm, memory, cfg, logger)
@@ -163,9 +165,13 @@ func main() {
 
 				client.memory.Save(0, receivedMsg)
 
-				time.Sleep(time.Second * 20)
+				if client.model != llms.ProviderOllama {
+					time.Sleep(time.Second * 18)
+				}
 
-				log.Info("Dispatched message to LLM")
+				time.Sleep(time.Second * 2)
+
+				// log.Info("Dispatched message to LLM")
 
 				res, err := client.Request(ctx, receivedMsg)
 				if err != nil {
@@ -176,7 +182,11 @@ func main() {
 
 				client.memory.Save(1, res)
 
-				time.Sleep(time.Second * 20)
+				if client.model != llms.ProviderOllama {
+					time.Sleep(time.Second * 18)
+				}
+
+				time.Sleep(time.Second * 2)
 
 				responseChan <- res
 
