@@ -14,6 +14,7 @@ import (
 type client struct {
 	stream pb.ChatService_ChatServer
 	name   string
+	model  string
 }
 
 type chatServer struct {
@@ -41,15 +42,21 @@ func (s *chatServer) Chat(stream pb.ChatService_ChatServer) error {
 		return fmt.Errorf("client name cannot be empty")
 	}
 
+	clientModel := firstMsg.Content
+
 	// Add the client to the list of current clients. Multiple connections may
 	// happen all at once, so we need to lock and unlock the mutex to avoid
 	// race conditions.
 
 	s.mu.Lock()
-	s.clients[clientName] = &client{stream: stream, name: clientName}
+	s.clients[clientName] = &client{
+		stream: stream,
+		name:   clientName,
+		model:  clientModel,
+	}
 	s.mu.Unlock()
 
-	log.Info("Client connected", "client", clientName)
+	log.Info("Client connected", "client", clientName, "model", clientModel)
 
 	// Enter an infinite listening session when the client is connected.
 
@@ -82,13 +89,15 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 	defer s.mu.Unlock()
 
 	destClient, ok := s.clients[msg.Receiver]
+	originClient := s.clients[msg.Sender]
 
 	if ok {
 
 		if err := destClient.stream.Send(msg); err != nil {
 			log.Error("Failed to send message to %s: %v\n", msg.Receiver, err)
 		} else {
-			log.Info("Routed message", "sender", msg.Sender, "recipient", msg.Receiver)
+			log.Printf("%s [%s]: %s", originClient.name, originClient.model, msg.Content)
+			// log.Info("Routed message", "sender", msg.Sender, "recipient", msg.Receiver)
 		}
 
 	} else {
