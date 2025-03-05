@@ -95,13 +95,13 @@ func (c *Ollama) prepare(messages []memory.Message) []ol.Message {
 	contents := make([]ol.Message, l)
 
 	if l != 0 {
-		for _, v := range messages {
+		for i, v := range messages {
 			content := ol.Message{
 				Role:    v.Role.String(),
 				Content: v.Text,
 			}
 
-			contents = append(contents, content)
+			contents[i] = content
 		}
 	}
 

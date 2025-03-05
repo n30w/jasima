@@ -63,7 +63,7 @@ func (c *OpenAIChatGPT) prepare(messages []memory.Message) []openai.ChatCompleti
 	l := len(messages)
 
 	if l != 0 {
-		for _, v := range messages {
+		for i, v := range messages {
 
 			var content openai.ChatCompletionMessageParamUnion
 
@@ -73,7 +73,7 @@ func (c *OpenAIChatGPT) prepare(messages []memory.Message) []openai.ChatCompleti
 				content = openai.AssistantMessage(v.Text)
 			}
 
-			contents = append(contents, content)
+			contents[i] = content
 		}
 	}
 

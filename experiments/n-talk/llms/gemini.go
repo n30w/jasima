@@ -77,7 +77,7 @@ func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	// If the memory isn't empty, append the memory to the content
 	// for the request.
 	if l != 0 {
-		for _, v := range messages {
+		for i, v := range messages {
 
 			var content *genai.Content
 
@@ -87,7 +87,7 @@ func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 				content = genai.NewModelContentFromText(v.Text)
 			}
 
-			contents = append(contents, content)
+			contents[i] = content
 		}
 	}
 
