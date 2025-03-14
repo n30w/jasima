@@ -1,4 +1,4 @@
-module codeberg.org/n30w/jasima/n-talk
+module codeberg.org/n30w/jasima
 
 go 1.24.0
 
