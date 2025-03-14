@@ -2,10 +2,10 @@ package memory
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DatabaseStore struct {
@@ -14,24 +14,18 @@ type DatabaseStore struct {
 	url      string
 	messages []Message
 	mu       sync.Mutex
-	db       *sql.DB
+	db       *pgxpool.Pool
 }
 
 func NewDatabaseStore(ctx context.Context, url string) (*DatabaseStore, error) {
-
 	// Initialize a connection to the database.
 
-	db, err := sql.Open("postgres", url)
+	db, err := pgxpool.New(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
 	defer db.Close()
-
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	// Return the object.
 	return &DatabaseStore{
@@ -41,21 +35,31 @@ func NewDatabaseStore(ctx context.Context, url string) (*DatabaseStore, error) {
 	}, nil
 }
 
-func (d *DatabaseStore) Save(role ChatRole, text string) error {
-	return nil
+func (d *DatabaseStore) SaveWithContext(ctx context.Context) func(role ChatRole, text string) error {
+	return func(role ChatRole, text string) error {
+		query := ""
+		args := pgx.NamedArgs{
+			"": "",
+		}
+
+		_, err := d.db.Exec(ctx, query, args)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
 
-func (d *DatabaseStore) Retrieve(n int) ([]Message, error) {
-	// Example query
-	rows, err := d.db.Query("SELECT * FROM your_table")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+func (d *DatabaseStore) RetrieveWithContext(ctx context.Context) func(n int) ([]Message, error) {
+	return func(n int) ([]Message, error) {
+		// https://pkg.go.dev/github.com/jackc/pgx/v5#RowToStructByPos
+		rows, _ := d.db.Query(ctx, "")
+		messages, err := pgx.CollectRows(rows, pgx.RowToStructByName[Message])
+		if err != nil {
+			return nil, err
+		}
 
-	// Process query results
-	for rows.Next() {
-		// Process each row
+		return messages, nil
 	}
-	return nil, nil
 }

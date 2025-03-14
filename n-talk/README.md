@@ -36,3 +36,4 @@ _Picture of state machine_
 ### Databases
 
 - <https://withcodeexample.com/golang-postgres/>
+- <https://donchev.is/post/working-with-postgresql-in-go-using-pgx/#inserting-data>
