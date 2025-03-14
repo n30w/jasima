@@ -32,3 +32,7 @@ _Picture of state machine_
 
 - <https://ai.google.dev/gemini-api/docs/text-generation?lang=go>
 - <https://aistudio.google.com/plan_information>
+
+### Databases
+
+- <https://withcodeexample.com/golang-postgres/>

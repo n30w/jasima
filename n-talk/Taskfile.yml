@@ -1,5 +1,4 @@
 version: '3'
-
 tasks:
   # Run commands
   run-agent-toki-gemini:
@@ -14,11 +13,9 @@ tasks:
   run-agent-pona-ollama:
     cmds:
       - go run ./agent -name=pona -recipient=toki -model=3
-
   run-server:
     cmds:
       - go run ./server
-
   gen-proto-chat:
     cmds:
       - protoc --go_out=./chat/ --go-grpc_out=./chat/ chat.proto
