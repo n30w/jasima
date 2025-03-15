@@ -4,6 +4,46 @@ Capstone II project for IMA at NYU Shanghai.
 
 Jasima is Toki Pona for "reflect", "echo", "mirror", or "duplicate". Similarly, the agents in this simulation reflect reality.
 
+## Getting Started
+
+There are a few required system dependencies needed regardless of whether you use the provided `flake.nix` file to setup the development environment.
+
+- Docker
+
+### No `nix`
+
+Even though it is highly recommended to have nix installed on your system, it is not needed. Here are the required dependencies, for development:
+
+- Go >= 1.24
+- protobuf
+- protoc-gen-go
+- protoc-gen-go-grpc
+- go-task
+
+Install them with your package manager of choice. Then install the dependencies:
+
+```bash
+go mod vendor
+go mod tidy
+```
+
+### Nix ⭐
+
+If you have the [nix package manager](https://nixos.org/) installed, copy and paste these commands into your terminal:
+
+```bash
+# Initialize development environment.
+nix develop .
+```
+
+This command will also install dependencies.
+
+For convenience, a `.envrc` file exists for this repository, so if you have `direnv` installed, you can allow this repository to auto-load the nix environment with `direnv allow`. Otherwise, to reinitialize the development environment every time you enter this repository, make sure to re-run:
+
+```bash
+nix develop .
+```
+
 ## Useful Links
 
 - [Toki Pona Dictionary](https://nimi.li/)
