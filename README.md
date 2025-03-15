@@ -44,7 +44,10 @@ For convenience, a `.envrc` file exists for this repository, so if you have `dir
 nix develop .
 ```
 
-## Useful Links
+## Useful Links and Sources
 
 - [Toki Pona Dictionary](https://nimi.li/)
+- [Toki Pona Sitelen SVGs](https://drive.google.com/open?id=1JnoEV7DFaZBbAZLaL1MXrqlVGm99onnP)
+- [Sitelen Pona](https://en.wikipedia.org/wiki/Sitelen_Pona)
 - <https://en.wikipedia.org/wiki/Sitelen_Pona#cite_ref-21>
+- [Free SVG Repo](https://www.svgrepo.com/)
