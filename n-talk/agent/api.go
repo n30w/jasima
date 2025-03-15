@@ -32,7 +32,7 @@ func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *c
 		logger: logger,
 	}
 
-	a, _ := c.memory.Retrieve(0)
+	a, _ := c.memory.Retrieve(context.Background(), 0)
 
 	c.logger.Printf("In Memory: %v", a)
 
@@ -41,7 +41,7 @@ func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *c
 
 func (c *client) Request(ctx context.Context, prompt string) (string, error) {
 
-	a, err := c.memory.Retrieve(0)
+	a, err := c.memory.Retrieve(context.Background(), 0)
 	if err != nil {
 		return "", err
 	}

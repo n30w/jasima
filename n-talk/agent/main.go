@@ -111,7 +111,7 @@ func main() {
 				// save anything!
 
 				if text != "" {
-					client.memory.Save(1, text)
+					client.memory.Save(ctx, 1, text)
 				}
 
 				err := conn.Send(&pb.Message{
@@ -173,7 +173,7 @@ func main() {
 				// When data is received back from the query,
 				// fill the channel.
 
-				client.memory.Save(0, receivedMsg)
+				client.memory.Save(ctx, 0, receivedMsg)
 
 				if client.model != llms.ProviderOllama {
 					time.Sleep(time.Second * 18)
@@ -190,7 +190,7 @@ func main() {
 
 				// Save the response to memory.
 
-				client.memory.Save(1, res)
+				client.memory.Save(ctx, 1, res)
 
 				if client.model != llms.ProviderOllama {
 					time.Sleep(time.Second * 18)

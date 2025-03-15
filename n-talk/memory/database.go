@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,7 +12,6 @@ type DatabaseStore struct {
 
 	url      string
 	messages []Message
-	mu       sync.Mutex
 	db       *pgxpool.Pool
 }
 
@@ -35,31 +33,27 @@ func NewDatabaseStore(ctx context.Context, url string) (*DatabaseStore, error) {
 	}, nil
 }
 
-func (d *DatabaseStore) SaveWithContext(ctx context.Context) func(role ChatRole, text string) error {
-	return func(role ChatRole, text string) error {
-		query := ""
-		args := pgx.NamedArgs{
-			"": "",
-		}
-
-		_, err := d.db.Exec(ctx, query, args)
-		if err != nil {
-			return err
-		}
-
-		return nil
+func (d *DatabaseStore) Save(ctx context.Context, role ChatRole, text string) error {
+	query := ""
+	args := pgx.NamedArgs{
+		"": "",
 	}
+
+	_, err := d.db.Exec(ctx, query, args)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (d *DatabaseStore) RetrieveWithContext(ctx context.Context) func(n int) ([]Message, error) {
-	return func(n int) ([]Message, error) {
-		// https://pkg.go.dev/github.com/jackc/pgx/v5#RowToStructByPos
-		rows, _ := d.db.Query(ctx, "")
-		messages, err := pgx.CollectRows(rows, pgx.RowToStructByName[Message])
-		if err != nil {
-			return nil, err
-		}
-
-		return messages, nil
+func (d *DatabaseStore) Retrieve(ctx context.Context, n int) ([]Message, error) {
+	// https://pkg.go.dev/github.com/jackc/pgx/v5#RowToStructByPos
+	rows, _ := d.db.Query(ctx, "")
+	messages, err := pgx.CollectRows(rows, pgx.RowToStructByName[Message])
+	if err != nil {
+		return nil, err
 	}
+
+	return messages, nil
 }

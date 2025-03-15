@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -58,7 +59,7 @@ func NewMemoryStore() *InMemoryStore {
 	}
 }
 
-func (in *InMemoryStore) Save(role ChatRole, text string) error {
+func (in *InMemoryStore) Save(_ context.Context, role ChatRole, text string) error {
 
 	t := time.Now()
 
@@ -75,7 +76,7 @@ func (in *InMemoryStore) Save(role ChatRole, text string) error {
 	return nil
 }
 
-func (in *InMemoryStore) Retrieve(n int) ([]Message, error) {
+func (in *InMemoryStore) Retrieve(_ context.Context, n int) ([]Message, error) {
 
 	in.mu.Lock()
 	defer in.mu.Unlock()

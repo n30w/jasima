@@ -20,12 +20,12 @@ type LLMService interface {
 type MemoryService interface {
 	// Save saves a message, using its role and text. A role of `0` saves as
 	// "user". A role of `1` saves as "model".
-	Save(role memory.ChatRole, text string) error
+	Save(ctx context.Context, role memory.ChatRole, text string) error
 
 	// Retrieve retrieves an `n` amount of messages from the storage. An `n`
 	// less-than-or-equal-to zero returns all messages. Any `n` amount
 	// less-than-or-equal-to the total number of memories returns `n` messages.
-	Retrieve(n int) ([]memory.Message, error)
+	Retrieve(ctx context.Context, n int) ([]memory.Message, error)
 }
 
 type ConnectionService interface {
