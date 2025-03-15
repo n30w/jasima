@@ -71,6 +71,11 @@
             zellij
             fish
           ];
+
+          shellHook = ''
+            go mod vendor
+            go mod tidy
+          '';
         };
       });
 
