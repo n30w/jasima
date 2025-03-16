@@ -16,7 +16,7 @@ type OpenAIChatGPT struct {
 	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
 }
 
-func NewOpenAIChatGPT(model string, apiKey string) (*OpenAIChatGPT, error) {
+func NewOpenAIChatGPT(model string, apiKey string, instructions string, temperature float64) (*OpenAIChatGPT, error) {
 
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
 	messages = append(messages, openai.SystemMessage(""))
@@ -30,7 +30,7 @@ func NewOpenAIChatGPT(model string, apiKey string) (*OpenAIChatGPT, error) {
 			Seed:                openai.Int(1),
 			Model:               openai.F(openai.ChatModelGPT4o),
 			MaxCompletionTokens: openai.Int(2000),
-			Temperature:         openai.Float(1.85),
+			Temperature:         openai.Float(temperature),
 			Messages:            openai.F(messages),
 		},
 	}

@@ -12,6 +12,7 @@
         "joho",
         "llms",
         "Ollama",
+        "pgxpool",
         "pona",
         "protoc",
         "toki",

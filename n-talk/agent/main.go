@@ -14,26 +14,74 @@ import (
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
+	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type ModelConfig struct {
+	Provider     int
+	Instructions string
+	Temperature  float64
+}
+
+type NetworkConfig struct {
+	Router   string
+	Database string
+}
+
+type ConfigFile struct {
+	Name      string
+	Recipient string
+	Model     ModelConfig
+	Network   NetworkConfig
+}
+
 func main() {
 
 	var err error
 
-	name := flag.String("name", "toki", "name of the agent")
-	recipient := flag.String("recipient", "pona", "name of the recipient agent")
-	server := flag.String("server", "localhost:50051", "communication server")
-	model := flag.Int("model", 0, "LLM model to use")
+	flagName := flag.String("name", "", "name of the agent")
+	flagRecipient := flag.String("recipient", "", "name of the recipient agent")
+	flagServer := flag.String("server", "", "communication server")
+	flagProvider := flag.Int("model", -1, "LLM model to use")
+	configPath := flag.String("configFile", "./configs/a1.toml", "configuration file path")
 
 	flag.Parse()
+
+	var conf ConfigFile
+	_, err = toml.DecodeFile(*configPath, &conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	name := conf.Name
+	recipient := conf.Recipient
+	router := conf.Network.Router
+	provider := conf.Model.Provider
+
+	if *flagName != "" {
+		name = *flagName
+	}
+
+	if *flagRecipient != "" {
+		recipient = *flagRecipient
+	}
+
+	if *flagServer != "" {
+		router = *flagServer
+	}
+
+	if *flagProvider != -1 {
+		provider = *flagProvider
+		conf.Model.Provider = *flagProvider
+	}
 
 	ctx := context.Background()
 	memory := memory.NewMemoryStore()
 
-	llm, err := selectModel(ctx, *model)
+	llm, err := selectModel(ctx, conf.Model)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,9 +92,9 @@ func main() {
 	})
 
 	cfg := &config{
-		name:   *name,
-		server: *server,
-		model:  llms.LLMProvider(*model),
+		name:   name,
+		server: router,
+		model:  llms.LLMProvider(provider),
 	}
 
 	client, err := NewClient(ctx, llm, memory, cfg, logger)
@@ -61,7 +109,7 @@ func main() {
 
 	defer connection.Close()
 
-	log.Info("Created new agent!", "name", *name, "server", *server, "model", llm)
+	log.Info("Created new agent!", "name", name, "server", router, "model", llm)
 
 	c := pb.NewChatServiceClient(connection)
 
@@ -74,8 +122,8 @@ func main() {
 
 	// Initialize a connection.
 	err = conn.Send(&pb.Message{
-		Sender:   *name,
-		Receiver: *recipient,
+		Sender:   name,
+		Receiver: recipient,
 		Content:  client.model.String(),
 	})
 	if err != nil {
@@ -115,8 +163,8 @@ func main() {
 				}
 
 				err := conn.Send(&pb.Message{
-					Sender:   *name,
-					Receiver: *recipient,
+					Sender:   name,
+					Receiver: recipient,
 					Content:  text,
 				})
 				if err != nil {
@@ -136,8 +184,8 @@ func main() {
 		for response := range responseChan {
 
 			err := conn.Send(&pb.Message{
-				Sender:   *name,
-				Receiver: *recipient,
+				Sender:   name,
+				Receiver: recipient,
 				Content:  response,
 			})
 			if err != nil {

@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func selectModel(ctx context.Context, model int) (LLMService, error) {
+func selectModel(ctx context.Context, mc ModelConfig) (LLMService, error) {
 
 	var llm LLMService
 	var apiKey string
@@ -19,17 +19,17 @@ func selectModel(ctx context.Context, model int) (LLMService, error) {
 		return nil, err
 	}
 
-	switch llms.LLMProvider(model) {
+	switch llms.LLMProvider(mc.Provider) {
 	case llms.ProviderGoogleGemini:
 		apiKey = os.Getenv("GEMINI_API_KEY")
-		llm, err = llms.NewGoogleGemini(ctx, apiKey, "gemini-2.0-flash")
+		llm, err = llms.NewGoogleGemini(ctx, apiKey, "gemini-2.0-flash", mc.Instructions, mc.Temperature)
 	case llms.ProviderChatGPT:
 		apiKey = os.Getenv("CHATGPT_API_KEY")
-		llm, err = llms.NewOpenAIChatGPT("4o", apiKey)
+		llm, err = llms.NewOpenAIChatGPT("4o", apiKey, mc.Instructions, mc.Temperature)
 	case llms.ProviderDeepseek:
 		panic("not implemented")
 	case llms.ProviderOllama:
-		llm = llms.NewOllama("qwen2.5:32b", "http://localhost:11434/api/chat")
+		llm = llms.NewOllama("qwen2.5:32b", "http://localhost:11434/api/chat", mc.Instructions, mc.Temperature)
 	default:
 		log.Fatal("invalid model")
 	}

@@ -14,7 +14,7 @@ type GoogleGemini struct {
 	genaiConfig *genai.GenerateContentConfig
 }
 
-func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleGemini, error) {
+func NewGoogleGemini(ctx context.Context, apiKey string, model string, instructions string, temperature float64) (*GoogleGemini, error) {
 	g, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -23,21 +23,19 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string) (*GoogleG
 		return nil, err
 	}
 
-	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM. Length of text is up to your discretion. Don't be too agreeable, be reasonable. Your conversational exchange does not need to be back and forth. You can let the other speaker know that you'll listen to what they'll have to say."
-
 	c := &GoogleGemini{
 		llm: &llm{
 			model: model,
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(1.65),
+			Temperature:     genai.Ptr(temperature),
 			MaxOutputTokens: genai.Ptr(int64(2000)),
 		},
 	}
 
-	if systemInstruction != "" {
-		c.genaiConfig.SystemInstruction = genai.NewModelContentFromText(systemInstruction)
+	if instructions != "" {
+		c.genaiConfig.SystemInstruction = genai.NewModelContentFromText(instructions)
 	}
 
 	return c, nil

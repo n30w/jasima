@@ -1,21 +1,17 @@
 version: '3'
 tasks:
   # Run commands
-  run-agent-toki-gemini:
+  run-agent-toki:
     cmds:
-      - go run ./agent -name=toki -recipient=pona -model=0
-  run-agent-pona-gemini:
+      - go run ./agent -configFile="./configs/a1.toml"
+  run-agent-pona:
     cmds:
-      - go run ./agent -name=pona -recipient=toki -model=0
-  run-agent-toki-ollama:
-    cmds:
-      - go run ./agent -name=toki -recipient=pona -model=3
-  run-agent-pona-ollama:
-    cmds:
-      - go run ./agent -name=pona -recipient=toki -model=3
+      - go run ./agent -configFile="./configs/a2.toml"
   run-server:
     cmds:
       - go run ./server
+
+  # utils
   gen-proto-chat:
     cmds:
       - protoc --go_out=./chat/ --go-grpc_out=./chat/ chat.proto

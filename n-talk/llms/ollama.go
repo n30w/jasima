@@ -23,19 +23,17 @@ type Ollama struct {
 	httpClient http.Client
 }
 
-func NewOllama(model string, url string) *Ollama {
+func NewOllama(model string, url string, instructions string, temperature float64) *Ollama {
 
 	s := false
-
-	systemInstruction := "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM. Length of text is up to your discretion. Don't be too agreeable, be reasonable. Your conversational exchange does not need to be back and forth. You can let the other speaker know that you'll listen to what they'll have to say."
 
 	return &Ollama{
 		llm: &llm{
 			model:        model,
-			instructions: systemInstruction,
+			instructions: instructions,
 		},
 		options: &ol.Options{
-			Temperature: 1.88,
+			Temperature: float32(temperature),
 		},
 		stream:     &s,
 		url:        url,
