@@ -30,7 +30,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string, instructi
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
 			Temperature:     genai.Ptr(temperature),
-			MaxOutputTokens: genai.Ptr(int64(2000)),
+			MaxOutputTokens: genai.Ptr(int64(10000)),
 		},
 	}
 
