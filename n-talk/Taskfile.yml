@@ -3,10 +3,10 @@ tasks:
   # Run commands
   run-agent-toki:
     cmds:
-      - go run ./agent -configFile="./configs/a1.toml"
+      - go run ./agent -configFile="./configs/b1.toml"
   run-agent-pona:
     cmds:
-      - go run ./agent -configFile="./configs/a2.toml"
+      - go run ./agent -configFile="./configs/b2.toml"
   run-server:
     cmds:
       - go run ./server

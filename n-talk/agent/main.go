@@ -24,6 +24,7 @@ type ModelConfig struct {
 	Provider     int
 	Instructions string
 	Temperature  float64
+	Initialize   string
 }
 
 type NetworkConfig struct {
@@ -136,6 +137,32 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	responseChan := make(chan string)
+
+	// Send the initialize SVG message.
+	if conf.Model.Initialize != "" {
+		file, err := os.Open(conf.Model.Initialize)
+		if err != nil {
+			log.Fatalf("Failed to open file: %v", err)
+		}
+		defer file.Close()
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			log.Fatalf("Failed to read file: %v", err)
+		}
+
+		svgText := string(data)
+
+		client.memory.Save(ctx, 1, svgText)
+		err = conn.Send(&pb.Message{
+			Sender:   name,
+			Receiver: recipient,
+			Content:  svgText,
+		})
+		if err != nil {
+			log.Fatalf("Failed to send message: %v", err)
+		}
+	}
 
 	// Send messages
 	go func() {

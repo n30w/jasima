@@ -1,0 +1,26 @@
+# Name of the agent.
+name = "toki"
+
+# Receiver of name's messages.
+recipient = "pona"
+
+[model]
+
+# LLM service provider.
+provider = 0
+
+# Initial system instructions.
+instructions = "You are researching ways to improve the Toki Pona orthography of Sitelen Pona. You are in conversation with another LLM. You will send SVG text and receive a message back containing: 1. logogram's name, 2. reason for the change, 3. and the SVG text. Dispute and argue whether these changes are correct and fall in line with the philosophy of Toki Pona or its potential development as a language. Send back your critique with the previous SVG data."
+
+# Initial SVG file to send over.
+initialize = "../resources/logography/a.svg"
+
+temperature = 1.91
+
+[network]
+
+# Host and port of the main server that routes messages.
+router = "localhost:50051"
+
+# URL of the database.
+database = ""
