@@ -11,7 +11,11 @@ type LLMService interface {
 	String() string
 
 	// Sends a request to the remote service. Returns a reply in the form
-	// of a string.
+	// of a string. Note that rather than serializing messages into a string,
+	// which would remove dependence on the `memory` package, a slice of
+	// messages are passed in directly, because it allows different services to
+	// adapt the messages to their different submission formats of their
+	// respective APIs.
 	Request(ctx context.Context, messages []memory.Message, prompt string) (string, error)
 }
 
@@ -20,12 +24,14 @@ type LLMService interface {
 type MemoryService interface {
 	// Save saves a message, using its role and text. A role of `0` saves as
 	// "user". A role of `1` saves as "model".
-	Save(ctx context.Context, role memory.ChatRole, text string) error
+	Save(ctx context.Context, message memory.Message) error
 
 	// Retrieve retrieves an `n` amount of messages from the storage. An `n`
 	// less-than-or-equal-to zero returns all messages. Any `n` amount
 	// less-than-or-equal-to the total number of memories returns `n` messages.
-	Retrieve(ctx context.Context, n int) ([]memory.Message, error)
+	// `name` is the name of the agent that inserted the messages. This is
+	// just the client name.
+	Retrieve(ctx context.Context, name string, n int) ([]memory.Message, error)
 }
 
 type ConnectionService interface {

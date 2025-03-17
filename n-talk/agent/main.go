@@ -153,7 +153,7 @@ func main() {
 
 		svgText := string(data)
 
-		client.memory.Save(ctx, 1, svgText)
+		client.memory.Save(ctx, client.NewMessageTo(recipient, svgText))
 		err = conn.Send(&pb.Message{
 			Sender:   name,
 			Receiver: recipient,
@@ -186,7 +186,7 @@ func main() {
 				// save anything!
 
 				if text != "" {
-					client.memory.Save(ctx, 1, text)
+					client.memory.Save(ctx, client.NewMessageTo(recipient, text))
 				}
 
 				err := conn.Send(&pb.Message{
@@ -243,12 +243,12 @@ func main() {
 			// log.Printf("%s: %s\n> ", msg.Sender, msg.Content)
 
 			// Send the data to the LLM.
-			go func(receivedMsg string) {
+			go func(msg *pb.Message) {
 
 				// When data is received back from the query,
 				// fill the channel.
 
-				client.memory.Save(ctx, 0, receivedMsg)
+				client.memory.Save(ctx, client.NewMessageFrom(msg.Receiver, msg.Content))
 
 				if client.model != llms.ProviderOllama {
 					time.Sleep(time.Second * 18)
@@ -258,14 +258,14 @@ func main() {
 
 				// log.Info("Dispatched message to LLM")
 
-				res, err := client.Request(ctx, receivedMsg)
+				res, err := client.Request(ctx, msg.Content)
 				if err != nil {
 					log.Fatal(err)
 				}
 
 				// Save the response to memory.
 
-				client.memory.Save(ctx, 1, res)
+				client.memory.Save(ctx, client.NewMessageTo(msg.Sender, msg.Content))
 
 				if client.model != llms.ProviderOllama {
 					time.Sleep(time.Second * 18)
@@ -275,7 +275,7 @@ func main() {
 
 				responseChan <- res
 
-			}(msg.Content)
+			}(msg)
 		}
 	}()
 
