@@ -10,7 +10,6 @@ tasks:
   run-server:
     cmds:
       - go run ./server
-
   # utils
   gen-proto-chat:
     cmds:
