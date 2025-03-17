@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"os"
 	"sync"
+	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
-	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
 )
 
@@ -56,7 +58,7 @@ func (s *chatServer) Chat(stream pb.ChatService_ChatServer) error {
 	}
 	s.mu.Unlock()
 
-	log.Info("Client connected", "client", clientName, "model", clientModel)
+	log.Println("Client connected", "client", clientName, "model", clientModel)
 
 	// Enter an infinite listening session when the client is connected.
 
@@ -71,7 +73,7 @@ func (s *chatServer) Chat(stream pb.ChatService_ChatServer) error {
 			delete(s.clients, clientName)
 			s.mu.Unlock()
 
-			log.Info("Client disconnected\n", "client", clientName)
+			log.Println("Client disconnected\n", "client", clientName)
 
 			return nil
 		}
@@ -94,7 +96,7 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 	if ok {
 
 		if err := destClient.stream.Send(msg); err != nil {
-			log.Error("Failed to send message to %s: %v\n", msg.Receiver, err)
+			log.Printf("Failed to send message to %s: %v\n", msg.Receiver, err)
 		} else {
 			log.Printf("%s [%s]: %s", originClient.name, originClient.model, msg.Content)
 			// log.Info("Routed message", "sender", msg.Sender, "recipient", msg.Receiver)
@@ -102,7 +104,7 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 
 	} else {
 
-		log.Warnf("Client %s not found\n", msg.Receiver)
+		log.Printf("Client %s not found\n", msg.Receiver)
 
 		if sender, ok := s.clients[msg.Sender]; ok {
 			sender.stream.Send(&pb.Message{Sender: "Server", Content: fmt.Sprintf("Client %s not found", msg.Receiver)})
@@ -112,6 +114,8 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 }
 
 func main() {
+	fn := logOutput()
+	defer fn()
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -126,5 +130,45 @@ func main() {
 	err = s.Serve(lis)
 	if err != nil {
 		log.Fatalf("failed to serve: %v", err)
+	}
+}
+
+// https://gist.github.com/jerblack/4b98ba48ed3fb1d9f7544d2b1a1be287
+func logOutput() func() {
+	logFile := fmt.Sprintf("../outputs/server_log_%s.log", time.Now().Format(time.RFC3339))
+	// open file read/write | create if not exist | clear file at open if exists
+	f, _ := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	// save existing stdout | MultiWriter writes to saved stdout and file
+	out := os.Stdout
+	mw := io.MultiWriter(out, f)
+
+	// get pipe reader and writer | writes to pipe writer come out pipe reader
+	r, w, _ := os.Pipe()
+
+	// replace stdout,stderr with pipe writer | all writes to stdout, stderr will go through pipe instead (fmt.print, log)
+	os.Stdout = w
+	os.Stderr = w
+
+	// writes with log.Print should also write to mw
+	log.SetOutput(mw)
+
+	//create channel to control exit | will block until all copies are finished
+	exit := make(chan bool)
+
+	go func() {
+		// copy all reads from pipe to multiwriter, which writes to stdout and file
+		_, _ = io.Copy(mw, r)
+		// when r or w is closed copy will finish and true will be sent to channel
+		exit <- true
+	}()
+
+	// function to be deferred in main until program exits
+	return func() {
+		// close writer then block on exit channel | this will let mw finish writing before the program exits
+		_ = w.Close()
+		<-exit
+		// close file after all writes have finished
+		_ = f.Close()
 	}
 }
