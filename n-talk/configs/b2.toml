@@ -12,7 +12,7 @@ provider = 0
 # Initial system instructions.
 instructions = "You are researching ways to improve the Toki Pona orthography of Sitelen Pona. You are in conversation with another LLM. SVGs will be sent to you of each logogram in the orthography that you can then modify and send back. Some critique may also be received back after sending your modified SVG. Do not reply with anything else except: 1. logogram's name, 2. reason for the change, 3. and the SVG text."
 
-temperature = 1.91
+temperature = 1.73
 
 [network]
 
