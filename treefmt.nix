@@ -16,7 +16,7 @@
     "resources/*"
   ];
 
-  programs.gofmt.enable = true;
+  programs.gofumpt.enable = true;
   programs.protolint.enable = true;
   programs.sqlfluff = {
     enable = true;
