@@ -24,7 +24,6 @@ type Ollama struct {
 }
 
 func NewOllama(model string, url string, instructions string, temperature float64) *Ollama {
-
 	s := false
 
 	return &Ollama{
@@ -42,7 +41,6 @@ func NewOllama(model string, url string, instructions string, temperature float6
 }
 
 func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
-
 	contents := c.prepare(messages)
 
 	options := make(map[string]interface{})
@@ -93,7 +91,6 @@ func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt 
 }
 
 func (c *Ollama) prepare(messages []memory.Message) []ol.Message {
-
 	// Add 1 for system instructions.
 	l := len(messages) + 1
 

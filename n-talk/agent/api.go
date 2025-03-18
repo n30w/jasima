@@ -73,7 +73,6 @@ func (c *client) NewMessageTo(recipient string, text string) memory.Message {
 }
 
 func (c *client) Request(ctx context.Context, prompt string) (string, error) {
-
 	a, err := c.memory.Retrieve(ctx, c.name, 0)
 	if err != nil {
 		return "", err

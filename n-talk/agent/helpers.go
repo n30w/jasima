@@ -10,7 +10,6 @@ import (
 )
 
 func selectModel(ctx context.Context, mc ModelConfig) (LLMService, error) {
-
 	var llm LLMService
 	var apiKey string
 

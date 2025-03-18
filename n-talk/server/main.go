@@ -94,14 +94,12 @@ func (s *chatServer) routeMessage(msg *pb.Message) {
 	originClient := s.clients[msg.Sender]
 
 	if ok {
-
 		if err := destClient.stream.Send(msg); err != nil {
 			log.Printf("Failed to send message to %s: %v\n", msg.Receiver, err)
 		} else {
 			log.Printf("%s [%s]: %s", originClient.name, originClient.model, msg.Content)
 			// log.Info("Routed message", "sender", msg.Sender, "recipient", msg.Receiver)
 		}
-
 	} else {
 
 		log.Printf("Client %s not found\n", msg.Receiver)
@@ -137,7 +135,7 @@ func main() {
 func logOutput() func() {
 	logFile := fmt.Sprintf("../outputs/server_log_%s.log", time.Now().Format(time.RFC3339))
 	// open file read/write | create if not exist | clear file at open if exists
-	f, _ := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	f, _ := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 
 	// save existing stdout | MultiWriter writes to saved stdout and file
 	out := os.Stdout
@@ -153,7 +151,7 @@ func logOutput() func() {
 	// writes with log.Print should also write to mw
 	log.SetOutput(mw)
 
-	//create channel to control exit | will block until all copies are finished
+	// create channel to control exit | will block until all copies are finished
 	exit := make(chan bool)
 
 	go func() {

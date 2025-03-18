@@ -42,7 +42,6 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string, instructi
 }
 
 func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
-
 	contents := c.prepare(messages)
 	contents = append(contents, genai.NewUserContentFromText(prompt))
 

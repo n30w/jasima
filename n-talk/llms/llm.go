@@ -20,7 +20,6 @@ const (
 )
 
 func (l LLMProvider) String() string {
-
 	s := "INVALID PROVIDER"
 
 	switch l {

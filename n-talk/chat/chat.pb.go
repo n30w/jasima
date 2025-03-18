@@ -7,11 +7,12 @@
 package chat
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -110,10 +111,13 @@ func file_chat_proto_rawDescGZIP() []byte {
 	return file_chat_proto_rawDescData
 }
 
-var file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-var file_chat_proto_goTypes = []any{
-	(*Message)(nil), // 0: chat.Message
-}
+var (
+	file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+	file_chat_proto_goTypes  = []any{
+		(*Message)(nil), // 0: chat.Message
+	}
+)
+
 var file_chat_proto_depIdxs = []int32{
 	0, // 0: chat.ChatService.Chat:input_type -> chat.Message
 	0, // 1: chat.ChatService.Chat:output_type -> chat.Message

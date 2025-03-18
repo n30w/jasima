@@ -40,7 +40,6 @@ type ConfigFile struct {
 }
 
 func main() {
-
 	var err error
 
 	flagName := flag.String("name", "", "name of the agent")
@@ -244,7 +243,6 @@ func main() {
 
 			// Send the data to the LLM.
 			go func(msg *pb.Message) {
-
 				// When data is received back from the query,
 				// fill the channel.
 
@@ -274,7 +272,6 @@ func main() {
 				time.Sleep(time.Second * 2)
 
 				responseChan <- res
-
 			}(msg)
 		}
 	}()

@@ -81,7 +81,6 @@ func (d *DatabaseStore) Save(ctx context.Context, message Message) error {
 // of Messages. Check out pgx's query all rows with generic type.
 // https://pkg.go.dev/github.com/jackc/pgx/v5#RowToStructByPos
 func (d *DatabaseStore) Retrieve(ctx context.Context, name string, n int) ([]Message, error) {
-
 	a1, err := d.getAgentId(ctx, name)
 	if err != nil {
 		return nil, err
@@ -149,7 +148,6 @@ func NewMemoryStore() *InMemoryStore {
 }
 
 func (in *InMemoryStore) Save(_ context.Context, message Message) error {
-
 	in.mu.Lock()
 	in.messages = append(in.messages, message)
 	in.mu.Unlock()
@@ -160,7 +158,6 @@ func (in *InMemoryStore) Save(_ context.Context, message Message) error {
 }
 
 func (in *InMemoryStore) Retrieve(_ context.Context, _ string, n int) ([]Message, error) {
-
 	in.mu.Lock()
 	defer in.mu.Unlock()
 
