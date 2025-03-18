@@ -12,14 +12,18 @@ INSERT INTO senders (name) VALUES ('toki'), ('pona');
 -- Create the messages table
 CREATE TABLE messages (
     id BIGSERIAL PRIMARY KEY,
-    role chat_role NOT NULL,
+    role CHAT_ROLE NOT NULL,
     text TEXT NOT NULL,
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT now (),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
     inserted_by BIGINT NOT NULL,
     sender_id BIGINT NOT NULL,
     receiver_id BIGINT NOT NULL,
-    CONSTRAINT fk_sender FOREIGN KEY (sender_id) REFERENCES agents (id) ON DELETE CASCADE,
-    CONSTRAINT fk_receiver FOREIGN KEY (receiver_id) REFERENCES agents (id) ON DELETE CASCADE
+    CONSTRAINT fk_sender FOREIGN KEY (sender_id) REFERENCES agents (
+        id
+    ) ON DELETE CASCADE,
+    CONSTRAINT fk_receiver FOREIGN KEY (receiver_id) REFERENCES agents (
+        id
+    ) ON DELETE CASCADE
 );
 
 -- Indexes for fast lookup
