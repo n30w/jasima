@@ -74,12 +74,14 @@
             fish
           ];
 
-          inherit (self.checks.${pkgs.system}.pre-commit-check) shellHook;
           buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
-          # shellHook = ''
-          #   go mod vendor
-          #   go mod tidy
-          # '';
+
+          shellHook = ''
+            ${self.checks.${pkgs.system}.pre-commit-check.shellHook}
+
+            go mod vendor
+            go mod tidy
+          '';
         };
       });
 
