@@ -9,6 +9,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     gopkgs.url = "github:sagikazarmark/go-flake";
     gopkgs.inputs.nixpkgs.follows = "nixpkgs";
+    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
   };
 
   # Configure a binary cache for your executable(s).
@@ -27,6 +28,7 @@
       systems,
       nixpkgs,
       treefmt-nix,
+      pre-commit-hooks,
       ...
     }:
     let
@@ -72,10 +74,12 @@
             fish
           ];
 
-          shellHook = ''
-            go mod vendor
-            go mod tidy
-          '';
+          inherit (self.checks.${pkgs.system}.pre-commit-check) shellHook;
+          buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
+          # shellHook = ''
+          #   go mod vendor
+          #   go mod tidy
+          # '';
         };
       });
 
@@ -83,6 +87,16 @@
 
       checks = eachSystem (pkgs: {
         treefmt = treefmtEval.${pkgs.system}.config.build.check self;
+        pre-commit-check = pre-commit-hooks.lib.${pkgs.system}.run {
+          src = ./.;
+          hooks = {
+            format = {
+              enable = true;
+              name = "Format files";
+              entry = "nix fmt";
+            };
+          };
+        };
       });
     };
 }

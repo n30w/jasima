@@ -3,3 +3,5 @@
 mprocs.log
 
 vendor
+
+.pre-commit-config.yaml
