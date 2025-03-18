@@ -212,3 +212,4 @@ dist/*            binary
 
 # Ignores
 *.log linguist-detectable=false
+resources/* linguist-detectable=false

@@ -9,9 +9,11 @@
     "*.svg"
     "*.png"
     "*.jpg"
+    "*.example"
     ".envrc"
     ".vscode/*"
     "outputs/*"
+    "resources/*"
   ];
 
   programs.gofmt.enable = true;
