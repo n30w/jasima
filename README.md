@@ -51,3 +51,8 @@ nix develop .
 - [Sitelen Pona](https://en.wikipedia.org/wiki/Sitelen_Pona)
 - <https://en.wikipedia.org/wiki/Sitelen_Pona#cite_ref-21>
 - [Free SVG Repo](https://www.svgrepo.com/)
+
+### Nix Stuff
+
+- <https://github.com/cachix/git-hooks.nix>
+- <https://bmcgee.ie/posts/2023/11/nix-my-workflow/>
