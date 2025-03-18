@@ -94,6 +94,7 @@
               enable = true;
               name = "Format files";
               entry = "nix fmt";
+              stages = [ "pre-commit" ];
             };
           };
         };
