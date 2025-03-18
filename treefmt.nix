@@ -4,11 +4,14 @@
   projectRootFile = "flake.nix";
 
   settings.global.excludes = [
+    ".gitignore"
+    ".gitattributes"
     "*.svg"
     "*.png"
     "*.jpg"
     ".envrc"
     ".vscode/*"
+    "outputs/*"
   ];
 
   programs.gofmt.enable = true;
