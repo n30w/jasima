@@ -94,8 +94,8 @@
           hooks = {
             format = {
               enable = true;
-              name = "Format files";
-              entry = "nix fmt";
+              name = "Format files with treefmt";
+              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt";
               stages = [ "pre-commit" ];
             };
           };
