@@ -3,10 +3,10 @@ tasks:
   # Run commands
   run-agent-toki:
     cmds:
-      - go run ./agent -configFile="./configs/b1.toml"
+      - go run ./agent -debug=true -initialize="./configs/default_message.txt" -temperature=1.62 -layer=1 -name="toki" -recipient="pona"
   run-agent-pona:
     cmds:
-      - go run ./agent -configFile="./configs/b2.toml"
+      - go run ./agent -debug=true -temperature=1.62 -layer=1 -name="pona" -recipient="toki"
   run-agent-toki-a1:
     cmds:
       - go run ./agent -configFile="./configs/a1.toml" -debug=true
