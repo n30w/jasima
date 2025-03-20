@@ -29,7 +29,7 @@ go mod tidy
 
 ### Nix ⭐
 
-If you have the [nix package manager](https://nixos.org/) installed, copy and paste these commands into your terminal:
+If you have the [nix package manager](https://nixos.org/) installed and have _nix experimental flakes_ **enabled**, copy and paste these commands into your terminal:
 
 ```bash
 # Initialize development environment.
