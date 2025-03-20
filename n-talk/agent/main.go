@@ -3,19 +3,14 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type ModelConfig struct {
@@ -33,6 +28,7 @@ type NetworkConfig struct {
 type ConfigFile struct {
 	Name      string
 	Recipient string
+	Layer     int
 	Model     ModelConfig
 	Network   NetworkConfig
 }
@@ -45,36 +41,46 @@ func main() {
 	flagServer := flag.String("server", "", "communication server")
 	flagProvider := flag.Int("model", -1, "LLM model to use")
 	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
-	configPath := flag.String("configFile", "./configs/a1.toml", "configuration file path")
+	flagConfigPath := flag.String("configFile", "./configs/default_agent.toml", "configuration file path")
+	flagTemperature := flag.Float64("temperature", 1.50, "float64 model temperature")
+	flagInitializePath := flag.String("initialize", "", "initial message path")
+	flagLayer := flag.Int("layer", -1, "agent's functional layer")
 
 	flag.Parse()
 
-	var conf ConfigFile
-	_, err = toml.DecodeFile(*configPath, &conf)
+	var userConf ConfigFile
+
+	_, err = toml.DecodeFile(*flagConfigPath, &userConf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	name := conf.Name
-	recipient := conf.Recipient
-	router := conf.Network.Router
-	provider := conf.Model.Provider
-
 	if *flagName != "" {
-		name = *flagName
+		userConf.Name = *flagName
 	}
 
 	if *flagRecipient != "" {
-		recipient = *flagRecipient
+		userConf.Recipient = *flagRecipient
 	}
 
 	if *flagServer != "" {
-		router = *flagServer
+		userConf.Network.Router = *flagServer
 	}
 
 	if *flagProvider != -1 {
-		provider = *flagProvider
-		conf.Model.Provider = *flagProvider
+		userConf.Model.Provider = *flagProvider
+	}
+
+	if *flagTemperature != 1.50 {
+		userConf.Model.Temperature = *flagTemperature
+	}
+
+	if *flagInitializePath != "" {
+		userConf.Model.Initialize = *flagInitializePath
+	}
+
+	if *flagLayer != -1 {
+		userConf.Layer = *flagLayer
 	}
 
 	ctx := context.Background()
@@ -93,7 +99,7 @@ func main() {
 
 	logger.Debug("DEBUG is set to TRUE")
 
-	llm, err := selectModel(ctx, conf.Model, logger)
+	llm, err := selectModel(ctx, userConf.Model, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -101,10 +107,12 @@ func main() {
 	logger.Debugf("%s is online and ready to go", llm)
 
 	cfg := &config{
-		name:   name,
-		server: router,
-		model:  llms.LLMProvider(provider),
-		peers:  []string{recipient},
+		name:       userConf.Name,
+		server:     userConf.Network.Router,
+		model:      llms.LLMProvider(userConf.Model.Provider),
+		peers:      []string{userConf.Recipient},
+		layer:      userConf.Layer,
+		initialize: userConf.Model.Initialize,
 	}
 
 	client, err := NewClient(ctx, llm, memory, cfg, logger)
@@ -112,38 +120,12 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	connection, err := grpc.NewClient(client.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	logger.Info("Created new agent!", "name", client.name, "model", client.llm, "layer", client.layer)
+
+	err = client.SendInitialMessage(ctx)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.Fatal(err)
 	}
-
-	defer connection.Close()
-
-	logger.Info("Created new agent!", "name", name, "model", llm)
-
-	c := pb.NewChatServiceClient(connection)
-
-	// The implementation of `Chat` is in the server code. This is where the
-	// client establishes a first connection to the server.
-	conn, err := c.Chat(ctx)
-	if err != nil {
-		logger.Fatalf("could not create stream: %v", err)
-	}
-
-	client.conn = conn
-
-	// Initialize a connection.
-
-	err = conn.Send(&pb.Message{
-		Sender:   name,
-		Receiver: recipient,
-		Content:  client.model.String(),
-	})
-	if err != nil {
-		logger.Fatalf("Unable to establish server connection; failed to send message: %v", err)
-	}
-
-	logger.Infof("Established connection to the server @ %s", router)
 
 	// Set the status of the client to online.
 
@@ -156,44 +138,12 @@ func main() {
 
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Send the initialize text.
-	if conf.Model.Initialize != "" {
-
-		logger.Infof("Initialization is NOT empty, sending initial message to %s", recipient)
-
-		time.Sleep(1 * time.Second)
-
-		file, err := os.Open(conf.Model.Initialize)
-		if err != nil {
-			logger.Fatalf("Failed to open file: %v", err)
-		}
-
-		defer file.Close()
-
-		data, err := io.ReadAll(file)
-		if err != nil {
-			logger.Fatalf("Failed to read file: %v", err)
-		}
-
-		fileText := string(data)
-
-		client.memory.Save(ctx, client.NewMessageTo(recipient, fileText))
-		err = conn.Send(&pb.Message{
-			Sender:   name,
-			Receiver: recipient,
-			Content:  fileText,
-		})
-		if err != nil {
-			logger.Fatalf("Failed to send message: %v", err)
-		}
-	}
-
 	// !!! UNLATCH FOR NOW !!!
 	client.latch = false
 	// !!! UNLATCH FOR NOW !!!
 
 	// Send any message in the response channel.
-	go client.SendMessage(conn, recipient, errorChan, responseChan)
+	go client.SendMessage(errorChan, responseChan)
 
 	// Wait for messages to come in and process them accordingly.
 	go client.ReceiveMessages(ctx, online, errorChan, llmChan)
@@ -214,5 +164,6 @@ func main() {
 	<-stop
 
 	logger.Info("Shutting down. See you later.")
-	conn.CloseSend()
+
+	client.Teardown()
 }

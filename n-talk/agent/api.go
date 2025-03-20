@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"os"
 	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
@@ -10,13 +11,16 @@ import (
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type config struct {
-	name   string
-	peers  []string
-	server string
-	model  llms.LLMProvider
+	name       string
+	peers      []string
+	server     string
+	model      llms.LLMProvider
+	layer      int
+	initialize string
 }
 
 type client struct {
@@ -24,7 +28,9 @@ type client struct {
 	memory MemoryService
 	llm    LLMService
 	logger *log.Logger
-	conn   grpc.BidiStreamingClient[pb.Message, pb.Message]
+
+	conn              grpc.BidiStreamingClient[pb.Message, pb.Message]
+	chatServiceClient *grpc.ClientConn
 
 	// latch determines whether data that is received from the server is allowed
 	// to be sent to the LLM service. If the latch is `true`, data will NOT be
@@ -45,14 +51,73 @@ func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *c
 		latch: true,
 	}
 
-	a, err := c.memory.Retrieve(context.Background(), c.name, 0)
+	var err error
+
+	c.chatServiceClient, err = grpc.NewClient(c.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, err
+		logger.Fatalf("%v", err)
 	}
 
-	c.logger.Printf("In Memory: %v", a)
+	// The implementation of `Chat` is in the server code. This is where the
+	// client establishes a first connection to the server.
+	c.conn, err = pb.NewChatServiceClient(c.chatServiceClient).Chat(ctx)
+	if err != nil {
+		logger.Fatalf("could not create stream: %v", err)
+	}
+
+	// Initialize a connection.
+
+	err = c.sendMessage(c.model.String())
+	if err != nil {
+		logger.Fatalf("Unable to establish server connection; failed to send message: %v", err)
+	}
+
+	logger.Debugf("Established connection to the server @ %s", c.server)
 
 	return c, nil
+}
+
+func (c *client) SendInitialMessage(ctx context.Context) error {
+	recipient := c.peers[0]
+
+	if c.initialize != "" {
+
+		c.logger.Infof("Initialization path is %s, sending initial message to %s", c.initialize, recipient)
+
+		time.Sleep(1 * time.Second)
+
+		file, err := os.Open(c.initialize)
+		if err != nil {
+			return err
+		}
+
+		defer file.Close()
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return err
+		}
+
+		fileText := string(data)
+
+		c.memory.Save(ctx, c.NewMessageTo(recipient, fileText))
+
+		err = c.sendMessage(fileText)
+		if err != nil {
+			return err
+		}
+
+		c.logger.Info("Initial message sent successfully")
+	}
+
+	return nil
+}
+
+func (c *client) Teardown() {
+	c.logger.Debug("Beginning teardown...")
+
+	c.conn.CloseSend()
+	c.chatServiceClient.Close()
 }
 
 func (c *client) newMessage(text string) memory.Message {
@@ -105,16 +170,12 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 	return result, nil
 }
 
-func (c *client) SendMessage(conn grpc.BidiStreamingClient[pb.Message, pb.Message], receiver string, errs chan<- error, response <-chan string) {
+func (c *client) SendMessage(errs chan<- error, response <-chan string) {
 	for res := range response {
 
 		c.logger.Debug("Sending message 📧")
 
-		err := conn.Send(&pb.Message{
-			Sender:   c.name,
-			Receiver: receiver,
-			Content:  res,
-		})
+		err := c.sendMessage(res)
 		if err != nil {
 			errs <- err
 			return
@@ -122,6 +183,19 @@ func (c *client) SendMessage(conn grpc.BidiStreamingClient[pb.Message, pb.Messag
 
 		c.logger.Debug("Message sent successfully")
 	}
+}
+
+func (c *client) sendMessage(content string) error {
+	err := c.conn.Send(&pb.Message{
+		Sender:   c.name,
+		Receiver: c.peers[0],
+		Content:  content,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response chan<- string, llmChan <-chan string) {
@@ -187,6 +261,7 @@ func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- e
 
 			// Send the data to the LLM.
 			content := msg.Content
+
 			if c.latch {
 				c.memory.Save(ctx, c.NewMessageFrom(msg.Receiver, content))
 				c.logger.Debug("Latch is TRUE. Saved to memory only!")
