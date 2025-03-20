@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/llms"
@@ -46,6 +43,7 @@ func main() {
 	flagRecipient := flag.String("recipient", "", "name of the recipient agent")
 	flagServer := flag.String("server", "", "communication server")
 	flagProvider := flag.Int("model", -1, "LLM model to use")
+	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
 	configPath := flag.String("configFile", "./configs/a1.toml", "configuration file path")
 
 	flag.Parse()
@@ -86,15 +84,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	logger := log.NewWithOptions(os.Stderr, log.Options{
+	logOptions := log.Options{
 		ReportCaller:    true,
 		ReportTimestamp: true,
-	})
+	}
+
+	if *flagDebug {
+		logOptions.Level = log.DebugLevel
+	}
+
+	logger := log.NewWithOptions(os.Stderr, logOptions)
+
+	logger.Debug("DEBUG is set to TRUE")
 
 	cfg := &config{
 		name:   name,
 		server: router,
 		model:  llms.LLMProvider(provider),
+		peers:  []string{recipient},
 	}
 
 	client, err := NewClient(ctx, llm, memory, cfg, logger)
@@ -109,7 +116,7 @@ func main() {
 
 	defer connection.Close()
 
-	log.Info("Created new agent!", "name", name, "server", router, "model", llm)
+	logger.Info("Created new agent!", "name", name, "server", router, "model", llm)
 
 	c := pb.NewChatServiceClient(connection)
 
@@ -117,32 +124,42 @@ func main() {
 	// client establishes a first connection to the server.
 	conn, err := c.Chat(ctx)
 	if err != nil {
-		log.Fatalf("could not create stream: %v", err)
+		logger.Fatalf("could not create stream: %v", err)
 	}
 
+	client.conn = conn
+
 	// Initialize a connection.
+
 	err = conn.Send(&pb.Message{
 		Sender:   name,
 		Receiver: recipient,
 		Content:  client.model.String(),
 	})
 	if err != nil {
-		log.Fatalf("Failed to send message: %v", err)
+		log.Fatalf("Unable to establish server connection; failed to send message: %v", err)
 	}
 
 	log.Info("Established connection to server")
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// Set the status of the client to online.
+
+	online := true
 
 	responseChan := make(chan string)
+	llmChan := make(chan string)
+	errorChan := make(chan error)
+	stop := make(chan os.Signal, 1)
 
-	// Send the initialize SVG message.
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Send the initialize text.
 	if conf.Model.Initialize != "" {
 		file, err := os.Open(conf.Model.Initialize)
 		if err != nil {
 			log.Fatalf("Failed to open file: %v", err)
 		}
+
 		defer file.Close()
 
 		data, err := io.ReadAll(file)
@@ -150,134 +167,44 @@ func main() {
 			log.Fatalf("Failed to read file: %v", err)
 		}
 
-		svgText := string(data)
+		fileText := string(data)
 
-		client.memory.Save(ctx, client.NewMessageTo(recipient, svgText))
+		client.memory.Save(ctx, client.NewMessageTo(recipient, fileText))
 		err = conn.Send(&pb.Message{
 			Sender:   name,
 			Receiver: recipient,
-			Content:  svgText,
+			Content:  fileText,
 		})
 		if err != nil {
 			log.Fatalf("Failed to send message: %v", err)
 		}
 	}
 
-	// Send messages
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for {
+	// !!! UNLATCH FOR NOW !!!
+	client.latch = false
+	// !!! UNLATCH FOR NOW !!!
 
-			fmt.Print("> ") // Prompt for user input
+	// Send any message in the response channel.
+	go client.SendMessage(conn, recipient, errorChan, responseChan)
 
-			if scanner.Scan() {
+	// Wait for messages to come in and process them accordingly.
+	go client.ReceiveMessages(ctx, online, errorChan, llmChan)
 
-				text := scanner.Text()
+	// Watch for possible LLM dispatches.
+	go client.DispatchToLLM(ctx, errorChan, responseChan, llmChan)
 
-				if text == "exit" {
-					log.Info("Closing connection...")
-					conn.CloseSend()
-					return
-				}
-
-				// Save as model, as we are "talking" as the model.
-				// If the user presses "enter" with nothing written, don't
-				// save anything!
-
-				if text != "" {
-					client.memory.Save(ctx, client.NewMessageTo(recipient, text))
-				}
-
-				err := conn.Send(&pb.Message{
-					Sender:   name,
-					Receiver: recipient,
-					Content:  text,
-				})
-				if err != nil {
-					log.Fatalf("Failed to send message: %v", err)
-				}
-
-			} else {
-				// Handle scanner errors
-				if err := scanner.Err(); err != nil {
-					log.Fatalf("Error reading input: %v", err)
-				}
-			}
-		}
-	}()
-
-	go func() {
-		for response := range responseChan {
-
-			err := conn.Send(&pb.Message{
-				Sender:   name,
-				Receiver: recipient,
-				Content:  response,
-			})
+	// GTFO on error.
+	go func(stop chan<- os.Signal, e <-chan error) {
+		for err := range e {
 			if err != nil {
-				log.Fatalf("Failed to send response: %v", err)
+				logger.Fatal(err)
+				stop <- os.Kill
 			}
-
-			// log.Printf("YOU%s: %s\n", client.model, response)
 		}
-	}()
-
-	// Receive messages
-	// Anything that is received is sent to the LLM.
-	go func() {
-		for {
-
-			msg, err := conn.Recv()
-
-			if err == io.EOF {
-				// This exits the program when the connection is terminated
-				// by the server.
-				break
-			}
-
-			if err != nil {
-				log.Fatalf("failed to receive message: %v", err)
-			}
-
-			// log.Printf("%s: %s\n> ", msg.Sender, msg.Content)
-
-			// Send the data to the LLM.
-			go func(msg *pb.Message) {
-				// When data is received back from the query,
-				// fill the channel.
-
-				client.memory.Save(ctx, client.NewMessageFrom(msg.Receiver, msg.Content))
-
-				if client.model != llms.ProviderOllama {
-					time.Sleep(time.Second * 18)
-				}
-
-				time.Sleep(time.Second * 2)
-
-				// log.Info("Dispatched message to LLM")
-
-				res, err := client.Request(ctx, msg.Content)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				// Save the response to memory.
-
-				client.memory.Save(ctx, client.NewMessageTo(msg.Sender, msg.Content))
-
-				if client.model != llms.ProviderOllama {
-					time.Sleep(time.Second * 18)
-				}
-
-				time.Sleep(time.Second * 2)
-
-				responseChan <- res
-			}(msg)
-		}
-	}()
+	}(stop, errorChan)
 
 	<-stop
 
-	log.Info("shutting down")
+	logger.Info("Shutting down. See you later.")
 	conn.CloseSend()
 }
