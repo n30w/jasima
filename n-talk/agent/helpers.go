@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"codeberg.org/n30w/jasima/n-talk/llms"
 	"github.com/charmbracelet/log"
@@ -38,4 +39,10 @@ func selectModel(ctx context.Context, mc ModelConfig, logger *log.Logger) (LLMSe
 	}
 
 	return llm, nil
+}
+
+func timer(start time.Time) func() time.Duration {
+	return func() time.Duration {
+		return time.Since(start)
+	}
 }

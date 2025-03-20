@@ -89,16 +89,27 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 		return "", err
 	}
 
+	c.logger.Debug("Dispatching request to LLM...")
+
+	t := timer(time.Now())
+
 	result, err := c.llm.Request(ctx, a, prompt)
 	if err != nil {
 		return "", err
 	}
+
+	v := t()
+
+	c.logger.Debugf("Response received from LLM, roundtrip %s", v.Truncate(1*time.Millisecond))
 
 	return result, nil
 }
 
 func (c *client) SendMessage(conn grpc.BidiStreamingClient[pb.Message, pb.Message], receiver string, errs chan<- error, response <-chan string) {
 	for res := range response {
+
+		c.logger.Debug("Sending message 📧")
+
 		err := conn.Send(&pb.Message{
 			Sender:   c.name,
 			Receiver: receiver,
@@ -108,6 +119,8 @@ func (c *client) SendMessage(conn grpc.BidiStreamingClient[pb.Message, pb.Messag
 			errs <- err
 			return
 		}
+
+		c.logger.Debug("Message sent successfully")
 	}
 }
 
@@ -119,7 +132,11 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		// First save the incoming message.
 
+		c.logger.Debug("Saving message to memory...")
+
 		c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
+
+		c.logger.Debug("Messaged saved to memory successfully")
 
 		if c.model != llms.ProviderOllama {
 			time.Sleep(time.Second * 18)
@@ -148,29 +165,34 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		// When data is received back from the query, fill the channel
 
+		c.logger.Debug("Piping message to response channel...")
+
 		response <- llmResponse
 	}
 }
 
 func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- error, llmChan chan<- string) {
 	for online {
+
 		msg, err := c.conn.Recv()
+
 		if err == io.EOF {
-			// This exits the program when the connection is terminated by
-			// the server.
 			online = false
 		} else if err != nil {
 			errs <- err
 			return
 		} else {
+
+			c.logger.Debugf("Message received from %s", msg.Sender)
+
 			// Send the data to the LLM.
 			content := msg.Content
 			if c.latch {
 				c.memory.Save(ctx, c.NewMessageFrom(msg.Receiver, content))
 				c.logger.Debug("Latch is TRUE. Saved to memory only!")
 			} else {
+				c.logger.Debug("Piping message to LLM service...")
 				llmChan <- content
-				c.logger.Debug("Dispatched message to LLM")
 			}
 		}
 	}

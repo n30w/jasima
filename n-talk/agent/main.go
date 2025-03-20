@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/llms"
@@ -118,7 +119,7 @@ func main() {
 
 	defer connection.Close()
 
-	logger.Info("Created new agent!", "name", name, "server", router, "model", llm)
+	logger.Info("Created new agent!", "name", name, "model", llm)
 
 	c := pb.NewChatServiceClient(connection)
 
@@ -142,7 +143,7 @@ func main() {
 		logger.Fatalf("Unable to establish server connection; failed to send message: %v", err)
 	}
 
-	logger.Info("Established connection to server")
+	logger.Infof("Established connection to the server @ %s", router)
 
 	// Set the status of the client to online.
 
@@ -157,6 +158,11 @@ func main() {
 
 	// Send the initialize text.
 	if conf.Model.Initialize != "" {
+
+		logger.Infof("Initialization is NOT empty, sending initial message to %s", recipient)
+
+		time.Sleep(1 * time.Second)
+
 		file, err := os.Open(conf.Model.Initialize)
 		if err != nil {
 			logger.Fatalf("Failed to open file: %v", err)

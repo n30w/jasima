@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,7 +48,7 @@ func NewOllama(model string, url *url.URL, instructions string, temperature floa
 
 	_, err = http.Get(ollamaUrl.String())
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Ollama is not running or invalid host URL")
 	}
 
 	// Then setup the chat API route.
