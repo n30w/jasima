@@ -79,11 +79,6 @@ func main() {
 	ctx := context.Background()
 	memory := memory.NewMemoryStore()
 
-	llm, err := selectModel(ctx, conf.Model)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	logOptions := log.Options{
 		ReportCaller:    true,
 		ReportTimestamp: true,
@@ -97,6 +92,13 @@ func main() {
 
 	logger.Debug("DEBUG is set to TRUE")
 
+	llm, err := selectModel(ctx, conf.Model, logger)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	logger.Debugf("%s is online and ready to go", llm)
+
 	cfg := &config{
 		name:   name,
 		server: router,
@@ -106,12 +108,12 @@ func main() {
 
 	client, err := NewClient(ctx, llm, memory, cfg, logger)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	connection, err := grpc.NewClient(client.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.Fatalf("%v", err)
 	}
 
 	defer connection.Close()
@@ -137,10 +139,10 @@ func main() {
 		Content:  client.model.String(),
 	})
 	if err != nil {
-		log.Fatalf("Unable to establish server connection; failed to send message: %v", err)
+		logger.Fatalf("Unable to establish server connection; failed to send message: %v", err)
 	}
 
-	log.Info("Established connection to server")
+	logger.Info("Established connection to server")
 
 	// Set the status of the client to online.
 
@@ -157,14 +159,14 @@ func main() {
 	if conf.Model.Initialize != "" {
 		file, err := os.Open(conf.Model.Initialize)
 		if err != nil {
-			log.Fatalf("Failed to open file: %v", err)
+			logger.Fatalf("Failed to open file: %v", err)
 		}
 
 		defer file.Close()
 
 		data, err := io.ReadAll(file)
 		if err != nil {
-			log.Fatalf("Failed to read file: %v", err)
+			logger.Fatalf("Failed to read file: %v", err)
 		}
 
 		fileText := string(data)
@@ -176,7 +178,7 @@ func main() {
 			Content:  fileText,
 		})
 		if err != nil {
-			log.Fatalf("Failed to send message: %v", err)
+			logger.Fatalf("Failed to send message: %v", err)
 		}
 	}
 

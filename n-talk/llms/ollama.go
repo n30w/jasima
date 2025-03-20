@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	ol "github.com/ollama/ollama/api"
@@ -23,8 +24,36 @@ type Ollama struct {
 	httpClient http.Client
 }
 
-func NewOllama(model string, url string, instructions string, temperature float64) *Ollama {
+// NewOllama creates a new Ollama LLM service. `url` is the URL of the server
+// hosting the Ollama instance. If URL is nil, the default instance URL is used.
+func NewOllama(model string, url *url.URL, instructions string, temperature float64) (*Ollama, error) {
+	var err error
+
 	s := false
+
+	ollamaUrl := url
+
+	if url == nil {
+		ollamaUrl, err = url.Parse("http://localhost:11434")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// First check if Ollama is alive. Make a GET request. We don't care
+	// about the value it returns. We only need to know if it errors.
+
+	ollamaUrl.Path = "/api/version"
+
+	_, err = http.Get(ollamaUrl.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// Then setup the chat API route.
+
+	ollamaUrl.Path = "/api/chat"
+	chatUrl := ollamaUrl.String()
 
 	return &Ollama{
 		llm: &llm{
@@ -35,9 +64,9 @@ func NewOllama(model string, url string, instructions string, temperature float6
 			Temperature: float32(temperature),
 		},
 		stream:     &s,
-		url:        url,
+		url:        chatUrl,
 		httpClient: http.Client{Timeout: 0},
-	}
+	}, nil
 }
 
 func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {

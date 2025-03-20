@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"codeberg.org/n30w/jasima/n-talk/llms"
@@ -9,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func selectModel(ctx context.Context, mc ModelConfig) (LLMService, error) {
+func selectModel(ctx context.Context, mc ModelConfig, logger *log.Logger) (LLMService, error) {
 	var llm LLMService
 	var apiKey string
 
@@ -28,9 +29,9 @@ func selectModel(ctx context.Context, mc ModelConfig) (LLMService, error) {
 	case llms.ProviderDeepseek:
 		panic("not implemented")
 	case llms.ProviderOllama:
-		llm = llms.NewOllama("qwen2.5:32b", "http://localhost:11434/api/chat", mc.Instructions, mc.Temperature)
+		llm, err = llms.NewOllama("qwen2.5:32b", nil, mc.Instructions, mc.Temperature)
 	default:
-		log.Fatal("invalid model")
+		return nil, errors.New("invalid model")
 	}
 	if err != nil {
 		return nil, err
