@@ -9,8 +9,11 @@ import (
 )
 
 func main() {
-	fn := logOutput()
-	defer fn()
+	logToFile := false
+	if logToFile {
+		fn := logOutput()
+		defer fn()
+	}
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -19,7 +22,7 @@ func main() {
 
 	s := grpc.NewServer()
 
-	chatServer := newChatServer()
+	chatServer := newChatServer("SERVER")
 	pb.RegisterChatServiceServer(s, chatServer)
 
 	err = s.Serve(lis)

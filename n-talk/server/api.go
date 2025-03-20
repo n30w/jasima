@@ -17,13 +17,15 @@ type client struct {
 
 type chatServer struct {
 	pb.UnimplementedChatServiceServer
-	clients map[string]*client
-	mu      sync.Mutex
+	clients    map[string]*client
+	mu         sync.Mutex
+	serverName string
 }
 
-func newChatServer() *chatServer {
+func newChatServer(name string) *chatServer {
 	return &chatServer{
-		clients: make(map[string]*client),
+		clients:    make(map[string]*client),
+		serverName: name,
 	}
 }
 
@@ -56,7 +58,7 @@ func (s *chatServer) Chat(stream pb.ChatService_ChatServer) error {
 
 	log.Println("Client connected", "client", clientName, "model", clientModel)
 
-	if clientName == "system" {
+	if clientName == "SYSTEM" {
 		log.Println("SYSTEM agent online.")
 	}
 
@@ -102,20 +104,34 @@ func (s *chatServer) routeMessage(msg *pb.Message) error {
 	originClient := s.clients[msg.Sender]
 
 	if ok {
-		if err := destClient.stream.Send(msg); err != nil {
+		err := destClient.stream.Send(msg)
+		if err != nil {
 			log.Printf("Failed to send message to %s: %v\n", msg.Receiver, err)
 		} else {
 			log.Printf("%s [%s]: %s", originClient.name, originClient.model, msg.Content)
+
+			// Also save the message for further processing.
 		}
 	} else {
 
-		log.Printf("Client %s not found\n", msg.Receiver)
+		log.Printf("Client %s not found // From: %s\n", msg.Receiver, msg.Sender)
 
 		if sender, ok := s.clients[msg.Sender]; ok {
-			sender.stream.Send(&pb.Message{Sender: "Server", Content: fmt.Sprintf("Client %s not found", msg.Receiver)})
+			content := fmt.Sprintf("Client %s not found", msg.Receiver)
+			err := sender.stream.Send(s.NewPbMessage(msg.Receiver, content))
+			if err != nil {
+				log.Printf("%v", err)
+			}
 		}
-
 	}
 
 	return nil
+}
+
+func (s *chatServer) NewPbMessage(receiver, content string) *pb.Message {
+	return &pb.Message{
+		Sender:   s.serverName,
+		Receiver: receiver,
+		Content:  content,
+	}
 }
