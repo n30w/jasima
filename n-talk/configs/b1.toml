@@ -1,8 +1,8 @@
 # Name of the agent.
-name = "toki"
+name = "penny"
 
 # Receiver of name's messages.
-recipient = "pona"
+recipient = "tails"
 
 [model]
 

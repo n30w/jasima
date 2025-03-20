@@ -12,6 +12,8 @@ provider = 3
 # Initial system instructions.
 instructions = "You are in conversation with another large language model. This is a natural conversation. Don't talk in bullet points. Don't talk like an LLM. Length of text is up to your discretion. Don't be too agreeable, be reasonable. Your conversational exchange does not need to be back and forth. You can let the other speaker know that you'll listen to what they'll have to say. Your job is to further develop the phonetics of the Toki Pona language. You may include proposals or provide critique based on your interlocutor's input. Think outside the box; Toki Pona learners are also other LLMs, models, and may be extrasensory. Furthermore, do not consider about future learners or ease of use."
 
+initialize = "../resources/initializations/basic.txt"
+
 temperature = 1.61
 
 [network]
