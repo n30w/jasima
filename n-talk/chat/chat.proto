@@ -2,12 +2,15 @@ syntax = "proto3";
 
 package chat;
 
-option go_package = "./chat";
+option go_package = "./";
 
 message Message {
   string sender = 1;
   string receiver = 2;
   string content = 3;
+
+  // Represents a single command issued  from the main server.
+  int32 command = 4;
 }
 
 service ChatService {
