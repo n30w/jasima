@@ -4,7 +4,7 @@ package llms
 
 type llm struct {
 	// model is the name of the model.
-	model string
+	model LLMProvider
 
 	// instruction is a system instruction.
 	instructions string
@@ -24,13 +24,13 @@ func (l LLMProvider) String() string {
 
 	switch l {
 	case 0:
-		s = "Google Gemini"
+		s = "gemini-2.0-flash"
 	case 1:
-		s = "ChatGPT"
+		s = "4o"
 	case 2:
 		s = "Deepseek"
 	case 3:
-		s = "Ollama"
+		s = "qwen2.5:32b"
 	}
 
 	return s

@@ -16,13 +16,13 @@ type OpenAIChatGPT struct {
 	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
 }
 
-func NewOpenAIChatGPT(model string, apiKey string, instructions string, temperature float64) (*OpenAIChatGPT, error) {
+func NewOpenAIChatGPT(apiKey string, instructions string, temperature float64) (*OpenAIChatGPT, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
 	messages = append(messages, openai.SystemMessage(""))
 
 	gpt := &OpenAIChatGPT{
 		llm: &llm{
-			model: model,
+			model: ProviderChatGPT,
 		},
 		chatGptClient: openai.NewClient(option.WithAPIKey(apiKey)),
 		chatGptCompletionParams: &openai.ChatCompletionNewParams{

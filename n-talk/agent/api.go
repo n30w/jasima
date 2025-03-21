@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -10,17 +11,13 @@ import (
 	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
+	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type config struct {
-	name       string
-	peers      []string
-	server     string
-	model      llms.LLMProvider
-	layer      int
-	initialize string
+	*userConfig
 }
 
 type client struct {
@@ -29,8 +26,8 @@ type client struct {
 	llm    LLMService
 	logger *log.Logger
 
-	conn              grpc.BidiStreamingClient[pb.Message, pb.Message]
-	chatServiceClient *grpc.ClientConn
+	conn       grpc.BidiStreamingClient[pb.Message, pb.Message]
+	grpcClient *grpc.ClientConn
 
 	// latch determines whether data that is received from the server is allowed
 	// to be sent to the LLM service. If the latch is `true`, data will NOT be
@@ -39,54 +36,96 @@ type client struct {
 	latch bool
 }
 
-func NewClient(ctx context.Context, llm LLMService, memory MemoryService, cfg *config, logger *log.Logger) (*client, error) {
+func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *log.Logger) (*client, error) {
+	var err error
+	var apiKey string
+	var llm LLMService
+
+	// Initialize the LLM service based on provider.
+
+	err = godotenv.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	switch llms.LLMProvider(cfg.Model.Provider) {
+	case llms.ProviderGoogleGemini:
+		apiKey = os.Getenv("GEMINI_API_KEY")
+		llm, err = llms.NewGoogleGemini(ctx, apiKey, cfg.Model.Instructions, cfg.Model.Temperature)
+	case llms.ProviderChatGPT:
+		apiKey = os.Getenv("CHATGPT_API_KEY")
+		llm, err = llms.NewOpenAIChatGPT(apiKey, cfg.Model.Instructions, cfg.Model.Temperature)
+	case llms.ProviderDeepseek:
+		panic("not implemented")
+	case llms.ProviderOllama:
+		llm, err = llms.NewOllama(nil, cfg.Model.Instructions, cfg.Model.Temperature)
+	default:
+		err = errors.New("invalid LLM provider")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debugf("%s is online and ready to go", llm)
+
+	// Initialize gRPC facilities.
+
+	grpcClient, err := grpc.NewClient(cfg.Network.Router, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+
+	// The implementation of `Chat` is in the server code. This is where the
+	// client establishes the initial connection to the server.
+	conn, err := pb.NewChatServiceClient(grpcClient).Chat(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	c := &client{
-		memory: memory,
-		llm:    llm,
-		config: cfg,
-		logger: logger,
+		memory:     memory,
+		llm:        llm,
+		config:     cfg,
+		logger:     logger,
+		grpcClient: grpcClient,
+		conn:       conn,
 
 		// Initially set `latch` to `true` so that data will only be sent in
 		// lockstep with server commands.
 		latch: true,
 	}
 
-	var err error
+	// Initialize the connection to the server.
 
-	c.chatServiceClient, err = grpc.NewClient(c.config.server, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	err = c.initConnection()
 	if err != nil {
-		logger.Fatalf("%v", err)
+		return nil, err
 	}
-
-	// The implementation of `Chat` is in the server code. This is where the
-	// client establishes a first connection to the server.
-	c.conn, err = pb.NewChatServiceClient(c.chatServiceClient).Chat(ctx)
-	if err != nil {
-		logger.Fatalf("could not create stream: %v", err)
-	}
-
-	// Initialize a connection.
-
-	err = c.sendMessage(c.model.String())
-	if err != nil {
-		logger.Fatalf("Unable to establish server connection; failed to send message: %v", err)
-	}
-
-	logger.Debugf("Established connection to the server @ %s", c.server)
 
 	return c, nil
 }
 
+func (c *client) initConnection() error {
+	err := c.sendMessage(c.llm.String())
+	if err != nil {
+		return err
+	}
+
+	c.logger.Debugf("Established connection to the server @ %s", c.Network.Router)
+
+	return nil
+}
+
 func (c *client) SendInitialMessage(ctx context.Context) error {
-	recipient := c.peers[0]
+	recipient := c.Peers[0]
 
-	if c.initialize != "" {
+	if c.Model.Initialize != "" {
 
-		c.logger.Infof("Initialization path is %s, sending initial message to %s", c.initialize, recipient)
+		c.logger.Infof("Initialization path is %s, sending initial message to %s", c.Model.Initialize, recipient)
 
 		time.Sleep(1 * time.Second)
 
-		file, err := os.Open(c.initialize)
+		file, err := os.Open(c.Model.Initialize)
 		if err != nil {
 			return err
 		}
@@ -117,14 +156,14 @@ func (c *client) Teardown() {
 	c.logger.Debug("Beginning teardown...")
 
 	c.conn.CloseSend()
-	c.chatServiceClient.Close()
+	c.grpcClient.Close()
 }
 
 func (c *client) newMessage(text string) memory.Message {
 	return memory.Message{
 		Text:       text,
 		Timestamp:  time.Now(),
-		InsertedBy: c.name,
+		InsertedBy: c.Name,
 	}
 }
 
@@ -133,7 +172,7 @@ func (c *client) NewMessageFrom(sender string, text string) memory.Message {
 
 	m.Role = 0
 	m.Sender = sender
-	m.Receiver = c.name
+	m.Receiver = c.Name
 
 	return m
 }
@@ -143,13 +182,13 @@ func (c *client) NewMessageTo(recipient string, text string) memory.Message {
 
 	m.Role = 1
 	m.Receiver = recipient
-	m.Sender = c.name
+	m.Sender = c.Name
 
 	return m
 }
 
 func (c *client) request(ctx context.Context, prompt string) (string, error) {
-	a, err := c.memory.Retrieve(ctx, c.name, 0)
+	a, err := c.memory.Retrieve(ctx, c.Name, 0)
 	if err != nil {
 		return "", err
 	}
@@ -187,8 +226,8 @@ func (c *client) SendMessage(errs chan<- error, response <-chan string) {
 
 func (c *client) sendMessage(content string) error {
 	err := c.conn.Send(&pb.Message{
-		Sender:   c.name,
-		Receiver: c.peers[0],
+		Sender:   c.Name,
+		Receiver: c.Peers[0],
 		Content:  content,
 	})
 	if err != nil {
@@ -202,7 +241,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 	for input := range llmChan {
 
 		content := input
-		receiver := c.peers[0]
+		receiver := c.Peers[0]
 
 		// First save the incoming message.
 
@@ -212,7 +251,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		c.logger.Debug("Messaged saved to memory successfully")
 
-		if c.model != llms.ProviderOllama {
+		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
 			time.Sleep(time.Second * 18)
 		}
 
@@ -226,12 +265,12 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		// Save the LLM's response to memory.
 
-		c.memory.Save(ctx, c.NewMessageTo(c.name, llmResponse))
+		c.memory.Save(ctx, c.NewMessageTo(c.Name, llmResponse))
 
 		// Sleep longer if the provider is NOT Ollama. Let's not hit rate
 		// limits...
 
-		if c.model != llms.ProviderOllama {
+		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
 			time.Sleep(time.Second * 18)
 		}
 

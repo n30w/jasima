@@ -2,7 +2,7 @@
 name = "toki"
 
 # Receiver of name's messages.
-recipient = "pona"
+peers = ["pona"]
 
 # Functional layer this agent exists on.
 layer = 1

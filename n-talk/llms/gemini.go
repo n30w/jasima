@@ -14,7 +14,7 @@ type GoogleGemini struct {
 	genaiConfig *genai.GenerateContentConfig
 }
 
-func NewGoogleGemini(ctx context.Context, apiKey string, model string, instructions string, temperature float64) (*GoogleGemini, error) {
+func NewGoogleGemini(ctx context.Context, apiKey string, instructions string, temperature float64) (*GoogleGemini, error) {
 	g, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -25,7 +25,7 @@ func NewGoogleGemini(ctx context.Context, apiKey string, model string, instructi
 
 	c := &GoogleGemini{
 		llm: &llm{
-			model: model,
+			model: ProviderGoogleGemini,
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
@@ -45,7 +45,7 @@ func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, p
 	contents := c.prepare(messages)
 	contents = append(contents, genai.NewUserContentFromText(prompt))
 
-	result, err := c.genaiClient.Models.GenerateContent(ctx, c.model, contents, c.genaiConfig)
+	result, err := c.genaiClient.Models.GenerateContent(ctx, c.model.String(), contents, c.genaiConfig)
 	if err != nil {
 		return "", err
 	}
@@ -65,7 +65,7 @@ func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, p
 	return res, nil
 }
 
-// getContent makes adheres memories to the `genai` library `content` type.
+// prepare adheres memories to the `genai` library `content` type.
 func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	l := len(messages)
 

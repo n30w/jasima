@@ -27,7 +27,7 @@ type Ollama struct {
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
 // hosting the Ollama instance. If URL is nil, the default instance URL is used.
-func NewOllama(model string, url *url.URL, instructions string, temperature float64) (*Ollama, error) {
+func NewOllama(url *url.URL, instructions string, temperature float64) (*Ollama, error) {
 	var err error
 
 	s := false
@@ -58,7 +58,7 @@ func NewOllama(model string, url *url.URL, instructions string, temperature floa
 
 	return &Ollama{
 		llm: &llm{
-			model:        model,
+			model:        ProviderOllama,
 			instructions: instructions,
 		},
 		options: &ol.Options{
@@ -78,7 +78,7 @@ func (c *Ollama) Request(ctx context.Context, messages []memory.Message, prompt 
 	options["temperature"] = c.options.Temperature
 
 	ollamaRequest := ol.ChatRequest{
-		Model:    c.model,
+		Model:    c.model.String(),
 		Stream:   c.stream,
 		Messages: contents,
 		Options:  options,

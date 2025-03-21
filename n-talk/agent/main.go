@@ -7,37 +7,36 @@ import (
 	"os/signal"
 	"syscall"
 
-	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
 )
 
-type ModelConfig struct {
+type modelConfig struct {
 	Provider     int
 	Instructions string
 	Temperature  float64
 	Initialize   string
 }
 
-type NetworkConfig struct {
+type networkConfig struct {
 	Router   string
 	Database string
 }
 
-type ConfigFile struct {
-	Name      string
-	Recipient string
-	Layer     int
-	Model     ModelConfig
-	Network   NetworkConfig
+type userConfig struct {
+	Name    string
+	Peers   []string
+	Layer   int
+	Model   modelConfig
+	Network networkConfig
 }
 
 func main() {
 	var err error
 
 	flagName := flag.String("name", "", "name of the agent")
-	flagRecipient := flag.String("recipient", "", "name of the recipient agent")
+	flagPeers := flag.String("peers", "", "comma separated list of agent's peers")
 	flagServer := flag.String("server", "", "communication server")
 	flagProvider := flag.Int("model", -1, "LLM model to use")
 	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
@@ -48,7 +47,7 @@ func main() {
 
 	flag.Parse()
 
-	var userConf ConfigFile
+	var userConf userConfig
 
 	_, err = toml.DecodeFile(*flagConfigPath, &userConf)
 	if err != nil {
@@ -59,8 +58,8 @@ func main() {
 		userConf.Name = *flagName
 	}
 
-	if *flagRecipient != "" {
-		userConf.Recipient = *flagRecipient
+	if *flagPeers != "" {
+		userConf.Peers[0] = *flagPeers
 	}
 
 	if *flagServer != "" {
@@ -87,40 +86,30 @@ func main() {
 	memory := memory.NewMemoryStore()
 
 	logOptions := log.Options{
-		ReportCaller:    true,
 		ReportTimestamp: true,
 	}
 
 	if *flagDebug {
 		logOptions.Level = log.DebugLevel
+		logOptions.ReportCaller = true
 	}
 
 	logger := log.NewWithOptions(os.Stderr, logOptions)
 
 	logger.Debug("DEBUG is set to TRUE")
 
-	llm, err := selectModel(ctx, userConf.Model, logger)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	logger.Debugf("%s is online and ready to go", llm)
-
 	cfg := &config{
-		name:       userConf.Name,
-		server:     userConf.Network.Router,
-		model:      llms.LLMProvider(userConf.Model.Provider),
-		peers:      []string{userConf.Recipient},
-		layer:      userConf.Layer,
-		initialize: userConf.Model.Initialize,
+		userConfig: &userConf,
 	}
 
-	client, err := NewClient(ctx, llm, memory, cfg, logger)
+	client, err := NewClient(ctx, cfg, memory, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	logger.Info("Created new agent!", "name", client.name, "model", client.llm, "layer", client.layer)
+	logger.Info("Created new agent!", "name", client.Name, "model", client.llm, "layer", client.Layer)
+
+	// Send an initial message, if the initialization config parameter is set.
 
 	err = client.SendInitialMessage(ctx)
 	if err != nil {

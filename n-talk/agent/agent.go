@@ -7,7 +7,7 @@ import (
 )
 
 type LLMService interface {
-	// Stringer interface.
+	// String returns the full name of the service provider and the model type.
 	String() string
 
 	// Sends a request to the remote service. Returns a reply in the form
