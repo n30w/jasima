@@ -252,6 +252,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 		c.logger.Debug("Messaged saved to memory successfully")
 
 		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
+			c.logger.Debug("sleeping...")
 			time.Sleep(time.Second * 18)
 		}
 
@@ -271,6 +272,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 		// limits...
 
 		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
+			c.logger.Debug("sleeping again...")
 			time.Sleep(time.Second * 18)
 		}
 
