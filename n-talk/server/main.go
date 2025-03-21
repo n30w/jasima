@@ -1,32 +1,45 @@
 package main
 
 import (
-	"log"
-	"net"
+	"flag"
+	"os"
 
-	pb "codeberg.org/n30w/jasima/n-talk/chat"
-	"google.golang.org/grpc"
+	"github.com/charmbracelet/log"
 )
 
 func main() {
-	logToFile := false
-	if logToFile {
-		fn := logOutput()
-		defer fn()
+	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
+	flagLogToFile := flag.Bool("logToFile", false, "also logs output to file")
+
+	flag.Parse()
+
+	logOptions := log.Options{
+		ReportTimestamp: true,
 	}
 
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+	if *flagDebug {
+		logOptions.Level = log.DebugLevel
+		logOptions.ReportCaller = true
 	}
 
-	s := grpc.NewServer()
+	logger := log.NewWithOptions(os.Stderr, logOptions)
 
-	chatServer := newChatServer("SERVER")
-	pb.RegisterChatServiceServer(s, chatServer)
+	logger.Info("starting with these options", "debug", *flagDebug, "logToFile", *flagLogToFile)
 
-	err = s.Serve(lis)
-	if err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	errors := make(chan error)
+
+	if *flagLogToFile {
+		f := logOutput(logger, errors)
+		defer f()
+	}
+
+	server := NewServer("SERVER", logger)
+
+	go server.ListenAndServe(errors)
+
+	for err := range errors {
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 }
