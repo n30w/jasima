@@ -15,8 +15,8 @@ tasks:
       - go run ./agent -configFile="./configs/a2.toml" -debug=true
   run-server:
     cmds:
-      - go run ./server
+      - go run ./server -debug=true -logToFile=true
   # utils
   gen-proto-chat:
     cmds:
-      - protoc --go_out=./chat/ --go-grpc_out=./chat/ chat.proto
+      - protoc --go_out=./chat/ --go-grpc_out=./chat/ ./chat/chat.proto
