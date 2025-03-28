@@ -9,48 +9,66 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// Modified from:
+// logOutput uses a logger to write outputs to both stdout and a file at
+// `logFilePath`. logOutput writes to the error channel `errors` when an error
+// occurs.
+//
+// This function is a modified version of:
 // https://gist.github.com/jerblack/4b98ba48ed3fb1d9f7544d2b1a1be287
-func logOutput(log *log.Logger, errors chan<- error) func() {
-	logFile := fmt.Sprintf("../outputs/server_log_%s.log", time.Now().Format(time.RFC3339))
+// This implementation uses an error channel and contains more documentation
+// for learning purposes.
+//
+// For a NON-annotated version of this function, see:
+// https://gist.github.com/n30w/bb7e1ab90838b398bba863ca486c1344#file-tee_with_channel-go
+func logOutput(log *log.Logger, logFilePath string, errors chan<- error) func() {
+	// Create a new file at the specified `logFile` location. If the file
+	// does not exist, it creates a new one. Otherwise, it will clear the file
+	// of its contents when it opens.
 
-	// open file read/write | create if not exist | clear file at open if exists
-	f, _ := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+	f, _ := os.OpenFile(logFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 
-	// save existing stdout | MultiWriter writes to saved stdout and file
+	// Create a new MultiWriter, `mw`. MultiWriter, as the name sugests, writes
+	// the output of multiple writers to different locations.
+
 	out := os.Stdout
 	mw := io.MultiWriter(out, f)
 
 	// Create a pipe. A pipe can be written to and read from. It is represented
-	// in the OS as a pair of two connected files.
+	// in the OS as a pair of two connected files, one that can be read from and
+	// one that can be written to.
 
 	r, w, err := os.Pipe()
 	if err != nil {
 		errors <- err
 	}
 
-	// Set the Standard Output and Standard Error outputs to point to the pipe's
-	// `w`, which is the file that can be written to.
+	// Set stdout and stderr to point to the pipe's write file, `w`.
 
 	os.Stdout = w
 	os.Stderr = w
 
-	// Set the logger's output to the MultiWriter, rather than Stdout. Keep in
-	// mind this will remove color output from stdout. This is because
+	// Set the logger's output to the MultiWriter, rather than stdout.
+	//
+	// Keep in mind this will remove color output from stdout. This is because
 	// MultiWriter removes terminal color escape sequences. See:
 	// https://github.com/sirupsen/logrus/issues/780#issuecomment-401542420
 
 	log.SetOutput(mw)
 
-	// Create a new channel `exit` with an empty struct type. This type
-	// allocates no memory, because it is an empty struct. Also, this
-	// empty struct channel pattern is idiomatic in Go for channels that
-	// are used for signaling rather than value passing.
+	// Create a new channel, `exit`. The type of `exit` is an empty struct.
+	// This type allocates no memory, because it is an empty struct. The empty
+	// struct channel pattern is idiomatic in Go for channels that are used for
+	// signaling of events rather than sharing of data.
 	//
-	// See: https://dave.cheney.net/2014/03/25/the-empty-struct and also
-	// check out: https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/select#synchronising-processes
+	// See:
+	// - https://dave.cheney.net/2014/03/25/the-empty-struct
+	// - https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/select#synchronising-processes
 
 	exit := make(chan struct{})
+
+	// This next section contains two functions, FUNCTIOn A and FUNCTION B.
+	// FUNCTION A is dispatched into its own go routine. FUNCTION B is the return
+	// value of the function enclosing the return keyword.
 
 	/// FUNCTION A ///
 
@@ -65,12 +83,18 @@ func logOutput(log *log.Logger, errors chan<- error) func() {
 		_, err = io.Copy(mw, r)
 
 		// ... using the `.Close()` method on either the io.Writer (mw) or the
-		// io.Reader (r) makes `io.Copy(mw, r)` function return. After the
-		// `io.Copy` function returns, `close(exit)` will execute, closing the
-		// `exit` channel that was created earlier. Closing the `exit` channel
-		// is a way to notify that logging operations are completed.
+		// io.Reader (r) makes the `io.Copy(mw, r)` function return, because
+		// inside io.Copy's implementation, there is code that will: 1) exit the
+		// function when `mw` or `r` returns an error; OR 2) exit the function when
+		// `r` has reached io.EOF.
+
+		// Now, after the `io.Copy` function returns, `close(exit)` will execute...
 
 		close(exit)
+
+		// ... which closes the `exit` channel that was created earlier. Remember
+		// that closing the `exit` channel is a way to notify that logging
+		// operations are now complete.
 
 		if err != nil {
 			errors <- err
@@ -80,11 +104,12 @@ func logOutput(log *log.Logger, errors chan<- error) func() {
 	/// FUNCTION B ///
 
 	// The return value is a function that should be executed at the end of the
-	// program's lifetime (use `defer`).
+	// enclosing function's caller's lifetime (use `defer`).
 
 	return func() {
-		// Close the pipe's writer file from earlier. When this file is closed,
-		// `io.Copy` from FUNCTION A will detect an EOF and subsequently return.
+		// Close the pipe's writer file that was defined from earlier. When
+		// this file is closed, `io.Copy` from FUNCTION A will detect an EOF
+		// and subsequently return, stopping FUNCTION A's go routine.
 
 		err := w.Close()
 		if err != nil {
@@ -92,14 +117,17 @@ func logOutput(log *log.Logger, errors chan<- error) func() {
 		}
 
 		// After the pipe's writer file is closed, the bare `<-exit` is used to
-		// block execution. `<-exit` will stop blocking if and only if the
-		// `exit` channel receives a value, or, in this case, the `exit` channel
-		// is closed (using `close(exit)`). Therefore, everything waits for
-		// either of these two conditions.
+		// block execution. To "block execution" means the code that immediately
+		// follows AFTER `<-exit` will not execute. `<-exit` will stop blocking if
+		// and only if the `exit` channel receives a value, or, in this case, the
+		// `exit` channel is closed (using `close(exit)`). In a slightly more formal
+		// syntax:
+		//
+		// close(exit) + send_value_to_exit(value) => ~block.
 
 		<-exit
 
-		// Close the logging file that was being written to.
+		// Make sure to close the logging file that `mw` was writing to.
 
 		err = f.Close()
 		if err != nil {

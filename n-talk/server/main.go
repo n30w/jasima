@@ -29,7 +29,8 @@ func main() {
 	errors := make(chan error)
 
 	if *flagLogToFile {
-		f := logOutput(logger, errors)
+		logFilePath := fmt.Sprintf("../outputs/server_log_%s.log", time.Now().Format(time.RFC3339))
+		f := logOutput(logger, logFilePath, errors)
 		defer f()
 	}
 
