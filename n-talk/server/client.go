@@ -10,6 +10,7 @@ type client struct {
 	stream pb.ChatService_ChatServer
 	name   string
 	model  string
+	layer  int
 }
 
 func NewClient(stream pb.ChatService_ChatServer, name, model string) (*client, error) {

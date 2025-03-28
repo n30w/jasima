@@ -62,18 +62,10 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 		return err
 	}
 
-	client, err := NewClient(stream, firstMsg.Sender, firstMsg.Content)
+	client, err := s.initClient(stream, firstMsg)
 	if err != nil {
 		return err
 	}
-
-	s.connect(client)
-
-	s.logger.Info("client connected", "client", client.String())
-
-	// if clientName == "SYSTEM" {
-	// 	s.logger.Println("SYSTEM agent online.")
-	// }
 
 	// Enter an infinite listening session when the client is connected.
 
@@ -85,17 +77,28 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 	return nil
 }
 
+func (s *Server) initLayer(stream pb.ChatService_ChatServer, client *client) error {
+	return s.listen(stream, client)
+}
+
+// listen is called when a client connection with `Chat` has already been
+// established. It disconnects clients when they error or when they disconnect
+// from the server. It also calls `routeMessage` when a message is received
+// from the connected client.
 func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error {
 	var err error
 	disconnected := false
 
 	for !disconnected {
 		var msg *pb.Message
+
+		// Wait for a message to come in from the client. This is a blocking call.
+
 		msg, err = stream.Recv()
 
 		if err == io.EOF {
 
-			s.disconnect(client)
+			s.removeClient(client)
 
 			s.logger.Info("client disconnected", "client", client.name)
 
@@ -103,7 +106,7 @@ func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error 
 
 		} else if err != nil {
 
-			s.disconnect(client)
+			s.removeClient(client)
 
 			disconnected = true
 
@@ -114,13 +117,19 @@ func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error 
 
 			fromSender := s.newPbMessage(msg.Sender, msg.Receiver, msg.Content)
 
-			err = s.routeMessage(fromSender)
+			err = s.handleMessage(fromSender)
 			if err != nil {
 				s.logger.Errorf("%v", err)
 				continue
 			}
 
-			// If all is well...
+			// If all is well save the message to transcript.
+
+			err = s.saveToTranscript(fromSender)
+			if err != nil {
+				s.logger.Errorf("%v", err)
+				continue
+			}
 
 			s.logger.Infof("%s: %s", msg.Sender, msg.Content)
 
@@ -135,7 +144,28 @@ func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error 
 	return nil
 }
 
-func (s *Server) connect(client *client) {
+func (s *Server) saveToTranscript(msg *pb.Message) error {
+	return nil
+}
+
+// initClient initializes a client connection and adds the client to the list
+// of clients currently maintaining a connection.
+func (s *Server) initClient(stream pb.ChatService_ChatServer, msg *pb.Message) (*client, error) {
+	client, err := NewClient(stream, msg.Sender, msg.Content)
+	if err != nil {
+		return nil, err
+	}
+
+	s.addClient(client)
+
+	s.logger.Info("client connected", "client", client.String())
+
+	return client, nil
+}
+
+// addClient adds a client to the list of clients that maintain an active
+// connection to the server.
+func (s *Server) addClient(client *client) {
 	// Add the client to the list of current clients. Multiple connections may
 	// happen all at once, so we need to lock and unlock the mutex to avoid
 	// race conditions.
@@ -145,22 +175,39 @@ func (s *Server) connect(client *client) {
 	s.mu.Unlock()
 }
 
-func (s *Server) disconnect(client *client) {
+// removeClient removes a client from the list of clients that maintain an
+// active connection to the server.
+func (s *Server) removeClient(client *client) {
 	s.mu.Lock()
 	delete(s.clients, client.name)
 	s.mu.Unlock()
 }
 
+// handleMessage decides what happens to a message, based on sender, receiver,
+// and the state of the layer.
+func (s *Server) handleMessage(msg *pb.Message) error {
+	// If a message is from a system agent.
+
+	if msg.Sender == "SYSTEM" && msg.Receiver == "SERVER" {
+		return nil
+	}
+
+	err := s.routeMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// routeMessage sends a message `msg` to a client. The client should exist in
+// the list of clients maintaining an active connection. routeMessage returns
+// an error if the client does not exist.
 func (s *Server) routeMessage(msg *pb.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var err error
-
-	// If a message is from a system agent.
-	if msg.Sender == "SYSTEM" && msg.Receiver == "SERVER" {
-		return nil
-	}
 
 	destClient, ok := s.clients[msg.Receiver]
 
@@ -170,13 +217,10 @@ func (s *Server) routeMessage(msg *pb.Message) error {
 		err = fmt.Errorf("from: %s -> client [%s] not found", msg.Sender, msg.Receiver)
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
+// newPbMessage constructs a new protobuf Message.
 func (s *Server) newPbMessage(sender, receiver, content string, command ...int32) *pb.Message {
 	m := &pb.Message{
 		Sender:   sender,
