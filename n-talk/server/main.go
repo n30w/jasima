@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/log"
 )

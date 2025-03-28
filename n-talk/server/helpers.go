@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/charmbracelet/log"
 )
@@ -27,7 +25,7 @@ func logOutput(log *log.Logger, logFilePath string, errors chan<- error) func() 
 
 	f, _ := os.OpenFile(logFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 
-	// Create a new MultiWriter, `mw`. MultiWriter, as the name sugests, writes
+	// Create a new MultiWriter, `mw`. MultiWriter, as the name suggests, writes
 	// the output of multiple writers to different locations.
 
 	out := os.Stdout
