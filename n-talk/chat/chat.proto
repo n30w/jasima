@@ -9,7 +9,7 @@ message Message {
   string receiver = 2;
   string content = 3;
 
-  // Represents a single command issued  from the main server.
+  // Represents a single command issued from the main server.
   int32 command = 4;
 }
 
