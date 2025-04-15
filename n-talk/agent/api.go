@@ -309,8 +309,10 @@ func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- e
 				c.memory.Clear()
 			case server.Latch:
 				c.latch = true
+				c.logger.Debug("Server commands LATCH", "latch", c.latch)
 			case server.Unlatch:
 				c.latch = false
+				c.logger.Debug("Server commands UNLATCH", "latch", c.latch)
 			default:
 				// Send the data to the LLM.
 				content := msg.Content
