@@ -27,7 +27,7 @@ type networkConfig struct {
 type userConfig struct {
 	Name    string
 	Peers   []string
-	Layer   int
+	Layer   int32
 	Model   modelConfig
 	Network networkConfig
 }
@@ -79,7 +79,7 @@ func main() {
 	}
 
 	if *flagLayer != -1 {
-		userConf.Layer = *flagLayer
+		userConf.Layer = int32(*flagLayer)
 	}
 
 	ctx := context.Background()

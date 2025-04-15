@@ -229,6 +229,7 @@ func (c *client) sendMessage(content string) error {
 		Sender:   c.Name,
 		Receiver: c.Peers[0],
 		Content:  content,
+		Layer:    c.Layer,
 	})
 	if err != nil {
 		return err
