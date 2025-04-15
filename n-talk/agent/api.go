@@ -113,6 +113,7 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 	return c, nil
 }
 
+// initConnection runs to establish an initial connection to the server.
 func (c *client) initConnection() error {
 	err := c.sendMessage(c.llm.String())
 	if err != nil {
@@ -282,6 +283,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 	}
 }
 
+// ReceiveMessages receives messages from the server.
 func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- error, llmChan chan<- string) {
 	for online {
 
