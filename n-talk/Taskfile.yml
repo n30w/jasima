@@ -1,9 +1,9 @@
-version: '3'
+version: "3"
 tasks:
   # Run commands
   run-agent-toki:
     cmds:
-      - go run ./agent -debug=true -initialize="./configs/default_message.txt" -temperature=1.62 -layer=1 -name="toki" -peers="pona"
+      - go run ./agent -debug=true -initialize="./configs/default_message.txt" -temperature=1.62 -layer=1 -name="toki" -peers="pona" -model=0
   run-agent-pona:
     cmds:
       - go run ./agent -debug=true -temperature=1.62 -layer=1 -name="pona" -peers="toki"
@@ -15,7 +15,7 @@ tasks:
       - go run ./agent -configFile="./configs/a2.toml" -debug=true
   run-server:
     cmds:
-      - go run ./server -debug=true -logToFile=true
+      - go run ./server/cmd -debug=true -logToFile=false
   # utils
   gen-proto-chat:
     cmds:
