@@ -86,6 +86,7 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 	// Each client receives their own context.
 
 	ctx, cancel := context.WithCancel(context.Background())
+
 	defer cancel()
 
 	err = s.listen(ctx, stream, client)
@@ -146,10 +147,10 @@ func (s *Server) listen(ctx context.Context, stream pb.ChatService_ChatServer, c
 				continue
 			}
 
+			s.logger.Infof("%s: %s", msg.Sender, msg.Content)
+
 			// Emit done signal for evolution function.
 			s.exchangeComplete <- true
-
-			s.logger.Infof("%s: %s", msg.Sender, msg.Content)
 		}
 	}
 
