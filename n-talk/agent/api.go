@@ -238,12 +238,14 @@ func (c *client) SendMessage(errs chan<- error, response <-chan string) {
 }
 
 func (c *client) sendMessage(content string) error {
-	err := c.conn.Send(&pb.Message{
+	msg := &pb.Message{
 		Sender:   c.Name,
 		Receiver: c.Peers[0],
 		Content:  content,
 		Layer:    c.Layer,
-	})
+	}
+
+	err := c.conn.Send(msg)
 	if err != nil {
 		return err
 	}
