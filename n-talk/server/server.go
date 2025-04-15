@@ -128,7 +128,7 @@ type langSpecification struct {
 	Phonetics  string
 }
 
-func newLangSpecification(p string) (*langSpecification, error) {
+func NewLangSpecification(p string) (*langSpecification, error) {
 	ls := &langSpecification{}
 
 	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))

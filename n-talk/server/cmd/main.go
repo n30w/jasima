@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"flag"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/server"
 	"github.com/charmbracelet/log"
 )
 
@@ -28,7 +29,7 @@ func main() {
 
 	logger := log.NewWithOptions(os.Stderr, logOptions)
 
-	logger.Info("starting with these options", "debug", *flagDebug, "logToFile", *flagLogToFile)
+	logger.Info("starting with these options", "debug", *flagDebug, "logToFile", *flagLogToFile, "specs", *flagSpecificationPath)
 
 	errors := make(chan error)
 
@@ -38,17 +39,17 @@ func main() {
 		defer f()
 	}
 
-	memory := serverMemory{
-		memory.NewMemoryStore(0),
+	memory := server.ServerMemory{
+		MemoryService: memory.NewMemoryStore(0),
 	}
 
-	// Load and serialize specifications
-	specifications, err := newLangSpecification(*flagSpecificationPath)
+	// Load and serialize specifications.
+	specifications, err := server.NewLangSpecification(*flagSpecificationPath)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	server := NewConlangServer("SERVER", logger, memory, specifications)
+	server := server.NewConlangServer("SERVER", logger, memory, specifications)
 
 	go server.ListenAndServe(errors)
 

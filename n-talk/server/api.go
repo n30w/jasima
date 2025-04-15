@@ -308,12 +308,12 @@ func (s *Server) SendCommand(command Command, to *client) error {
 	return nil
 }
 
-type serverMemory struct {
+type ServerMemory struct {
 	MemoryService
 }
 
 // String serializes all memories into a string.
-func (s serverMemory) String() string {
+func (s ServerMemory) String() string {
 	var builder strings.Builder
 
 	t := template.New("t1")
