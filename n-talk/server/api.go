@@ -225,9 +225,7 @@ func (s *Server) getClientByName(name string) (*client, error) {
 	var c *client
 	var ok bool
 
-	s.mu.Lock()
 	c, ok = s.clients.getByName(name)
-	s.mu.Unlock()
 
 	if !ok {
 		return nil, fmt.Errorf("client with name: '%s' not found", name)
@@ -257,8 +255,8 @@ func (s *Server) handleMessage(msg *pb.Message) error {
 // the list of clients maintaining an active connection. routeMessage returns
 // an error if the client does not exist.
 func (s *Server) routeMessage(msg *pb.Message) error {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	var err error
 
