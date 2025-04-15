@@ -130,7 +130,7 @@ func (s *Server) listen(ctx context.Context, stream pb.ChatService_ChatServer, c
 			// Strip away any `Command` that came from a client by making
 			// a new pb message.
 
-			fromSender := s.newPbMessage(msg.Sender, msg.Receiver, msg.Content)
+			fromSender := s.newPbMessage(msg.Sender, msg.Receiver, msg.Content, msg.Layer)
 
 			err = s.handleMessage(fromSender)
 			if err != nil {
@@ -176,7 +176,7 @@ func (s *Server) saveToTranscript(ctx context.Context, msg *pb.Message) error {
 // initClient initializes a client connection and adds the client to the list
 // of clients currently maintaining a connection.
 func (s *Server) initClient(stream pb.ChatService_ChatServer, msg *pb.Message) (*client, error) {
-	client, err := NewClient(stream, msg.Sender, msg.Content)
+	client, err := NewClient(stream, msg.Sender, msg.Content, msg.Layer)
 	if err != nil {
 		return nil, err
 	}
@@ -277,12 +277,13 @@ func (s *Server) routeMessage(msg *pb.Message) error {
 }
 
 // newPbMessage constructs a new protobuf Message.
-func (s *Server) newPbMessage(sender, receiver, content string, command ...int32) *pb.Message {
+func (s *Server) newPbMessage(sender, receiver, content string, layer int32, command ...int32) *pb.Message {
 	m := &pb.Message{
 		Sender:   sender,
 		Receiver: receiver,
 		Content:  content,
 		Command:  -1,
+		Layer:    layer,
 	}
 
 	if len(command) > 0 {

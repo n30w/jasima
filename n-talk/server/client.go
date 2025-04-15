@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
+	"github.com/charmbracelet/log"
 )
 
 type client struct {
@@ -13,7 +14,7 @@ type client struct {
 	layer  int32
 }
 
-func NewClient(stream pb.ChatService_ChatServer, name, model string) (*client, error) {
+func NewClient(stream pb.ChatService_ChatServer, name, model string, layer int32) (*client, error) {
 	if name == "" {
 		return nil, fmt.Errorf("client name cannot be empty")
 	}
@@ -22,6 +23,7 @@ func NewClient(stream pb.ChatService_ChatServer, name, model string) (*client, e
 		stream: stream,
 		name:   name,
 		model:  model,
+		layer:  layer,
 	}
 
 	return c, nil
@@ -52,6 +54,7 @@ type (
 type clientele struct {
 	byName  nameToClientsMap
 	byLayer layerToNamesMap
+	logger  *log.Logger
 }
 
 func (ct *clientele) addByName(c *client) {
