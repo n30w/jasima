@@ -47,6 +47,19 @@ func main() {
 
 	flag.Parse()
 
+	logOptions := log.Options{
+		ReportTimestamp: true,
+	}
+
+	logger := log.NewWithOptions(os.Stderr, logOptions)
+
+	if *flagDebug {
+		logOptions.Level = log.DebugLevel
+		logOptions.ReportCaller = true
+	}
+
+	logger.Debug("DEBUG is set to TRUE")
+
 	var userConf userConfig
 
 	_, err = toml.DecodeFile(*flagConfigPath, &userConf)
@@ -82,21 +95,15 @@ func main() {
 		userConf.Layer = int32(*flagLayer)
 	}
 
+	if userConf.Layer <= 0 {
+		logger.Fatal("`layer` parameter must be greater than 0")
+	}
+
 	ctx := context.Background()
+
+	logger.Debug("Initializing memory storage")
+
 	memory := memory.NewMemoryStore(0)
-
-	logOptions := log.Options{
-		ReportTimestamp: true,
-	}
-
-	if *flagDebug {
-		logOptions.Level = log.DebugLevel
-		logOptions.ReportCaller = true
-	}
-
-	logger := log.NewWithOptions(os.Stderr, logOptions)
-
-	logger.Debug("DEBUG is set to TRUE")
 
 	cfg := &config{
 		userConfig: &userConf,
