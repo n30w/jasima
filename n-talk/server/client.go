@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// client represents a client connected to the server.
 type client struct {
 	stream pb.ChatService_ChatServer
 	name   string
