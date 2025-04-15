@@ -99,7 +99,9 @@ func main() {
 		logger.Fatal("`layer` parameter must be greater than 0")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
 
 	logger.Debug("Initializing memory storage")
 
