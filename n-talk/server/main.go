@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"flag"
@@ -13,6 +13,7 @@ import (
 func main() {
 	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
 	flagLogToFile := flag.Bool("logToFile", false, "also logs output to file")
+	flagSpecificationPath := flag.String("specs", "../resources/specifications", "path to directory containing specifications")
 
 	flag.Parse()
 
@@ -41,7 +42,13 @@ func main() {
 		memory.NewMemoryStore(0),
 	}
 
-	server := NewServer("SERVER", logger, memory)
+	// Load and serialize specifications
+	specifications, err := newLangSpecification(*flagSpecificationPath)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	server := NewConlangServer("SERVER", logger, memory, specifications)
 
 	go server.ListenAndServe(errors)
 

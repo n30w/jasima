@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -18,21 +18,29 @@ import (
 
 type Server struct {
 	pb.UnimplementedChatServiceServer
-	clients    map[string]*client
+	clients    *clientele
 	mu         sync.Mutex
 	serverName string
 	logger     *log.Logger
 	memory     ServerMemoryService
+
+	// exchangeComplete is a signaling channel to detect whether or not
+	// an exchange between two clients has been completed.
+	exchangeComplete chan bool
 }
 
-func NewServer(name string, l *log.Logger, m ServerMemoryService) *Server {
-	return &Server{
-		clients:    make(map[string]*client),
-		serverName: name,
-		logger:     l,
-		memory:     m,
-	}
-}
+// func newServer(name string, l *log.Logger, m ServerMemoryService) *Server {
+// 	return &Server{
+// 		clients: &clientele{
+// 			byName:  make(nameToClientsMap),
+// 			byLayer: make(layerToNamesMap),
+// 		},
+// 		serverName:       name,
+// 		logger:           l,
+// 		memory:           m,
+// 		exchangeComplete: make(chan bool),
+// 	}
+// }
 
 func (s *Server) ListenAndServe(errors chan<- error) {
 	protocol := "tcp"
@@ -88,10 +96,6 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 	return nil
 }
 
-func (s *Server) initLayer(ctx context.Context, stream pb.ChatService_ChatServer, client *client) error {
-	return s.listen(ctx, stream, client)
-}
-
 // listen is called when a client connection with `Chat` has already been
 // established. It disconnects clients when they error or when they disconnect
 // from the server. It also calls `routeMessage` when a message is received
@@ -142,9 +146,10 @@ func (s *Server) listen(ctx context.Context, stream pb.ChatService_ChatServer, c
 				continue
 			}
 
-			s.logger.Infof("%s: %s", msg.Sender, msg.Content)
+			// Emit done signal for evolution function.
+			s.exchangeComplete <- true
 
-			// Save the message for further processing.
+			s.logger.Infof("%s: %s", msg.Sender, msg.Content)
 		}
 	}
 
@@ -178,7 +183,7 @@ func (s *Server) initClient(stream pb.ChatService_ChatServer, msg *pb.Message) (
 
 	s.addClient(client)
 
-	s.logger.Info("client connected", "client", client.String())
+	s.logger.Info("Client connected", "client", client.String(), "layer", client.layer)
 
 	return client, nil
 }
@@ -191,7 +196,9 @@ func (s *Server) addClient(client *client) {
 	// race conditions.
 
 	s.mu.Lock()
-	s.clients[client.name] = client
+	// s.clients.byName[client.name] = client
+	s.clients.addByName(client)
+	s.clients.addByLayer(client)
 	s.mu.Unlock()
 }
 
@@ -199,8 +206,34 @@ func (s *Server) addClient(client *client) {
 // active connection to the server.
 func (s *Server) removeClient(client *client) {
 	s.mu.Lock()
-	delete(s.clients, client.name)
+	s.clients.removeByName(client)
+	s.clients.removeByLayer(client)
 	s.mu.Unlock()
+}
+
+func (s *Server) getClientsByLayer(layer int32) []*client {
+	var c []*client
+
+	s.mu.Lock()
+	c = s.clients.getByLayer(layer)
+	s.mu.Unlock()
+
+	return c
+}
+
+func (s *Server) getClientByName(name string) (*client, error) {
+	var c *client
+	var ok bool
+
+	s.mu.Lock()
+	c, ok = s.clients.getByName(name)
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf("client with name: '%s' not found", name)
+	}
+
+	return c, nil
 }
 
 // handleMessage decides what happens to a message, based on sender, receiver,
@@ -224,20 +257,23 @@ func (s *Server) handleMessage(msg *pb.Message) error {
 // the list of clients maintaining an active connection. routeMessage returns
 // an error if the client does not exist.
 func (s *Server) routeMessage(msg *pb.Message) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
 	var err error
 
-	destClient, ok := s.clients[msg.Receiver]
-
-	if ok {
-		err = destClient.Send(msg)
-	} else {
-		err = fmt.Errorf("from: %s -> client [%s] not found", msg.Sender, msg.Receiver)
+	// destClient, ok := s.clients.byName[msg.Receiver]
+	destClient, err := s.getClientByName(msg.Receiver)
+	if err != nil {
+		return err
 	}
 
-	return err
+	err = destClient.Send(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // newPbMessage constructs a new protobuf Message.
@@ -255,6 +291,21 @@ func (s *Server) newPbMessage(sender, receiver, content string, command ...int32
 	}
 
 	return m
+}
+
+// SendCommand issues a command to a client.
+func (s *Server) SendCommand(command Command, to *client) error {
+	msg := &pb.Message{
+		Command: int32(command),
+		Layer:   to.layer,
+	}
+
+	err := to.Send(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type serverMemory struct {
