@@ -121,6 +121,16 @@ func (s *ConlangServer) EvolutionLoop() {
 	}
 }
 
+func (s *Server) TestExchangeEvent() {
+	i := 0
+	for i < 5 {
+		<-s.exchangeComplete
+		i++
+		s.logger.Infof("Exchange Total: %d", i)
+	}
+	s.logger.Info("see ya later")
+}
+
 type langSpecification struct {
 	Logography string
 	Grammar    string
