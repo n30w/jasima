@@ -10,6 +10,7 @@ import (
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
 	"codeberg.org/n30w/jasima/n-talk/llms"
 	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/server"
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -286,9 +287,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 // ReceiveMessages receives messages from the server.
 func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- error, llmChan chan<- string) {
 	for online {
-
 		msg, err := c.conn.Recv()
-
 		if err == io.EOF {
 			online = false
 		} else if err != nil {
@@ -298,15 +297,26 @@ func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- e
 
 			c.logger.Debugf("Message received from %s", msg.Sender)
 
-			// Send the data to the LLM.
-			content := msg.Content
+			// Intercept commands from the server.
 
-			if c.latch {
-				c.memory.Save(ctx, c.NewMessageFrom(msg.Receiver, content))
-				c.logger.Debug("Latch is TRUE. Saved to memory only!")
-			} else {
-				c.logger.Debug("Piping message to LLM service...")
-				llmChan <- content
+			switch server.Command(msg.Command) {
+			case server.ClearMemory:
+				c.memory.Clear()
+			case server.Latch:
+				c.latch = true
+			case server.Unlatch:
+				c.latch = false
+			default:
+				// Send the data to the LLM.
+				content := msg.Content
+
+				if c.latch {
+					c.logger.Debug("Latch is TRUE. Only saving message...")
+					c.memory.Save(ctx, c.NewMessageFrom(msg.Receiver, content))
+				} else {
+					c.logger.Debug("Piping message to LLM service...")
+					llmChan <- content
+				}
 			}
 		}
 	}
