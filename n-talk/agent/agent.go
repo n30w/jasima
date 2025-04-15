@@ -32,4 +32,7 @@ type MemoryService interface {
 	// `name` is the name of the agent that inserted the messages. This is
 	// just the client name.
 	Retrieve(ctx context.Context, name string, n int) ([]memory.Message, error)
+
+	// Clear clears all the memory in the storage.
+	Clear() error
 }
