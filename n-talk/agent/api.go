@@ -36,8 +36,9 @@ type client struct {
 	// latch is `false`, data will be sent to the LLM service and returned.
 	latch bool
 
-	// sleepSeconds is the number of seconds to sleep. This differs based on the
-	// model chosen.
+	// sleepSeconds is the number of seconds to sleep between requests to an LLM
+	// service. The number will differ based on model, but use the fastest time
+	// for this value.
 	sleepDuration time.Duration
 }
 
@@ -101,6 +102,8 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 		// lockstep with server commands.
 		latch: true,
 
+		// sleepDuration is the number of seconds to wait between each request
+		// and receive from an LLM.
 		sleepDuration: sleepDuration,
 	}
 
