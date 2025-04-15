@@ -109,7 +109,7 @@ func (s *ConlangServer) EvolutionLoop() {
 		s.specification.Phonetics,
 		s.specification.Grammar,
 		s.specification.Dictionary,
-		s.specification.Logoraphy,
+		s.specification.Logography,
 	}
 
 	for range 1 {
@@ -122,7 +122,7 @@ func (s *ConlangServer) EvolutionLoop() {
 }
 
 type langSpecification struct {
-	Logoraphy  string
+	Logography string
 	Grammar    string
 	Dictionary string
 	Phonetics  string
@@ -145,12 +145,12 @@ func newLangSpecification(p string) (*langSpecification, error) {
 
 	ls.Grammar = string(b)
 
-	b, err = os.ReadFile(filepath.Join(p, "logoraphy.md"))
+	b, err = os.ReadFile(filepath.Join(p, "logography.md"))
 	if err != nil {
 		return nil, err
 	}
 
-	ls.Logoraphy = string(b)
+	ls.Logography = string(b)
 
 	b, err = os.ReadFile(filepath.Join(p, "phonetics.md"))
 	if err != nil {
