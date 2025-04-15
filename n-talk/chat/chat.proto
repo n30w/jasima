@@ -5,12 +5,20 @@ package chat;
 option go_package = "./";
 
 message Message {
+  // Message sender.
   string sender = 1;
+  
+  // Message receiver
   string receiver = 2;
+
+  // Message content.
   string content = 3;
 
   // Represents a single command issued from the main server.
   int32 command = 4;
+
+  // Layer group.
+  int32 layer = 5;
 }
 
 service ChatService {
