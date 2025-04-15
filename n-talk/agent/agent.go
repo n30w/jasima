@@ -33,9 +33,3 @@ type MemoryService interface {
 	// just the client name.
 	Retrieve(ctx context.Context, name string, n int) ([]memory.Message, error)
 }
-
-type ConnectionService interface {
-	Send()
-	Receive()
-	Open()
-}

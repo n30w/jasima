@@ -140,9 +140,11 @@ type InMemoryStore struct {
 	mu sync.Mutex
 }
 
-func NewMemoryStore() *InMemoryStore {
+// NewMemoryStore creates an ephemeral storage in memory. messageLimit is the number
+// of messages that are allowed in the store.
+func NewMemoryStore(messageLimit int) *InMemoryStore {
 	return &InMemoryStore{
-		messages: make([]Message, 0),
+		messages: make([]Message, messageLimit),
 		total:    0,
 	}
 }
@@ -177,4 +179,10 @@ func (in *InMemoryStore) Retrieve(_ context.Context, _ string, n int) ([]Message
 	}
 
 	return messages, nil
+}
+
+// Clear clears the entire memory.
+func (in *InMemoryStore) Clear() error {
+	in.messages = nil
+	return nil
 }

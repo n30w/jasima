@@ -83,7 +83,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	memory := memory.NewMemoryStore()
+	memory := memory.NewMemoryStore(0)
 
 	logOptions := log.Options{
 		ReportTimestamp: true,
