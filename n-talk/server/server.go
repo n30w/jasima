@@ -161,11 +161,3 @@ func NewLangSpecification(p string) (*langSpecification, error) {
 
 	return ls, nil
 }
-
-type Command int32
-
-const (
-	Latch       Command = 10
-	Unlatch     Command = -10
-	ClearMemory Command = -20
-)
