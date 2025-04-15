@@ -4,6 +4,8 @@ name = "tails"
 # Receiver of name's messages.
 recipient = "penny"
 
+layer = 1
+
 [model]
 
 # LLM service provider.
