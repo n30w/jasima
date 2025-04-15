@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
 )
 
@@ -36,7 +37,11 @@ func main() {
 		defer f()
 	}
 
-	server := NewServer("SERVER", logger)
+	memory := serverMemory{
+		memory.NewMemoryStore(0),
+	}
+
+	server := NewServer("SERVER", logger, memory)
 
 	go server.ListenAndServe(errors)
 

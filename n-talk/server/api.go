@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
+	"text/template"
 
 	pb "codeberg.org/n30w/jasima/n-talk/chat"
+	"codeberg.org/n30w/jasima/n-talk/memory"
 	"github.com/charmbracelet/log"
 	"google.golang.org/grpc"
 )
@@ -17,13 +22,15 @@ type Server struct {
 	mu         sync.Mutex
 	serverName string
 	logger     *log.Logger
+	memory     ServerMemoryService
 }
 
-func NewServer(name string, l *log.Logger) *Server {
+func NewServer(name string, l *log.Logger, m ServerMemoryService) *Server {
 	return &Server{
 		clients:    make(map[string]*client),
 		serverName: name,
 		logger:     l,
+		memory:     m,
 	}
 }
 
@@ -68,8 +75,12 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 	}
 
 	// Enter an infinite listening session when the client is connected.
+	// Each client receives their own context.
 
-	err = s.listen(stream, client)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = s.listen(ctx, stream, client)
 	if err != nil {
 		return err
 	}
@@ -77,15 +88,15 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 	return nil
 }
 
-func (s *Server) initLayer(stream pb.ChatService_ChatServer, client *client) error {
-	return s.listen(stream, client)
+func (s *Server) initLayer(ctx context.Context, stream pb.ChatService_ChatServer, client *client) error {
+	return s.listen(ctx, stream, client)
 }
 
 // listen is called when a client connection with `Chat` has already been
 // established. It disconnects clients when they error or when they disconnect
 // from the server. It also calls `routeMessage` when a message is received
 // from the connected client.
-func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error {
+func (s *Server) listen(ctx context.Context, stream pb.ChatService_ChatServer, client *client) error {
 	var err error
 	disconnected := false
 
@@ -125,9 +136,9 @@ func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error 
 
 			// If all is well save the message to transcript.
 
-			err = s.saveToTranscript(fromSender)
+			err = s.saveToTranscript(ctx, fromSender)
 			if err != nil {
-				s.logger.Errorf("%v", err)
+				s.logger.Errorf("error saving to transcript: %v", err)
 				continue
 			}
 
@@ -144,7 +155,16 @@ func (s *Server) listen(stream pb.ChatService_ChatServer, client *client) error 
 	return nil
 }
 
-func (s *Server) saveToTranscript(msg *pb.Message) error {
+// saveToTranscript saves a message to the server's memory storage.
+func (s *Server) saveToTranscript(ctx context.Context, msg *pb.Message) error {
+	m := memory.NewMessage(memory.UserRole, msg.Content)
+	m.Sender = msg.Sender
+
+	err := s.memory.Save(ctx, m)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -235,4 +255,26 @@ func (s *Server) newPbMessage(sender, receiver, content string, command ...int32
 	}
 
 	return m
+}
+
+type serverMemory struct {
+	MemoryService
+}
+
+// String serializes all memories into a string.
+func (s serverMemory) String() string {
+	var builder strings.Builder
+
+	t := template.New("t1")
+	t, _ = t.Parse("{{.Sender}}: {{.Text}}\n")
+
+	memories, _ := s.Retrieve(context.Background(), "", 0)
+
+	for _, v := range memories {
+		var buff bytes.Buffer
+		t.Execute(&buff, v)
+		builder.Write(buff.Bytes())
+	}
+
+	return builder.String()
 }
