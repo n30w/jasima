@@ -56,3 +56,8 @@ nix develop .
 
 - <https://github.com/cachix/git-hooks.nix>
 - <https://bmcgee.ie/posts/2023/11/nix-my-workflow/>
+
+### gRPC
+
+- <https://protobuf.dev/overview/>
+- <https://github.com/grpc/grpc-go/blob/master/examples/route_guide/routeguide/route_guide.pb.go>
