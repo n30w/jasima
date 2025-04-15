@@ -34,12 +34,17 @@ type client struct {
 	// sent to the LLM service, hence the data is "latched" onto the client. If
 	// latch is `false`, data will be sent to the LLM service and returned.
 	latch bool
+
+	// sleepSeconds is the number of seconds to sleep. This differs based on the
+	// model chosen.
+	sleepDuration time.Duration
 }
 
 func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *log.Logger) (*client, error) {
 	var err error
 	var apiKey string
 	var llm LLMService
+	var sleepDuration time.Duration = 18
 
 	// Initialize the LLM service based on provider.
 
@@ -59,6 +64,7 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 		panic("not implemented")
 	case llms.ProviderOllama:
 		llm, err = llms.NewOllama(nil, cfg.Model.Instructions, cfg.Model.Temperature)
+		sleepDuration = 2
 	default:
 		err = errors.New("invalid LLM provider")
 	}
@@ -93,6 +99,8 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 		// Initially set `latch` to `true` so that data will only be sent in
 		// lockstep with server commands.
 		latch: true,
+
+		sleepDuration: sleepDuration,
 	}
 
 	// Initialize the connection to the server.
@@ -252,12 +260,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		c.logger.Debug("Messaged saved to memory successfully")
 
-		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
-			c.logger.Debug("sleeping...")
-			time.Sleep(time.Second * 18)
-		}
-
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * c.sleepDuration)
 
 		llmResponse, err := c.request(ctx, content)
 		if err != nil {
@@ -269,15 +272,7 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 
 		c.memory.Save(ctx, c.NewMessageTo(c.Name, llmResponse))
 
-		// Sleep longer if the provider is NOT Ollama. Let's not hit rate
-		// limits...
-
-		if llms.LLMProvider(c.Model.Provider) != llms.ProviderOllama {
-			c.logger.Debug("sleeping again...")
-			time.Sleep(time.Second * 18)
-		}
-
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * c.sleepDuration)
 
 		// When data is received back from the query, fill the channel
 
