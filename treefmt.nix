@@ -17,6 +17,9 @@
   ];
 
   programs.gofumpt.enable = true;
+  programs.golines.enable = true;
+  programs.goimports.enable = true;
+
   programs.protolint.enable = true;
   programs.sqlfluff = {
     enable = true;
