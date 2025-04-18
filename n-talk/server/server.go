@@ -35,14 +35,14 @@ type ConlangServer struct {
 	Server
 
 	// specification are serialized versions of the Markdown specifications.
-	specification *langSpecification
+	specification *LangSpecification
 }
 
 func NewConlangServer(
 	name string,
 	l *log.Logger,
 	m ServerMemoryService,
-	s *langSpecification,
+	s *LangSpecification,
 ) *ConlangServer {
 	return &ConlangServer{
 		Server: Server{
@@ -109,7 +109,7 @@ func (s *ConlangServer) process(specs []string, layer int32) []string {
 	return newSpecs
 }
 
-// EvolutionLoop manages the entire evolutiuonary function loop.
+// EvolutionLoop manages the entire evolutionary function loop.
 func (s *ConlangServer) EvolutionLoop() {
 	specs := []string{
 		s.specification.Phonetics,
@@ -137,15 +137,15 @@ func (s *Server) TestExchangeEvent() {
 	s.logger.Info("see ya later")
 }
 
-type langSpecification struct {
+type LangSpecification struct {
 	Logography string
 	Grammar    string
 	Dictionary string
 	Phonetics  string
 }
 
-func NewLangSpecification(p string) (*langSpecification, error) {
-	ls := &langSpecification{}
+func NewLangSpecification(p string) (*LangSpecification, error) {
+	ls := &LangSpecification{}
 
 	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))
 	if err != nil {
