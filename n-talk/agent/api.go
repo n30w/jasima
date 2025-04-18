@@ -180,7 +180,10 @@ func (c *client) SendInitialMessage(ctx context.Context) error {
 
 		fileText := string(data)
 
-		c.memory.Save(ctx, c.NewMessageTo(recipient, fileText))
+		err = c.memory.Save(ctx, c.NewMessageTo(recipient, fileText))
+		if err != nil {
+			return err
+		}
 
 		err = c.sendMessage(fileText)
 		if err != nil {
@@ -299,7 +302,11 @@ func (c *client) DispatchToLLM(
 
 		c.logger.Debug("Saving message to memory...")
 
-		c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
+		err := c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
+		if err != nil {
+			errs <- err
+			return
+		}
 
 		c.logger.Debug("Messaged saved to memory successfully")
 
@@ -313,7 +320,11 @@ func (c *client) DispatchToLLM(
 
 		// Save the LLM's response to memory.
 
-		c.memory.Save(ctx, c.NewMessageTo(c.Name, llmResponse))
+		err = c.memory.Save(ctx, c.NewMessageTo(c.Name, llmResponse))
+		if err != nil {
+			errs <- err
+			return
+		}
 
 		time.Sleep(time.Second * c.sleepDuration)
 
@@ -349,7 +360,11 @@ func (c *client) ReceiveMessages(
 			case server.SetInstructions:
 				c.llm.SetInstructions(msg.Content)
 			case server.ClearMemory:
-				c.memory.Clear()
+				err = c.memory.Clear()
+				if err != nil {
+					errs <- err
+					return
+				}
 			case server.Latch:
 				c.latch = true
 				c.logger.Debug("Server commands LATCH", "latch", c.latch)
@@ -362,7 +377,16 @@ func (c *client) ReceiveMessages(
 
 				if c.latch {
 					c.logger.Debug("Latch is TRUE. Only saving message...")
-					c.memory.Save(ctx, c.NewMessageFrom(msg.Receiver, content))
+					err = c.memory.Save(
+						ctx, c.NewMessageFrom(
+							msg.Receiver,
+							content,
+						),
+					)
+					if err != nil {
+						errs <- err
+						return
+					}
 				} else {
 					c.logger.Debug("Piping message to LLM service...")
 					llmChan <- content

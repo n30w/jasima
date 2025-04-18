@@ -24,7 +24,7 @@ type Server struct {
 	logger     *log.Logger
 	memory     ServerMemoryService
 
-	// exchangeComplete is a signaling channel to detect whether or not
+	// exchangeComplete is a signaling channel to detect whether
 	// an exchange between two clients has been completed.
 	exchangeComplete chan bool
 }
@@ -135,7 +135,12 @@ func (s *Server) listen(
 			// Strip away any `Command` that came from a client by making
 			// a new pb message.
 
-			fromSender := s.newPbMessage(msg.Sender, msg.Receiver, msg.Content, msg.Layer)
+			fromSender := s.newPbMessage(
+				msg.Sender,
+				msg.Receiver,
+				msg.Content,
+				msg.Layer,
+			)
 
 			err = s.handleMessage(fromSender)
 			if err != nil {
@@ -180,7 +185,10 @@ func (s *Server) saveToTranscript(ctx context.Context, msg *pb.Message) error {
 
 // initClient initializes a client connection and adds the client to the list
 // of clients currently maintaining a connection.
-func (s *Server) initClient(stream pb.ChatService_ChatServer, msg *pb.Message) (*client, error) {
+func (s *Server) initClient(
+	stream pb.ChatService_ChatServer,
+	msg *pb.Message,
+) (*client, error) {
 	client, err := NewClient(stream, msg.Sender, msg.Content, msg.Layer)
 	if err != nil {
 		return nil, err
@@ -188,7 +196,13 @@ func (s *Server) initClient(stream pb.ChatService_ChatServer, msg *pb.Message) (
 
 	s.addClient(client)
 
-	s.logger.Info("Client connected", "client", client.String(), "layer", client.layer)
+	s.logger.Info(
+		"Client connected",
+		"client",
+		client.String(),
+		"layer",
+		client.layer,
+	)
 
 	return client, nil
 }
