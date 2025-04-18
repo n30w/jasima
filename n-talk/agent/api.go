@@ -42,7 +42,12 @@ type client struct {
 	sleepDuration time.Duration
 }
 
-func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *log.Logger) (*client, error) {
+func newClient(
+	ctx context.Context,
+	cfg *config,
+	memory MemoryService,
+	logger *log.Logger,
+) (*client, error) {
 	var err error
 	var apiKey string
 	var llm LLMService
@@ -58,14 +63,27 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 	switch llms.LLMProvider(cfg.Model.Provider) {
 	case llms.ProviderGoogleGemini:
 		apiKey = os.Getenv("GEMINI_API_KEY")
-		llm, err = llms.NewGoogleGemini(ctx, apiKey, cfg.Model.Instructions, cfg.Model.Temperature)
+		llm, err = llms.NewGoogleGemini(
+			ctx,
+			apiKey,
+			cfg.Model.Instructions,
+			cfg.Model.Temperature,
+		)
 	case llms.ProviderChatGPT:
 		apiKey = os.Getenv("CHATGPT_API_KEY")
-		llm, err = llms.NewOpenAIChatGPT(apiKey, cfg.Model.Instructions, cfg.Model.Temperature)
+		llm, err = llms.NewOpenAIChatGPT(
+			apiKey,
+			cfg.Model.Instructions,
+			cfg.Model.Temperature,
+		)
 	case llms.ProviderDeepseek:
 		panic("not implemented")
 	case llms.ProviderOllama:
-		llm, err = llms.NewOllama(nil, cfg.Model.Instructions, cfg.Model.Temperature)
+		llm, err = llms.NewOllama(
+			nil,
+			cfg.Model.Instructions,
+			cfg.Model.Temperature,
+		)
 		sleepDuration = 2
 	default:
 		err = errors.New("invalid LLM provider")
@@ -78,7 +96,10 @@ func NewClient(ctx context.Context, cfg *config, memory MemoryService, logger *l
 
 	// Initialize gRPC facilities.
 
-	grpcClient, err := grpc.NewClient(cfg.Network.Router, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcClient, err := grpc.NewClient(
+		cfg.Network.Router,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +145,10 @@ func (c *client) initConnection() error {
 		return err
 	}
 
-	c.logger.Debugf("Established connection to the server @ %s", c.Network.Router)
+	c.logger.Debugf(
+		"Established connection to the server @ %s",
+		c.Network.Router,
+	)
 
 	return nil
 }
@@ -134,7 +158,11 @@ func (c *client) SendInitialMessage(ctx context.Context) error {
 
 	if c.Model.Initialize != "" {
 
-		c.logger.Infof("Initialization path is %s, sending initial message to %s", c.Model.Initialize, recipient)
+		c.logger.Infof(
+			"Initialization path is %s, sending initial message to %s",
+			c.Model.Initialize,
+			recipient,
+		)
 
 		time.Sleep(1 * time.Second)
 
@@ -217,7 +245,10 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 
 	v := t()
 
-	c.logger.Debugf("Response received from LLM, roundtrip %s", v.Truncate(1*time.Millisecond))
+	c.logger.Debugf(
+		"Response received from LLM, roundtrip %s",
+		v.Truncate(1*time.Millisecond),
+	)
 
 	return result, nil
 }
@@ -253,7 +284,12 @@ func (c *client) sendMessage(content string) error {
 	return nil
 }
 
-func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response chan<- string, llmChan <-chan string) {
+func (c *client) DispatchToLLM(
+	ctx context.Context,
+	errs chan<- error,
+	response chan<- string,
+	llmChan <-chan string,
+) {
 	for input := range llmChan {
 
 		content := input
@@ -290,7 +326,12 @@ func (c *client) DispatchToLLM(ctx context.Context, errs chan<- error, response 
 }
 
 // ReceiveMessages receives messages from the server.
-func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- error, llmChan chan<- string) {
+func (c *client) ReceiveMessages(
+	ctx context.Context,
+	online bool,
+	errs chan<- error,
+	llmChan chan<- string,
+) {
 	for online {
 		msg, err := c.conn.Recv()
 		if err == io.EOF {
@@ -305,6 +346,8 @@ func (c *client) ReceiveMessages(ctx context.Context, online bool, errs chan<- e
 			// Intercept commands from the server.
 
 			switch server.Command(msg.Command) {
+			case server.SetInstructions:
+				c.llm.SetInstructions(msg.Content)
 			case server.ClearMemory:
 				c.memory.Clear()
 			case server.Latch:

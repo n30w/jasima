@@ -10,13 +10,20 @@ type LLMService interface {
 	// String returns the full name of the service provider and the model type.
 	String() string
 
-	// Sends a request to the remote service. Returns a reply in the form
+	// Request sends a request to the remote service. Returns a reply in the form
 	// of a string. Note that rather than serializing messages into a string,
 	// which would remove dependence on the `memory` package, a slice of
 	// messages are passed in directly, because it allows different services to
 	// adapt the messages to their different submission formats of their
 	// respective APIs.
-	Request(ctx context.Context, messages []memory.Message, prompt string) (string, error)
+	Request(
+		ctx context.Context,
+		messages []memory.Message,
+		prompt string,
+	) (string, error)
+
+	// SetInstructions sets the initial instructions for the model.
+	SetInstructions(s string)
 }
 
 // MemoryService is a memory storage. It supports saving and retrieving messages

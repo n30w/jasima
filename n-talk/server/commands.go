@@ -10,6 +10,10 @@ const (
 	// for an LLM model.
 	AppendInstructions Command = 2
 
+	// SetInstructions changes the client's instructions to new
+	// new ones from the message body.
+	SetInstructions Command = 3
+
 	// Latch requires a client go into `latch` mode.
 	Latch Command = 10
 

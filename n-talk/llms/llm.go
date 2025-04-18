@@ -10,6 +10,10 @@ type llm struct {
 	instructions string
 }
 
+func (l *llm) SetInstructions(s string) {
+	l.instructions = s
+}
+
 type LLMProvider int
 
 const (

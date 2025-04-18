@@ -36,12 +36,24 @@ func main() {
 	var err error
 
 	flagName := flag.String("name", "", "name of the agent")
-	flagPeers := flag.String("peers", "", "comma separated list of agent's peers")
+	flagPeers := flag.String(
+		"peers",
+		"",
+		"comma separated list of agent's peers",
+	)
 	flagServer := flag.String("server", "", "communication server")
 	flagProvider := flag.Int("model", -1, "LLM model to use")
 	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
-	flagConfigPath := flag.String("configFile", "./configs/default_agent.toml", "configuration file path")
-	flagTemperature := flag.Float64("temperature", 1.50, "float64 model temperature")
+	flagConfigPath := flag.String(
+		"configFile",
+		"./configs/default_agent.toml",
+		"configuration file path",
+	)
+	flagTemperature := flag.Float64(
+		"temperature",
+		1.50,
+		"float64 model temperature",
+	)
 	flagInitializePath := flag.String("initialize", "", "initial message path")
 	flagLayer := flag.Int("layer", -1, "agent's functional layer")
 
@@ -111,12 +123,20 @@ func main() {
 		userConfig: &userConf,
 	}
 
-	client, err := NewClient(ctx, cfg, memory, logger)
+	client, err := newClient(ctx, cfg, memory, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	logger.Info("Created new agent!", "name", client.Name, "model", client.llm, "layer", client.Layer)
+	logger.Info(
+		"Created new agent!",
+		"name",
+		client.Name,
+		"model",
+		client.llm,
+		"layer",
+		client.Layer,
+	)
 
 	// Send an initial message, if the initialization config parameter is set.
 

@@ -101,7 +101,11 @@ func (s *Server) Chat(stream pb.ChatService_ChatServer) error {
 // established. It disconnects clients when they error or when they disconnect
 // from the server. It also calls `routeMessage` when a message is received
 // from the connected client.
-func (s *Server) listen(ctx context.Context, stream pb.ChatService_ChatServer, client *client) error {
+func (s *Server) listen(
+	ctx context.Context,
+	stream pb.ChatService_ChatServer,
+	client *client,
+) error {
 	var err error
 	disconnected := false
 
@@ -256,6 +260,8 @@ func (s *Server) handleMessage(msg *pb.Message) error {
 // the list of clients maintaining an active connection. routeMessage returns
 // an error if the client does not exist.
 func (s *Server) routeMessage(msg *pb.Message) error {
+	// Lock for the entirety of this function, as we use the client for
+	// the lifetime of this function.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -276,7 +282,11 @@ func (s *Server) routeMessage(msg *pb.Message) error {
 }
 
 // newPbMessage constructs a new protobuf Message.
-func (s *Server) newPbMessage(sender, receiver, content string, layer int32, command ...int32) *pb.Message {
+func (s *Server) newPbMessage(
+	sender, receiver, content string,
+	layer int32,
+	command ...int32,
+) *pb.Message {
 	m := &pb.Message{
 		Sender:   sender,
 		Receiver: receiver,

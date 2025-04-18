@@ -14,7 +14,12 @@ type GoogleGemini struct {
 	genaiConfig *genai.GenerateContentConfig
 }
 
-func NewGoogleGemini(ctx context.Context, apiKey string, instructions string, temperature float64) (*GoogleGemini, error) {
+func NewGoogleGemini(
+	ctx context.Context,
+	apiKey string,
+	instructions string,
+	temperature float64,
+) (*GoogleGemini, error) {
 	g, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -41,11 +46,20 @@ func NewGoogleGemini(ctx context.Context, apiKey string, instructions string, te
 	return c, nil
 }
 
-func (c *GoogleGemini) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
+func (c *GoogleGemini) Request(
+	ctx context.Context,
+	messages []memory.Message,
+	prompt string,
+) (string, error) {
 	contents := c.prepare(messages)
 	contents = append(contents, genai.NewUserContentFromText(prompt))
 
-	result, err := c.genaiClient.Models.GenerateContent(ctx, c.model.String(), contents, c.genaiConfig)
+	result, err := c.genaiClient.Models.GenerateContent(
+		ctx,
+		c.model.String(),
+		contents,
+		c.genaiConfig,
+	)
 	if err != nil {
 		return "", err
 	}

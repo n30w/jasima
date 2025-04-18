@@ -14,7 +14,11 @@ import (
 func main() {
 	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
 	flagLogToFile := flag.Bool("logToFile", false, "also logs output to file")
-	flagSpecificationPath := flag.String("specs", "../resources/specifications", "path to directory containing specifications")
+	flagSpecificationPath := flag.String(
+		"specs",
+		"../resources/specifications",
+		"path to directory containing specifications",
+	)
 
 	flag.Parse()
 
@@ -29,7 +33,15 @@ func main() {
 
 	logger := log.NewWithOptions(os.Stderr, logOptions)
 
-	logger.Info("starting with these options", "debug", *flagDebug, "logToFile", *flagLogToFile, "specs", *flagSpecificationPath)
+	logger.Info(
+		"starting with these options",
+		"debug",
+		*flagDebug,
+		"logToFile",
+		*flagLogToFile,
+		"specs",
+		*flagSpecificationPath,
+	)
 
 	errors := make(chan error)
 

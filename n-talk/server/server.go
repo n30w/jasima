@@ -38,7 +38,12 @@ type ConlangServer struct {
 	specification *langSpecification
 }
 
-func NewConlangServer(name string, l *log.Logger, m ServerMemoryService, s *langSpecification) *ConlangServer {
+func NewConlangServer(
+	name string,
+	l *log.Logger,
+	m ServerMemoryService,
+	s *langSpecification,
+) *ConlangServer {
 	byLayer := make(layerToNamesMap, 0)
 
 	byLayer[1] = make(map[string]struct{}, 0)
@@ -63,9 +68,9 @@ func NewConlangServer(name string, l *log.Logger, m ServerMemoryService, s *lang
 	}
 }
 
-// process begins the processing of a layer. The function completes after the total number
-// of back and forth rounds are complete. Layer control and message routing are
-// decoupled.
+// process begins the processing of a layer. The function completes after the
+// total number of back and forth rounds are complete. Layer control and message
+// routing are decoupled.
 func (s *ConlangServer) process(specs []string, layer int32) []string {
 	newSpecs := make([]string, 0)
 

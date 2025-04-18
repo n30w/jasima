@@ -16,7 +16,11 @@ type OpenAIChatGPT struct {
 	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
 }
 
-func NewOpenAIChatGPT(apiKey string, instructions string, temperature float64) (*OpenAIChatGPT, error) {
+func NewOpenAIChatGPT(
+	apiKey string,
+	instructions string,
+	temperature float64,
+) (*OpenAIChatGPT, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
 	messages = append(messages, openai.SystemMessage(""))
 
@@ -37,7 +41,11 @@ func NewOpenAIChatGPT(apiKey string, instructions string, temperature float64) (
 	return gpt, nil
 }
 
-func (c *OpenAIChatGPT) Request(ctx context.Context, messages []memory.Message, prompt string) (string, error) {
+func (c *OpenAIChatGPT) Request(
+	ctx context.Context,
+	messages []memory.Message,
+	prompt string,
+) (string, error) {
 	contents := c.prepare(messages)
 
 	c.chatGptCompletionParams.Messages = openai.F(contents)
@@ -50,7 +58,9 @@ func (c *OpenAIChatGPT) Request(ctx context.Context, messages []memory.Message, 
 	return result.Choices[0].Message.Content, nil
 }
 
-func (c *OpenAIChatGPT) prepare(messages []memory.Message) []openai.ChatCompletionMessageParamUnion {
+func (c *OpenAIChatGPT) prepare(
+	messages []memory.Message,
+) []openai.ChatCompletionMessageParamUnion {
 	contents := make([]openai.ChatCompletionMessageParamUnion, 0)
 
 	// Append the current System Message to contents.
