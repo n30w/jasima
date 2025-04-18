@@ -44,19 +44,11 @@ func NewConlangServer(
 	m ServerMemoryService,
 	s *langSpecification,
 ) *ConlangServer {
-	byLayer := make(layerToNamesMap, 0)
-
-	byLayer[1] = make(map[string]struct{}, 0)
-	byLayer[2] = make(map[string]struct{}, 0)
-	byLayer[3] = make(map[string]struct{}, 0)
-	byLayer[4] = make(map[string]struct{}, 0)
-	byLayer[5] = make(map[string]struct{}, 0)
-
 	return &ConlangServer{
 		Server: Server{
 			clients: &clientele{
-				byName:  make(nameToClientsMap, 0),
-				byLayer: byLayer,
+				byName:  make(nameToClientsMap),
+				byLayer: make(layerToNamesMap),
 				logger:  l,
 			},
 			serverName:       name,

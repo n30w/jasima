@@ -75,6 +75,11 @@ func (ct *clientele) removeByName(c *client) {
 }
 
 func (ct *clientele) addByLayer(c *client) {
+	_, ok := ct.byLayer[c.layer]
+	if !ok {
+		ct.byLayer[c.layer] = make(map[string]struct{})
+	}
+
 	ct.byLayer[c.layer][c.name] = struct{}{}
 }
 
