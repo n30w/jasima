@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/n-talk/internal/commands"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"github.com/charmbracelet/log"
 )
 
@@ -21,18 +24,20 @@ type MemoryService interface {
 	// less-than-or-equal-to the total number of memories returns `n` messages.
 	// `name` is the name of the agent that inserted the messages. This is
 	// just the client name.
-	Retrieve(ctx context.Context, name string, n int) ([]memory.Message, error)
+	Retrieve(ctx context.Context, name chat.Name, n int) (
+		[]memory.Message,
+		error,
+	)
 
 	Clear() error
 }
 
-type ServerMemoryService interface {
-	MemoryService
-	String() string
-}
-
 type ConlangServer struct {
 	Server
+
+	// systemAgentOnline signifies whether the system LLM agent service has
+	// come online or not. The evolution cannot start without it.
+	systemAgentOnline bool
 
 	// specification are serialized versions of the Markdown specifications.
 	specification *LangSpecification
@@ -41,17 +46,17 @@ type ConlangServer struct {
 func NewConlangServer(
 	name string,
 	l *log.Logger,
-	m ServerMemoryService,
+	m LocalMemory,
 	s *LangSpecification,
 ) *ConlangServer {
 	return &ConlangServer{
 		Server: Server{
 			clients: &clientele{
-				byName:  make(nameToClientsMap),
-				byLayer: make(layerToNamesMap),
-				logger:  l,
+				byNameMap:  make(nameToClientsMap),
+				byLayerMap: make(layerToNamesMap),
+				logger:     l,
 			},
-			serverName:       name,
+			name:             chat.Name(name),
 			logger:           l,
 			memory:           m,
 			exchangeComplete: make(chan bool),
@@ -60,23 +65,25 @@ func NewConlangServer(
 	}
 }
 
-// process begins the processing of a layer. The function completes after the
+// iterate begins the processing of a Layer. The function completes after the
 // total number of back and forth rounds are complete. Layer control and message
 // routing are decoupled.
-func (s *ConlangServer) process(specs []string, layer int32) []string {
+func (s *ConlangServer) iterate(specs []string, layer int32) []string {
 	newSpecs := make([]string, 0)
 
 	if layer == 0 {
 		return newSpecs
 	}
 
-	// Compile previous layer's outputs to use in this current layer's input
+	// Compile previous Layer's outputs to use in this current Layer's input
 
-	newSpecs = append(newSpecs, s.process(specs[:layer], layer-1)...)
+	newSpecs = append(newSpecs, s.iterate(specs[:layer], layer-1)...)
 
-	clients := s.getClientsByLayer(layer)
+	currentLayer := chat.Layer(layer)
 
-	// Dispatch process commands to clients on layer.
+	clients := s.getClientsByLayer(currentLayer)
+
+	// Dispatch iterate commands to clients on Layer.
 
 	// Send prevSpec to clients. Compile specs into a single system instruction
 	// for LLM.
@@ -91,9 +98,9 @@ func (s *ConlangServer) process(specs []string, layer int32) []string {
 
 	// latch clients
 
-	// Send every client in the layer clear memory command.
+	// Send every client in the Layer clear memory command.
 	for _, v := range clients {
-		err := s.SendCommand(ClearMemory, v)
+		err := s.SendCommand(commands.ClearMemory, v)
 		if err != nil {
 		}
 	}
@@ -101,13 +108,21 @@ func (s *ConlangServer) process(specs []string, layer int32) []string {
 	// When the chatting is complete, compile the chat records and
 	// send to SYSTEM LLM service.
 	//
-	// For each layer, ask for updates on specification.
+	// For each Layer, ask for updates on specification.
 
 	// When SYSTEM LLM sends response back, adjust the corresponding
 	// specification.
 
 	return newSpecs
 }
+
+// querySystemAgent makes a query to the system LLM agent. This query is often
+// to compile and summarize the data generated during the discussion phase.
+//func (s *ConlangServer) querySystemAgent(data string) {
+//	// Check if the system agent is online.
+//	// The response received should be deserialized into array data.
+//	clients := s.getClientsByLayer(0)
+//}
 
 // EvolutionLoop manages the entire evolutionary function loop.
 func (s *ConlangServer) EvolutionLoop() {
@@ -118,9 +133,13 @@ func (s *ConlangServer) EvolutionLoop() {
 		s.specification.Logography,
 	}
 
+	for !s.systemAgentOnline {
+		// ...
+	}
+
 	for range 1 {
-		// Starts on layer 4, recurses to 1.
-		specs = s.process(specs, 4)
+		// Starts on Layer 4, recurses to 1.
+		specs = s.iterate(specs, 4)
 		// Save specs to memory
 		// send results to SYSTEM LLM
 		// Save result to LLM.

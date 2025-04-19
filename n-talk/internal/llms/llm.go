@@ -39,3 +39,10 @@ func (l LLMProvider) String() string {
 
 	return s
 }
+
+type ModelConfig struct {
+	Provider     int
+	Instructions string
+	Temperature  float64
+	Initialize   string
+}

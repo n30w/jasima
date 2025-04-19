@@ -1,9 +1,13 @@
-package server
+package commands
 
 // Command defines integer values that represent server commands.
 // Server commands are sent to clients via messages. Clients must
 // adhere to server commands.
 type Command int32
+
+func (c Command) Int32() int32 {
+	return int32(c)
+}
 
 const (
 	// AppendInstructions appends additional initial instructions

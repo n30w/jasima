@@ -2,6 +2,9 @@ package memory
 
 import (
 	"time"
+
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/n-talk/internal/commands"
 )
 
 type ChatRole uint8
@@ -33,9 +36,11 @@ type Message struct {
 	// InsertedBy represents the agent who inserted the message. This is
 	// used to identify and query for a specific user's messages, since only
 	// one SQL table is used for all messages.
-	InsertedBy string
-	Sender     string
-	Receiver   string
+	InsertedBy chat.Name
+	Sender     chat.Name
+	Receiver   chat.Name
+	Layer      chat.Layer
+	Command    commands.Command
 }
 
 func NewMessage(role ChatRole, text string) Message {
@@ -43,4 +48,22 @@ func NewMessage(role ChatRole, text string) Message {
 		Role: role,
 		Text: text,
 	}
+}
+
+func NewChatMessage(
+	sender, receiver string, text string, layer int32,
+	command ...int32,
+) *Message {
+	msg := Message{
+		Sender:   chat.Name(sender),
+		Receiver: chat.Name(receiver),
+		Text:     text,
+		Layer:    chat.Layer(layer),
+	}
+
+	if len(command) > 0 {
+		msg.Command = commands.Command(command[0])
+	}
+
+	return &msg
 }

@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -18,8 +19,7 @@ type OpenAIChatGPT struct {
 
 func NewOpenAIChatGPT(
 	apiKey string,
-	instructions string,
-	temperature float64,
+	mc ModelConfig,
 ) (*OpenAIChatGPT, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
 	messages = append(messages, openai.SystemMessage(""))
@@ -33,7 +33,7 @@ func NewOpenAIChatGPT(
 			Seed:                openai.Int(1),
 			Model:               openai.F(openai.ChatModelGPT4o),
 			MaxCompletionTokens: openai.Int(2000),
-			Temperature:         openai.Float(temperature),
+			Temperature:         openai.Float(mc.Temperature),
 			Messages:            openai.F(messages),
 		},
 	}
@@ -41,7 +41,7 @@ func NewOpenAIChatGPT(
 	return gpt, nil
 }
 
-func (c *OpenAIChatGPT) Request(
+func (c OpenAIChatGPT) Request(
 	ctx context.Context,
 	messages []memory.Message,
 	prompt string,
@@ -50,7 +50,10 @@ func (c *OpenAIChatGPT) Request(
 
 	c.chatGptCompletionParams.Messages = openai.F(contents)
 
-	result, err := c.chatGptClient.Chat.Completions.New(ctx, *c.chatGptCompletionParams)
+	result, err := c.chatGptClient.Chat.Completions.New(
+		ctx,
+		*c.chatGptCompletionParams,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -58,7 +61,7 @@ func (c *OpenAIChatGPT) Request(
 	return result.Choices[0].Message.Content, nil
 }
 
-func (c *OpenAIChatGPT) prepare(
+func (c OpenAIChatGPT) prepare(
 	messages []memory.Message,
 ) []openai.ChatCompletionMessageParamUnion {
 	contents := make([]openai.ChatCompletionMessageParamUnion, 0)

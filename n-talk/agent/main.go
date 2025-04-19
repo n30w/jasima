@@ -7,30 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
 )
-
-type modelConfig struct {
-	Provider     int
-	Instructions string
-	Temperature  float64
-	Initialize   string
-}
-
-type networkConfig struct {
-	Router   string
-	Database string
-}
-
-type userConfig struct {
-	Name    string
-	Peers   []string
-	Layer   int32
-	Model   modelConfig
-	Network networkConfig
-}
 
 func main() {
 	var err error
@@ -107,8 +88,9 @@ func main() {
 		userConf.Layer = int32(*flagLayer)
 	}
 
-	if userConf.Layer <= 0 {
-		logger.Fatal("`layer` parameter must be greater than 0")
+	// system agents exist on layer 0.
+	if userConf.Layer < 0 {
+		logger.Fatal("`layer` parameter must be greater than or equal to 0")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -117,13 +99,9 @@ func main() {
 
 	logger.Debug("Initializing memory storage")
 
-	memory := memory.NewMemoryStore(0)
+	mem := memory.NewMemoryStore(0)
 
-	cfg := &config{
-		userConfig: &userConf,
-	}
-
-	client, err := newClient(ctx, cfg, memory, logger)
+	client, err := newClient(ctx, userConf, mem, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}

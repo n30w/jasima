@@ -4,7 +4,7 @@
 // - protoc             v5.29.3
 // source: chat/chat.proto
 
-package __
+package chat
 
 import (
 	context "context"
@@ -40,7 +40,8 @@ func NewChatServiceClient(cc grpc.ClientConnInterface) ChatServiceClient {
 
 func (c *chatServiceClient) Chat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Message, Message], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ChatService_ServiceDesc.Streams[0], ChatService_Chat_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ChatService_ServiceDesc.Streams[0],
+		ChatService_Chat_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}

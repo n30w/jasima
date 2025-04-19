@@ -10,7 +10,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	ol "github.com/ollama/ollama/api"
 )
 
@@ -27,7 +28,10 @@ type Ollama struct {
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
 // hosting the Ollama instance. If URL is nil, the default instance URL is used.
-func NewOllama(url *url.URL, instructions string, temperature float64) (*Ollama, error) {
+func NewOllama(url *url.URL, mc ModelConfig) (
+	*Ollama,
+	error,
+) {
 	var err error
 
 	s := false
@@ -48,7 +52,7 @@ func NewOllama(url *url.URL, instructions string, temperature float64) (*Ollama,
 
 	_, err = http.Get(ollamaUrl.String())
 	if err != nil {
-		return nil, errors.New("Ollama is not running or invalid host URL")
+		return nil, errors.New("ollama is not running or invalid host URL")
 	}
 
 	// Then setup the chat API route.
@@ -59,10 +63,10 @@ func NewOllama(url *url.URL, instructions string, temperature float64) (*Ollama,
 	return &Ollama{
 		llm: &llm{
 			model:        ProviderOllama,
-			instructions: instructions,
+			instructions: mc.Instructions,
 		},
 		options: &ol.Options{
-			Temperature: float32(temperature),
+			Temperature: float32(mc.Temperature),
 		},
 		stream:     &s,
 		url:        chatUrl,
@@ -70,7 +74,7 @@ func NewOllama(url *url.URL, instructions string, temperature float64) (*Ollama,
 	}, nil
 }
 
-func (c *Ollama) Request(
+func (c Ollama) Request(
 	ctx context.Context,
 	messages []memory.Message,
 	prompt string,
@@ -97,7 +101,12 @@ func (c *Ollama) Request(
 
 	// Make a POST request to the server with parameters.
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.url,
+		bytes.NewReader(body),
+	)
 	if err != nil {
 		return "", err
 	}
@@ -124,7 +133,7 @@ func (c *Ollama) Request(
 	return data.Message.Content, nil
 }
 
-func (c *Ollama) prepare(messages []memory.Message) []ol.Message {
+func (c Ollama) prepare(messages []memory.Message) []ol.Message {
 	// Add 1 for system instructions.
 	l := len(messages) + 1
 

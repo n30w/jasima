@@ -18,7 +18,11 @@ import (
 //
 // For a NON-annotated version of this function, see:
 // https://gist.github.com/n30w/bb7e1ab90838b398bba863ca486c1344#file-tee_with_channel-go
-func logOutput(log *log.Logger, logFilePath string, errors chan<- error) func() {
+func logOutput(
+	log *log.Logger,
+	logFilePath string,
+	errors chan<- error,
+) func() {
 	// Create a new file at the specified `logFile` location. If the file
 	// does not exist, it creates a new one. Otherwise, it will clear the file
 	// of its contents when it opens.

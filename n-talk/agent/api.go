@@ -7,18 +7,36 @@ import (
 	"os"
 	"time"
 
-	pb "codeberg.org/n30w/jasima/n-talk/chat"
-	"codeberg.org/n30w/jasima/n-talk/llms"
-	"codeberg.org/n30w/jasima/n-talk/memory"
-	"codeberg.org/n30w/jasima/n-talk/server"
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/n-talk/internal/commands"
+	"codeberg.org/n30w/jasima/n-talk/internal/llms"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type networkConfig struct {
+	Router   string
+	Database string
+}
+
+type userConfig struct {
+	Name    string
+	Peers   []string
+	Layer   int32
+	Model   llms.ModelConfig
+	Network networkConfig
+}
+
 type config struct {
-	*userConfig
+	Name          chat.Name
+	Peers         []chat.Name
+	Layer         chat.Layer
+	ModelConfig   llms.ModelConfig
+	NetworkConfig networkConfig
 }
 
 type client struct {
@@ -27,7 +45,7 @@ type client struct {
 	llm    LLMService
 	logger *log.Logger
 
-	conn       grpc.BidiStreamingClient[pb.Message, pb.Message]
+	conn       grpc.BidiStreamingClient[chat.Message, chat.Message]
 	grpcClient *grpc.ClientConn
 
 	// latch determines whether data that is received from the server is allowed
@@ -44,7 +62,7 @@ type client struct {
 
 func newClient(
 	ctx context.Context,
-	cfg *config,
+	userConf userConfig,
 	memory MemoryService,
 	logger *log.Logger,
 ) (*client, error) {
@@ -53,6 +71,19 @@ func newClient(
 	var llm LLMService
 	var sleepDuration time.Duration = 18
 
+	var peerNames []chat.Name = make([]chat.Name, 0)
+	for _, peer := range userConf.Peers {
+		peerNames = append(peerNames, chat.Name(peer))
+	}
+
+	cfg := &config{
+		Name:          chat.Name(userConf.Name),
+		Peers:         peerNames,
+		Layer:         chat.SetLayer(userConf.Layer),
+		ModelConfig:   userConf.Model,
+		NetworkConfig: userConf.Network,
+	}
+
 	// Initialize the LLM service based on provider.
 
 	err = godotenv.Load()
@@ -60,29 +91,26 @@ func newClient(
 		return nil, err
 	}
 
-	switch llms.LLMProvider(cfg.Model.Provider) {
+	switch llms.LLMProvider(cfg.ModelConfig.Provider) {
 	case llms.ProviderGoogleGemini:
 		apiKey = os.Getenv("GEMINI_API_KEY")
 		llm, err = llms.NewGoogleGemini(
 			ctx,
 			apiKey,
-			cfg.Model.Instructions,
-			cfg.Model.Temperature,
+			cfg.ModelConfig,
 		)
 	case llms.ProviderChatGPT:
 		apiKey = os.Getenv("CHATGPT_API_KEY")
 		llm, err = llms.NewOpenAIChatGPT(
 			apiKey,
-			cfg.Model.Instructions,
-			cfg.Model.Temperature,
+			cfg.ModelConfig,
 		)
 	case llms.ProviderDeepseek:
 		panic("not implemented")
 	case llms.ProviderOllama:
 		llm, err = llms.NewOllama(
 			nil,
-			cfg.Model.Instructions,
-			cfg.Model.Temperature,
+			cfg.ModelConfig,
 		)
 		sleepDuration = 2
 	default:
@@ -97,7 +125,7 @@ func newClient(
 	// Initialize gRPC facilities.
 
 	grpcClient, err := grpc.NewClient(
-		cfg.Network.Router,
+		cfg.NetworkConfig.Router,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -106,7 +134,7 @@ func newClient(
 
 	// The implementation of `Chat` is in the server code. This is where the
 	// client establishes the initial connection to the server.
-	conn, err := pb.NewChatServiceClient(grpcClient).Chat(ctx)
+	conn, err := chat.NewChatServiceClient(grpcClient).Chat(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +175,7 @@ func (c *client) initConnection() error {
 
 	c.logger.Debugf(
 		"Established connection to the server @ %s",
-		c.Network.Router,
+		c.NetworkConfig.Router,
 	)
 
 	return nil
@@ -156,17 +184,19 @@ func (c *client) initConnection() error {
 func (c *client) SendInitialMessage(ctx context.Context) error {
 	recipient := c.Peers[0]
 
-	if c.Model.Initialize != "" {
+	initMsg := c.ModelConfig.Initialize
+
+	if initMsg != "" {
 
 		c.logger.Infof(
 			"Initialization path is %s, sending initial message to %s",
-			c.Model.Initialize,
+			initMsg,
 			recipient,
 		)
 
 		time.Sleep(1 * time.Second)
 
-		file, err := os.Open(c.Model.Initialize)
+		file, err := os.Open(initMsg)
 		if err != nil {
 			return err
 		}
@@ -199,8 +229,8 @@ func (c *client) SendInitialMessage(ctx context.Context) error {
 func (c *client) Teardown() {
 	c.logger.Debug("Beginning teardown...")
 
-	c.conn.CloseSend()
-	c.grpcClient.Close()
+	_ = c.conn.CloseSend()
+	_ = c.grpcClient.Close()
 }
 
 func (c *client) newMessage(text string) memory.Message {
@@ -211,7 +241,7 @@ func (c *client) newMessage(text string) memory.Message {
 	}
 }
 
-func (c *client) NewMessageFrom(sender string, text string) memory.Message {
+func (c *client) NewMessageFrom(sender chat.Name, text string) memory.Message {
 	m := c.newMessage(text)
 
 	m.Role = 0
@@ -221,7 +251,7 @@ func (c *client) NewMessageFrom(sender string, text string) memory.Message {
 	return m
 }
 
-func (c *client) NewMessageTo(recipient string, text string) memory.Message {
+func (c *client) NewMessageTo(recipient chat.Name, text string) memory.Message {
 	m := c.newMessage(text)
 
 	m.Role = 1
@@ -272,12 +302,7 @@ func (c *client) SendMessage(errs chan<- error, response <-chan string) {
 }
 
 func (c *client) sendMessage(content string) error {
-	msg := &pb.Message{
-		Sender:   c.Name,
-		Receiver: c.Peers[0],
-		Content:  content,
-		Layer:    c.Layer,
-	}
+	msg := chat.NewPbMessage(c.Name, c.Peers[0], content, c.Layer)
 
 	err := c.conn.Send(msg)
 	if err != nil {
@@ -320,7 +345,10 @@ func (c *client) DispatchToLLM(
 
 		// Save the LLM's response to memory.
 
-		err = c.memory.Save(ctx, c.NewMessageTo(c.Name, llmResponse))
+		newMsg := c.NewMessageTo(c.Name, llmResponse)
+		newMsg.Role = memory.ModelRole
+
+		err = c.memory.Save(ctx, newMsg)
 		if err != nil {
 			errs <- err
 			return
@@ -344,7 +372,7 @@ func (c *client) ReceiveMessages(
 	llmChan chan<- string,
 ) {
 	for online {
-		msg, err := c.conn.Recv()
+		pbMsg, err := c.conn.Recv()
 		if err == io.EOF {
 			online = false
 		} else if err != nil {
@@ -352,35 +380,57 @@ func (c *client) ReceiveMessages(
 			return
 		} else {
 
+			msg := memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
+
 			c.logger.Debugf("Message received from %s", msg.Sender)
 
 			// Intercept commands from the server.
 
-			switch server.Command(msg.Command) {
-			case server.SetInstructions:
-				c.llm.SetInstructions(msg.Content)
-			case server.ClearMemory:
+			switch msg.Command {
+			case commands.SetInstructions:
+				c.llm.SetInstructions(msg.Text)
+			case commands.ClearMemory:
 				err = c.memory.Clear()
 				if err != nil {
 					errs <- err
 					return
 				}
-			case server.Latch:
+				c.logger.Debug(
+					"Server commands CLEAR MEMORY",
+					"cleared", true,
+				)
+			case commands.Latch:
+				c.logger.Debug("Server commands LATCH", "latch", c.latch)
+				if c.latch {
+					c.logger.Debug("already latched, doing nothing...")
+					break
+				}
+
 				c.latch = true
 				c.logger.Debug("Server commands LATCH", "latch", c.latch)
-			case server.Unlatch:
+
+			case commands.Unlatch:
+				c.logger.Debug("Server commands LATCH", "latch", c.latch)
+				if !c.latch {
+					c.logger.Debug("already unlatched, doing nothing...")
+					break
+				}
+
 				c.latch = false
 				c.logger.Debug("Server commands UNLATCH", "latch", c.latch)
+
 			default:
 				// Send the data to the LLM.
-				content := msg.Content
 
 				if c.latch {
 					c.logger.Debug("Latch is TRUE. Only saving message...")
 					err = c.memory.Save(
 						ctx, c.NewMessageFrom(
 							msg.Receiver,
-							content,
+							msg.Text,
 						),
 					)
 					if err != nil {
@@ -389,7 +439,7 @@ func (c *client) ReceiveMessages(
 					}
 				} else {
 					c.logger.Debug("Piping message to LLM service...")
-					llmChan <- content
+					llmChan <- msg.Text
 				}
 			}
 		}

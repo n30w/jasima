@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"codeberg.org/n30w/jasima/n-talk/server"
 	"github.com/charmbracelet/log"
 )
@@ -46,12 +47,15 @@ func main() {
 	errors := make(chan error)
 
 	if *flagLogToFile {
-		logFilePath := fmt.Sprintf("../outputs/server_log_%s.log", time.Now().Format(time.RFC3339))
+		logFilePath := fmt.Sprintf(
+			"../outputs/server_log_%s.log",
+			time.Now().Format(time.RFC3339),
+		)
 		f := logOutput(logger, logFilePath, errors)
 		defer f()
 	}
 
-	memory := server.ServerMemory{
+	store := server.LocalMemory{
 		MemoryService: memory.NewMemoryStore(0),
 	}
 
@@ -61,9 +65,13 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	server := server.NewConlangServer("SERVER", logger, memory, specifications)
+	cs := server.NewConlangServer("SERVER", logger, store, specifications)
 
-	go server.ListenAndServe(errors)
+	// Wait for system agent to connect...
+
+	go cs.TestExchangeEvent()
+
+	go cs.ListenAndServe(errors)
 
 	for err := range errors {
 		if err != nil {

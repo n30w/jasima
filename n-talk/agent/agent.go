@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
 )
 
 type LLMService interface {
@@ -38,7 +39,10 @@ type MemoryService interface {
 	// less-than-or-equal-to the total number of memories returns `n` messages.
 	// `name` is the name of the agent that inserted the messages. This is
 	// just the client name.
-	Retrieve(ctx context.Context, name string, n int) ([]memory.Message, error)
+	Retrieve(ctx context.Context, name chat.Name, n int) (
+		[]memory.Message,
+		error,
+	)
 
 	// Clear clears all the memory in the storage.
 	Clear() error

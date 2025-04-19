@@ -4,7 +4,7 @@
 // 	protoc        v5.29.3
 // source: chat/chat.proto
 
-package __
+package chat
 
 import (
 	reflect "reflect"
@@ -135,6 +135,7 @@ var (
 		(*Message)(nil), // 0: chat.Message
 	}
 )
+
 var file_chat_chat_proto_depIdxs = []int32{
 	0, // 0: chat.ChatService.Chat:input_type -> chat.Message
 	0, // 1: chat.ChatService.Chat:output_type -> chat.Message

@@ -6,7 +6,7 @@ tasks:
       - go run ./agent -debug=true -initialize="./configs/default_message.txt" -temperature=1.62 -layer=1 -name="toki" -peers="pona" -model=0
   run-agent-pona:
     cmds:
-      - go run ./agent -debug=true -temperature=1.62 -layer=1 -name="pona" -peers="toki"
+      - go run ./agent -debug=true -temperature=1.62 -layer=1 -name="pona" -peers="toki" -model=0
   run-agent-toki-a1:
     cmds:
       - go run ./agent -configFile="./configs/a1.toml" -debug=true
@@ -19,4 +19,4 @@ tasks:
   # utils
   gen-proto-chat:
     cmds:
-      - protoc --go_out=./chat/ --go-grpc_out=./chat/ ./chat/chat.proto
+      - protoc --go_out=./internal/chat/ --go-grpc_out=./chat/ ./internal/chat/chat.proto

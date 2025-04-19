@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"codeberg.org/n30w/jasima/n-talk/memory"
+	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+
 	"google.golang.org/genai"
 )
 
@@ -17,13 +18,14 @@ type GoogleGemini struct {
 func NewGoogleGemini(
 	ctx context.Context,
 	apiKey string,
-	instructions string,
-	temperature float64,
+	mc ModelConfig,
 ) (*GoogleGemini, error) {
-	g, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	g, err := genai.NewClient(
+		ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -34,19 +36,21 @@ func NewGoogleGemini(
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(temperature),
+			Temperature:     genai.Ptr(mc.Temperature),
 			MaxOutputTokens: genai.Ptr(int64(10000)),
 		},
 	}
 
-	if instructions != "" {
-		c.genaiConfig.SystemInstruction = genai.NewModelContentFromText(instructions)
+	if mc.Instructions != "" {
+		c.genaiConfig.SystemInstruction = genai.NewModelContentFromText(
+			mc.Instructions,
+		)
 	}
 
 	return c, nil
 }
 
-func (c *GoogleGemini) Request(
+func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
 	prompt string,
@@ -80,7 +84,7 @@ func (c *GoogleGemini) Request(
 }
 
 // prepare adheres memories to the `genai` library `content` type.
-func (c *GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
+func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	l := len(messages)
 
 	contents := make([]*genai.Content, l)

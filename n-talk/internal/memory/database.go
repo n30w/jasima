@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -38,19 +40,19 @@ func NewDatabaseStore(ctx context.Context, url string) (*DatabaseStore, error) {
 
 func (d *DatabaseStore) Save(ctx context.Context, message Message) error {
 	// ID of the sending agent.
-	a1, err := d.getAgentId(ctx, message.Sender)
+	a1, err := d.getAgentId(ctx, message.Sender.String())
 	if err != nil {
 		return err
 	}
 
 	// ID of the receiving agent.
-	a2, err := d.getAgentId(ctx, message.Receiver)
+	a2, err := d.getAgentId(ctx, message.Receiver.String())
 	if err != nil {
 		return err
 	}
 
 	// ID of the agent who is inserting this row.
-	a3, err := d.getAgentId(ctx, message.InsertedBy)
+	a3, err := d.getAgentId(ctx, message.InsertedBy.String())
 	if err != nil {
 		return err
 	}
@@ -80,7 +82,11 @@ func (d *DatabaseStore) Save(ctx context.Context, message Message) error {
 // Retrieve retrieves all messages from the database and puts them in a slice
 // of Messages. Check out pgx's query all rows with generic type.
 // https://pkg.go.dev/github.com/jackc/pgx/v5#RowToStructByPos
-func (d *DatabaseStore) Retrieve(ctx context.Context, name string, n int) ([]Message, error) {
+func (d *DatabaseStore) Retrieve(
+	ctx context.Context,
+	name string,
+	n int,
+) ([]Message, error) {
 	a1, err := d.getAgentId(ctx, name)
 	if err != nil {
 		return nil, err
@@ -108,7 +114,10 @@ func (d *DatabaseStore) Retrieve(ctx context.Context, name string, n int) ([]Mes
 	return messages, nil
 }
 
-func (d *DatabaseStore) getAgentId(ctx context.Context, name string) (int, error) {
+func (d *DatabaseStore) getAgentId(ctx context.Context, name string) (
+	int,
+	error,
+) {
 	query := `
 		SELECT * FROM agents WHERE name = @name
 	`
@@ -159,7 +168,11 @@ func (in *InMemoryStore) Save(_ context.Context, message Message) error {
 	return nil
 }
 
-func (in *InMemoryStore) Retrieve(_ context.Context, _ string, n int) ([]Message, error) {
+func (in *InMemoryStore) Retrieve(
+	_ context.Context,
+	_ chat.Name,
+	n int,
+) ([]Message, error) {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 
