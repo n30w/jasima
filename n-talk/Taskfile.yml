@@ -7,6 +7,12 @@ tasks:
   run-agent-pona:
     cmds:
       - go run ./agent -debug=true -temperature=1.62 -layer=1 -name="pona" -peers="toki" -model=0
+  run-agent-penny:
+    cmds:
+      - go run ./agent -debug=true -initialize="./configs/default_message.txt" -temperature=1.62 -layer=2 -name="penny" -peers="tails" -model=0
+  run-agent-tails:
+    cmds:
+      - go run ./agent -debug=true -temperature=1.62 -layer=2 -name="tails" -peers="penny" -model=0
   run-agent-toki-a1:
     cmds:
       - go run ./agent -configFile="./configs/a1.toml" -debug=true
