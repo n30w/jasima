@@ -210,7 +210,10 @@ func (c *client) SendInitialMessage(ctx context.Context) error {
 
 		fileText := string(data)
 
-		err = c.memory.Save(ctx, c.NewMessageTo(recipient, fileText))
+		msg := c.NewMessageTo(recipient, fileText)
+		msg.Layer = c.Layer
+
+		err = c.memory.Save(ctx, msg)
 		if err != nil {
 			return err
 		}
@@ -244,9 +247,10 @@ func (c *client) newMessage(text string) memory.Message {
 func (c *client) NewMessageFrom(sender chat.Name, text string) memory.Message {
 	m := c.newMessage(text)
 
-	m.Role = 0
+	m.Role = memory.UserRole
 	m.Sender = sender
 	m.Receiver = c.Name
+	m.Layer = c.Layer
 
 	return m
 }
@@ -254,9 +258,10 @@ func (c *client) NewMessageFrom(sender chat.Name, text string) memory.Message {
 func (c *client) NewMessageTo(recipient chat.Name, text string) memory.Message {
 	m := c.newMessage(text)
 
-	m.Role = 1
+	m.Role = memory.ModelRole
 	m.Receiver = recipient
 	m.Sender = c.Name
+	m.Layer = c.Layer
 
 	return m
 }
@@ -286,7 +291,7 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 	return result, nil
 }
 
-func (c *client) SendMessage(errs chan<- error, response <-chan string) {
+func (c *client) SendMessages(errs chan<- error, response <-chan string) {
 	for res := range response {
 
 		c.logger.Debug("Sending message 📧")
@@ -319,6 +324,10 @@ func (c *client) DispatchToLLM(
 	llmChan <-chan string,
 ) {
 	for input := range llmChan {
+		if c.latch {
+			log.Debug("Discarding response...", "latch", c.latch)
+			continue
+		}
 
 		content := input
 		receiver := c.Peers[0]
@@ -341,6 +350,11 @@ func (c *client) DispatchToLLM(
 		if err != nil {
 			errs <- err
 			return
+		}
+
+		if c.latch {
+			log.Debug("Discarding response...", "latch", c.latch)
+			continue
 		}
 
 		// Save the LLM's response to memory.
@@ -375,6 +389,7 @@ func (c *client) ReceiveMessages(
 		pbMsg, err := c.conn.Recv()
 		if err == io.EOF {
 			online = false
+			errs <- errors.New("received EOF")
 		} else if err != nil {
 			errs <- err
 			return
@@ -403,24 +418,22 @@ func (c *client) ReceiveMessages(
 					"cleared", true,
 				)
 			case commands.Latch:
-				c.logger.Debug("Server commands LATCH", "latch", c.latch)
 				if c.latch {
 					c.logger.Debug("already latched, doing nothing...")
 					break
 				}
 
 				c.latch = true
-				c.logger.Debug("Server commands LATCH", "latch", c.latch)
+				c.logger.Debug("LATCH command received", "latch", c.latch)
 
 			case commands.Unlatch:
-				c.logger.Debug("Server commands LATCH", "latch", c.latch)
 				if !c.latch {
 					c.logger.Debug("already unlatched, doing nothing...")
 					break
 				}
 
 				c.latch = false
-				c.logger.Debug("Server commands UNLATCH", "latch", c.latch)
+				c.logger.Debug("UNLATCH command received", "latch", c.latch)
 
 			default:
 				// Send the data to the LLM.

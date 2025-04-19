@@ -100,7 +100,7 @@ func (s *ConlangServer) iterate(specs []string, layer int32) []string {
 
 	// Send every client in the Layer clear memory command.
 	for _, v := range clients {
-		err := s.SendCommand(commands.ClearMemory, v)
+		err := s.sendCommand(commands.ClearMemory, v)
 		if err != nil {
 		}
 	}
@@ -148,12 +148,28 @@ func (s *ConlangServer) EvolutionLoop() {
 
 func (s *Server) TestExchangeEvent() {
 	i := 0
-	for i < 5 {
+
+	for i < 7 {
 		<-s.exchangeComplete
 		i++
 		s.logger.Infof("Exchange Total: %d", i)
 	}
-	s.logger.Info("see ya later")
+
+	clients := s.getClientsByLayer(chat.Layer(1))
+
+	for _, v := range clients {
+		s.logger.Infof("Sending latch command to %s", v.name)
+		err := s.sendCommand(commands.Latch, v)
+		if err != nil {
+			s.logger.Error(err)
+		}
+
+		s.logger.Infof("Sending clear memory command to %s", v.name)
+		err = s.sendCommand(commands.ClearMemory, v)
+		if err != nil {
+			s.logger.Error(err)
+		}
+	}
 }
 
 type LangSpecification struct {

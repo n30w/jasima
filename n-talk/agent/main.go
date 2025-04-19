@@ -44,12 +44,12 @@ func main() {
 		ReportTimestamp: true,
 	}
 
-	logger := log.NewWithOptions(os.Stderr, logOptions)
-
 	if *flagDebug {
 		logOptions.Level = log.DebugLevel
 		logOptions.ReportCaller = true
 	}
+
+	logger := log.NewWithOptions(os.Stderr, logOptions)
 
 	logger.Debug("DEBUG is set to TRUE")
 
@@ -93,9 +93,13 @@ func main() {
 		logger.Fatal("`layer` parameter must be greater than or equal to 0")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
 
-	defer cancel()
+	defer stop()
 
 	logger.Debug("Initializing memory storage")
 
@@ -130,16 +134,16 @@ func main() {
 	responseChan := make(chan string)
 	llmChan := make(chan string)
 	errorChan := make(chan error)
-	stop := make(chan os.Signal, 1)
+	halt := make(chan os.Signal, 1)
 
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(halt, os.Interrupt, syscall.SIGTERM)
 
 	// !!! UNLATCH FOR NOW !!!
 	client.latch = false
 	// !!! UNLATCH FOR NOW !!!
 
 	// Send any message in the response channel.
-	go client.SendMessage(errorChan, responseChan)
+	go client.SendMessages(errorChan, responseChan)
 
 	// Wait for messages to come in and process them accordingly.
 	go client.ReceiveMessages(ctx, online, errorChan, llmChan)
@@ -147,19 +151,14 @@ func main() {
 	// Watch for possible LLM dispatches.
 	go client.DispatchToLLM(ctx, errorChan, responseChan, llmChan)
 
-	// GTFO on error.
-	go func(stop chan<- os.Signal, e <-chan error) {
-		for err := range e {
-			if err != nil {
-				logger.Fatal(err)
-				stop <- os.Kill
-			}
-		}
-	}(stop, errorChan)
-
-	<-stop
-
-	logger.Info("Shutting down. See you later.")
+	select {
+	case err = <-errorChan:
+		logger.Fatalf("encountered error: %v", err)
+	case <-ctx.Done():
+		logger.Info("context done... goodnight.")
+	case <-halt:
+		logger.Info("halted, shutting down...")
+	}
 
 	client.Teardown()
 }

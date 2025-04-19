@@ -118,6 +118,14 @@ func (s *Server) listen(
 
 			disconnected = true
 
+			s.logger.Info(
+				"client disconnected",
+				"client",
+				client.name,
+				"reason",
+				err,
+			)
+
 		} else {
 
 			// Strip away any `Command` that came from a client by making
@@ -156,92 +164,6 @@ func (s *Server) listen(
 	return nil
 }
 
-// saveToTranscript saves a message to the server's memory storage.
-func (s *Server) saveToTranscript(
-	ctx context.Context,
-	msg *memory.Message,
-) error {
-	msg.Role = memory.UserRole
-
-	err := s.memory.Save(ctx, *msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// initClient initializes a client connection and adds the client to the list
-// of clients currently maintaining a connection.
-func (s *Server) initClient(
-	stream chat.ChatService_ChatServer,
-	msg *chat.Message,
-) (*client, error) {
-	client, err := newClient(stream, msg.Sender, msg.Content, msg.Layer)
-	if err != nil {
-		return nil, err
-	}
-
-	s.addClient(client)
-
-	s.logger.Info(
-		"Client connected",
-		"client",
-		client.String(),
-		"Layer",
-		client.layer,
-	)
-
-	return client, nil
-}
-
-// addClient adds a client to the list of clients that maintain an active
-// connection to the server.
-func (s *Server) addClient(client *client) {
-	// Add the client to the list of current clients. Multiple connections may
-	// happen all at once, so we need to lock and unlock the mutex to avoid
-	// race conditions.
-
-	s.mu.Lock()
-	s.clients.addByName(client)
-	s.clients.addByLayer(client)
-	s.mu.Unlock()
-}
-
-// removeClient removes a client from the list of clients that maintain an
-// active connection to the server.
-func (s *Server) removeClient(client *client) {
-	s.mu.Lock()
-	s.clients.removeByName(client)
-	s.clients.removeByLayer(client)
-	s.mu.Unlock()
-}
-
-// getClientsByLayer retrieves all the clients of a Layer and returns them
-// in an array of pointers to those clients.
-func (s *Server) getClientsByLayer(layer chat.Layer) Clients {
-	var c Clients
-
-	s.mu.Lock()
-	c = s.clients.byLayer(layer)
-	s.mu.Unlock()
-
-	return c
-}
-
-func (s *Server) getClientByName(name chat.Name) (*client, error) {
-	var c *client
-	var ok bool
-
-	c, ok = s.clients.byName(name)
-
-	if !ok {
-		return nil, fmt.Errorf("client with name: '%s' not found", name)
-	}
-
-	return c, nil
-}
-
 // handleMessage decides what happens to a message, based on sender, receiver,
 // and the state of the Layer.
 func (s *Server) handleMessage(msg *memory.Message) error {
@@ -251,7 +173,7 @@ func (s *Server) handleMessage(msg *memory.Message) error {
 		return nil
 	}
 
-	err := s.routeMessage(msg)
+	err := s.broadcast(msg)
 	if err != nil {
 		return err
 	}
@@ -259,24 +181,16 @@ func (s *Server) handleMessage(msg *memory.Message) error {
 	return nil
 }
 
-// routeMessage sends a message `msg` to a client. The client should exist in
+// forward forwards a message `msg` to a client. The client should exist in
 // the list of clients maintaining an active connection. routeMessage returns
 // an error if the client does not exist.
-func (s *Server) routeMessage(msg *memory.Message) error {
-	// Lock for the entirety of this function, as we use the client for
-	// the lifetime of this function.
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var err error
-
-	// destClient, ok := s.clients.byNameMap[msg.Receiver]
-	destClient, err := s.getClientByName(msg.Receiver)
+func (s *Server) forward(msg *memory.Message) error {
+	client, err := s.getClientByName(msg.Receiver)
 	if err != nil {
 		return err
 	}
 
-	err = destClient.Send(msg)
+	err = client.Send(msg)
 	if err != nil {
 		return err
 	}
@@ -284,15 +198,50 @@ func (s *Server) routeMessage(msg *memory.Message) error {
 	return nil
 }
 
-// SendCommand issues a command to a client.
-func (s *Server) SendCommand(command commands.Command, to *client) error {
+// broadcast forwards a message `msg` to all clients on a layer, excluding the
+// sender.
+func (s *Server) broadcast(msg *memory.Message) error {
+	var err error
+
+	clients := s.getClientsByLayer(msg.Layer)
+	for _, v := range clients {
+		if v.name == msg.Sender {
+			continue
+		}
+
+		err = v.Send(msg)
+		if err != nil {
+			return fmt.Errorf("error sending message to client: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// sendCommand issues a command to a client.
+func (s *Server) sendCommand(command commands.Command, to *client) error {
 	msg := memory.NewMessage(memory.ChatRole(0), "command")
 
 	msg.Command = command
 	msg.Sender = s.name
 	msg.Receiver = to.name
 
-	err := to.Send(&msg)
+	err := to.Send(&msg, msg.Command)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// saveToTranscript saves a message to the server's memory storage.
+func (s *Server) saveToTranscript(
+	ctx context.Context,
+	msg *memory.Message,
+) error {
+	msg.Role = memory.UserRole
+
+	err := s.memory.Save(ctx, *msg)
 	if err != nil {
 		return err
 	}
