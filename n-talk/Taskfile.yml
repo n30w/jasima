@@ -36,7 +36,7 @@ tasks:
       - go run ./agent -configFile="./configs/sys_agent.toml" -debug=true
   run-server:
     cmds:
-      - go run ./server/cmd -debug=true -logToFile=false
+      - go run ./server/cmd -debug=true -logToFile=false -exchanges=35
   # utils
   gen-proto-chat:
     cmds:

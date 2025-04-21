@@ -44,6 +44,10 @@ type ConlangServer struct {
 
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
+
+	// exchangeTotal represents the maximum number of exchanges between agents
+	// per layer.
+	exchangeTotal int
 }
 
 func NewConlangServer(
@@ -51,6 +55,7 @@ func NewConlangServer(
 	l *log.Logger,
 	m LocalMemory,
 	s chat.LayerMessageSet,
+	e int,
 ) *ConlangServer {
 	c := channels{
 		messagePool:            make(memory.MessageChannel),
@@ -73,6 +78,7 @@ func NewConlangServer(
 			channels: c,
 		},
 		specification: s,
+		exchangeTotal: e,
 	}
 }
 
@@ -82,6 +88,7 @@ func NewConlangServer(
 func (s *ConlangServer) iterate(
 	specs []chat.Content,
 	initialLayer chat.Layer,
+	exchanges int,
 ) ([]chat.Content, error) {
 	newSpecs := make([]chat.Content, initialLayer)
 	if initialLayer == chat.SystemLayer {
@@ -92,7 +99,7 @@ func (s *ConlangServer) iterate(
 
 	// Compile previous Layer's outputs to use in this current Layer's input
 
-	iteration, err := s.iterate(specs[:initialLayer], initialLayer-1)
+	iteration, err := s.iterate(specs[:initialLayer], initialLayer-1, exchanges)
 	if err != nil {
 		return nil, err
 	}
@@ -151,11 +158,9 @@ func (s *ConlangServer) iterate(
 
 	// Dispatch iterate commands to clients on Layer.
 
-	exchanges := 5
-
 	for i := range exchanges {
 		<-s.channels.exchanged
-		s.logger.Infof("Exchange Total: %d", i+1)
+		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
 	err = s.sendCommands(clients, commands.Latch, commands.ClearMemory)
@@ -261,7 +266,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	for range 1 {
 		// Starts on Layer 4, recurses to 1.
-		specs, err = s.iterate(specs, chat.LogographyLayer)
+		specs, err = s.iterate(specs, chat.LogographyLayer, s.exchangeTotal)
 		if err != nil {
 			errs <- err
 			return
