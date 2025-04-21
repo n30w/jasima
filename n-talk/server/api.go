@@ -154,9 +154,6 @@ func (s *Server) listen(
 			// If all is well, save the message to transcript.
 
 			s.logger.Infof("%s: %s", fromSender.Sender, fromSender.Text)
-
-			// Emit done signal for evolution function.
-			s.channels.exchanged <- true
 		}
 	}
 
@@ -181,7 +178,7 @@ func (s *Server) router() {
 			continue
 		}
 
-		err := s.saveToTranscript(nil, &msg)
+		err := s.saveToTranscript(context.TODO(), &msg)
 		if err != nil {
 			s.logger.Errorf("error saving to transcript: %v", err)
 			continue
@@ -191,6 +188,9 @@ func (s *Server) router() {
 		if err != nil {
 			s.logger.Errorf("%v", err)
 		}
+
+		// Emit done signal for evolution function.
+		s.channels.exchanged <- true
 	}
 }
 
