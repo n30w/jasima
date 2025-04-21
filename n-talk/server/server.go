@@ -41,14 +41,14 @@ type ConlangServer struct {
 	systemAgentOnline bool
 
 	// specification are serialized versions of the Markdown specifications.
-	specification *LangSpecification
+	specification chat.LayerMessageSet
 }
 
 func NewConlangServer(
 	name string,
 	l *log.Logger,
 	m LocalMemory,
-	s *LangSpecification,
+	s chat.LayerMessageSet,
 ) *ConlangServer {
 	return &ConlangServer{
 		Server: Server{
@@ -126,29 +126,29 @@ func (s *ConlangServer) iterate(specs []string, layer int32) []string {
 //}
 
 // EvolutionLoop manages the entire evolutionary function loop.
-func (s *ConlangServer) EvolutionLoop() {
-	specs := []string{
-		s.specification.Phonetics,
-		s.specification.Grammar,
-		s.specification.Dictionary,
-		s.specification.Logography,
-	}
+//func (s *ConlangServer) EvolutionLoop() {
+//	specs := []string{
+//		s.specification.Phonetics,
+//		s.specification.Grammar,
+//		s.specification.Dictionary,
+//		s.specification.Logography,
+//	}
+//
+//	for !s.systemAgentOnline {
+//		// ...
+//	}
+//
+//	for range 1 {
+//		// Starts on Layer 4, recurses to 1.
+//		specs = s.iterate(specs, 4)
+//		// Save specs to memory
+//		// send results to SYSTEM LLM
+//		// Save result to LLM.
+//	}
+//}
 
-	for !s.systemAgentOnline {
-		// ...
-	}
-
-	for range 1 {
-		// Starts on Layer 4, recurses to 1.
-		specs = s.iterate(specs, 4)
-		// Save specs to memory
-		// send results to SYSTEM LLM
-		// Save result to LLM.
-	}
-}
-
-func (s *Server) TestExchangeEvent() {
-	// Wait for layer 1 to have reuqired clients.
+func (s *ConlangServer) TestExchangeEvent(errs chan<- error) {
+	// Wait for layer 1 to have required clients.
 
 	allJoined := make(chan struct{})
 
@@ -158,7 +158,7 @@ func (s *Server) TestExchangeEvent() {
 			time.Sleep(1 * time.Second)
 			s.mu.Lock()
 			v := s.clients.byLayerMap[chat.PhoneticsLayer]
-			if !(len(v) < 2) {
+			if len(v) >= 2 {
 				joined = true
 			}
 			s.mu.Unlock()
@@ -170,22 +170,42 @@ func (s *Server) TestExchangeEvent() {
 
 	s.logger.Infof("%s clients all joined", chat.PhoneticsLayer)
 
-	// send the initialize command to first client
+	// Send the initialize command to first client.
 
 	clients := s.getClientsByLayer(chat.PhoneticsLayer)
 
 	s.logger.Infof("Sending %s to %s", commands.Unlatch, chat.PhoneticsLayer)
 	for _, v := range clients {
-		err := s.sendCommand(commands.Unlatch, v)
+
+		// First append new instructions to clients.
+
+		content := s.specification[chat.PhoneticsLayer]
+
+		err := s.sendCommand(commands.AppendInstructions, v, content)
+
+		// Then unlatch them... They're ready.
+
+		err = s.sendCommand(commands.Unlatch, v)
 		if err != nil {
 			s.logger.Error(err)
 		}
 	}
 
-	initMsg := "Hello, let's begin."
+	var initMsg chat.Content = "Hello, let's begin."
+
+	// Select the first client in the layer to be the initializer.
+
 	initializerClient := s.getClientsByLayer(chat.PhoneticsLayer)[0]
 
-	s.sendCommand(commands.SendInitialMessage, initializerClient, initMsg)
+	err := s.sendCommand(
+		commands.SendInitialMessage,
+		initializerClient,
+		initMsg,
+	)
+	if err != nil {
+		errs <- err
+		return
+	}
 
 	i := 0
 
@@ -209,52 +229,47 @@ func (s *Server) TestExchangeEvent() {
 		}
 	}
 
+	clients = s.getClientsByLayer(chat.GrammarLayer)
+
+	i = 0
+
 	for i < 7 {
 		<-s.exchangeComplete
 		i++
 		s.logger.Infof("Exchange Total: %d", i)
 	}
-
-	clients = s.getClientsByLayer(chat.Layer(2))
 }
 
-type LangSpecification struct {
-	Logography string
-	Grammar    string
-	Dictionary string
-	Phonetics  string
-}
-
-func NewLangSpecification(p string) (*LangSpecification, error) {
-	ls := &LangSpecification{}
+func NewLangSpecification(p string) (chat.LayerMessageSet, error) {
+	ls := make(chat.LayerMessageSet)
 
 	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))
 	if err != nil {
 		return nil, err
 	}
 
-	ls.Dictionary = string(b)
+	ls[chat.DictionaryLayer] = chat.Content(b)
 
 	b, err = os.ReadFile(filepath.Join(p, "grammar.md"))
 	if err != nil {
 		return nil, err
 	}
 
-	ls.Grammar = string(b)
+	ls[chat.GrammarLayer] = chat.Content(b)
 
 	b, err = os.ReadFile(filepath.Join(p, "logography.md"))
 	if err != nil {
 		return nil, err
 	}
 
-	ls.Logography = string(b)
+	ls[chat.LogographyLayer] = chat.Content(b)
 
 	b, err = os.ReadFile(filepath.Join(p, "phonetics.md"))
 	if err != nil {
 		return nil, err
 	}
 
-	ls.Phonetics = string(b)
+	ls[chat.PhoneticsLayer] = chat.Content(b)
 
 	return ls, nil
 }

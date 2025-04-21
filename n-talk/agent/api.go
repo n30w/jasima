@@ -168,7 +168,8 @@ func newClient(
 
 // initConnection runs to establish an initial connection to the server.
 func (c *client) initConnection() error {
-	err := c.sendMessage(c.llm.String())
+	content := chat.Content(c.llm.String())
+	err := c.sendMessage(content)
 	if err != nil {
 		return err
 	}
@@ -208,7 +209,7 @@ func (c *client) SendInitialMessage(ctx context.Context) error {
 			return err
 		}
 
-		fileText := string(data)
+		fileText := chat.Content(string(data))
 
 		msg := c.NewMessageTo(recipient, fileText)
 		msg.Layer = c.Layer
@@ -236,7 +237,7 @@ func (c *client) Teardown() {
 	_ = c.grpcClient.Close()
 }
 
-func (c *client) newMessage(text string) memory.Message {
+func (c *client) newMessage(text chat.Content) memory.Message {
 	return memory.Message{
 		Text:       text,
 		Timestamp:  time.Now(),
@@ -244,7 +245,10 @@ func (c *client) newMessage(text string) memory.Message {
 	}
 }
 
-func (c *client) NewMessageFrom(sender chat.Name, text string) memory.Message {
+func (c *client) NewMessageFrom(
+	sender chat.Name,
+	text chat.Content,
+) memory.Message {
 	m := c.newMessage(text)
 
 	m.Role = memory.UserRole
@@ -255,7 +259,10 @@ func (c *client) NewMessageFrom(sender chat.Name, text string) memory.Message {
 	return m
 }
 
-func (c *client) NewMessageTo(recipient chat.Name, text string) memory.Message {
+func (c *client) NewMessageTo(
+	recipient chat.Name,
+	text chat.Content,
+) memory.Message {
 	m := c.newMessage(text)
 
 	m.Role = memory.ModelRole
@@ -266,7 +273,10 @@ func (c *client) NewMessageTo(recipient chat.Name, text string) memory.Message {
 	return m
 }
 
-func (c *client) request(ctx context.Context, prompt string) (string, error) {
+func (c *client) request(ctx context.Context, prompt chat.Content) (
+	chat.Content,
+	error,
+) {
 	a, err := c.memory.Retrieve(ctx, c.Name, 0)
 	if err != nil {
 		return "", err
@@ -276,7 +286,7 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 
 	t := timer(time.Now())
 
-	result, err := c.llm.Request(ctx, a, prompt)
+	result, err := c.llm.Request(ctx, a, prompt.String())
 	if err != nil {
 		return "", err
 	}
@@ -288,11 +298,14 @@ func (c *client) request(ctx context.Context, prompt string) (string, error) {
 		v.Truncate(1*time.Millisecond),
 	)
 
-	return result, nil
+	return chat.Content(result), nil
 }
 
-func (c *client) SendMessages(errs chan<- error, response <-chan string) {
-	for res := range response {
+func (c *client) SendMessages(
+	errs chan<- error,
+	responses <-chan chat.Content,
+) {
+	for res := range responses {
 
 		c.logger.Debug("Sending message 📧")
 
@@ -306,7 +319,7 @@ func (c *client) SendMessages(errs chan<- error, response <-chan string) {
 	}
 }
 
-func (c *client) sendMessage(content string) error {
+func (c *client) sendMessage(content chat.Content) error {
 	msg := chat.NewPbMessage(c.Name, c.Peers[0], content, c.Layer)
 
 	err := c.conn.Send(msg)
@@ -320,8 +333,8 @@ func (c *client) sendMessage(content string) error {
 func (c *client) DispatchToLLM(
 	ctx context.Context,
 	errs chan<- error,
-	response chan<- string,
-	llmChan <-chan string,
+	responses chan<- chat.Content,
+	llmChan <-chan chat.Content,
 ) {
 	for input := range llmChan {
 		if c.latch {
@@ -374,7 +387,7 @@ func (c *client) DispatchToLLM(
 
 		c.logger.Debug("Piping message to response channel...")
 
-		response <- llmResponse
+		responses <- llmResponse
 	}
 }
 
@@ -383,7 +396,7 @@ func (c *client) ReceiveMessages(
 	ctx context.Context,
 	online bool,
 	errs chan<- error,
-	llmChan chan<- string,
+	llmChan chan<- chat.Content,
 ) {
 	for online {
 		pbMsg, err := c.conn.Recv()
@@ -407,8 +420,10 @@ func (c *client) ReceiveMessages(
 			c.logger.Debugf("Received %s", msg.Command)
 
 			switch msg.Command {
+			case commands.AppendInstructions:
+				c.llm.AppendInstructions(msg.Text.String())
 			case commands.SetInstructions:
-				c.llm.SetInstructions(msg.Text)
+				c.llm.SetInstructions(msg.Text.String())
 			case commands.ClearMemory:
 				err = c.memory.Clear()
 				if err != nil {
@@ -487,4 +502,18 @@ func (c *client) ReceiveMessages(
 			}
 		}
 	}
+}
+
+func (c *client) Run(ctx context.Context, errs chan error) {
+	responses := make(chan chat.Content)
+	chatting := make(chan chat.Content)
+
+	// Send any message in the response channel.
+	go c.SendMessages(errs, responses)
+
+	// Wait for messages to come in and process them accordingly.
+	go c.ReceiveMessages(ctx, true, errs, chatting)
+
+	// Watch for possible LLM dispatches.
+	go c.DispatchToLLM(ctx, errs, chatting, chatting)
 }

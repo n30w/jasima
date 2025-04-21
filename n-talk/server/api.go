@@ -185,12 +185,12 @@ func (s *Server) handleMessage(msg *memory.Message) error {
 // the list of clients maintaining an active connection. routeMessage returns
 // an error if the client does not exist.
 func (s *Server) forward(msg *memory.Message) error {
-	client, err := s.getClientByName(msg.Receiver)
+	c, err := s.getClientByName(msg.Receiver)
 	if err != nil {
 		return err
 	}
 
-	err = client.Send(msg)
+	err = c.Send(msg)
 	if err != nil {
 		return err
 	}
@@ -219,8 +219,13 @@ func (s *Server) broadcast(msg *memory.Message) error {
 }
 
 // sendCommand issues a command to a client.
-func (s *Server) sendCommand(command commands.Command, to *client, content ...string) error {
+func (s *Server) sendCommand(
+	command commands.Command,
+	to *client,
+	content ...chat.Content,
+) error {
 	msg := memory.NewMessage(memory.ChatRole(0), "command")
+
 	if len(content) > 0 {
 		msg.Text = content[0]
 	}

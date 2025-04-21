@@ -69,13 +69,13 @@ func main() {
 
 	// Wait for system agent to connect...
 
-	go cs.TestExchangeEvent()
+	go cs.TestExchangeEvent(errors)
 
 	go cs.ListenAndServe(errors)
 
-	for err := range errors {
-		if err != nil {
-			logger.Fatal(err)
+	for e := range errors {
+		if e != nil {
+			logger.Fatal(e)
 		}
 	}
 }

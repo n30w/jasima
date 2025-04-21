@@ -101,54 +101,34 @@ func main() {
 
 	defer stop()
 
-	logger.Debug("Initializing memory storage")
-
 	mem := memory.NewMemoryStore(0)
 
-	client, err := newClient(ctx, userConf, mem, logger)
+	logger.Debug("Initialized memory")
+
+	c, err := newClient(ctx, userConf, mem, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	logger.Info(
-		"Created new agent!",
+		"Agent created!",
 		"name",
-		client.Name,
+		c.Name,
 		"model",
-		client.llm,
+		c.llm,
 		"layer",
-		client.Layer,
+		c.Layer,
 	)
 
-	// Send an initial message, if the initialization config parameter is set.
-
-	// err = client.SendInitialMessage(ctx)
-	// if err != nil {
-	// 	logger.Fatal(err)
-	// }
-
-	// Set the status of the client to online.
-
-	online := true
-
-	responseChan := make(chan string)
-	llmChan := make(chan string)
-	errorChan := make(chan error)
 	halt := make(chan os.Signal, 1)
+	errs := make(chan error)
 
 	signal.Notify(halt, os.Interrupt, syscall.SIGTERM)
 
-	// Send any message in the response channel.
-	go client.SendMessages(errorChan, responseChan)
-
-	// Wait for messages to come in and process them accordingly.
-	go client.ReceiveMessages(ctx, online, errorChan, llmChan)
-
-	// Watch for possible LLM dispatches.
-	go client.DispatchToLLM(ctx, errorChan, responseChan, llmChan)
+	c.Run(ctx, errs)
 
 	select {
-	case err = <-errorChan:
+	case err = <-errs:
 		logger.Fatalf("encountered error: %v", err)
 	case <-ctx.Done():
 		logger.Info("context done... goodnight.")
@@ -156,5 +136,5 @@ func main() {
 		logger.Info("halted, shutting down...")
 	}
 
-	client.Teardown()
+	c.Teardown()
 }
