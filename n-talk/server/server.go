@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"codeberg.org/n30w/jasima/n-talk/internal/chat"
@@ -82,8 +83,9 @@ func (s *ConlangServer) iterate(
 	specs []chat.Content,
 	initialLayer chat.Layer,
 ) ([]chat.Content, error) {
+	newSpecs := make([]chat.Content, initialLayer)
 	if initialLayer == chat.SystemLayer {
-		return nil, nil
+		return newSpecs, nil
 	}
 
 	s.logger.Infof("RECURSED on %s", initialLayer)
@@ -95,29 +97,39 @@ func (s *ConlangServer) iterate(
 		return nil, err
 	}
 
-	newSpecs := make([]chat.Content, 0)
-
 	if iteration != nil {
 		newSpecs = append(newSpecs, specs...)
-		for i, iter := range iteration {
-			newSpecs[i] = iter
-		}
+		copy(newSpecs, specs)
 	}
 
 	clients := s.getClientsByLayer(initialLayer)
 
 	s.logger.Infof("Sending %s to %s", commands.Unlatch, initialLayer)
 
+	var sb strings.Builder
+
+	sb.WriteString(
+		fmt.Sprintf(
+			"You and your interlocutors are responsible for developing %s \nHere is the current specification.",
+			initialLayer,
+		),
+	)
+
+	for i := initialLayer; i > 0; i-- {
+		sb.WriteString(newSpecs[i].String())
+	}
+
+	content := chat.Content(sb.String())
+
 	for _, v := range clients {
 
 		// First append new instructions to clients.
 		// Send prevSpec to clients. Compile specs into a single system instruction
 
-		content := s.specification[initialLayer]
-
 		s.channels.messagePool <- *s.newCommand(
 			v,
-			commands.AppendInstructions, content,
+			commands.AppendInstructions,
+			content,
 		)
 
 		// Then unlatch them... They're ready.
@@ -125,7 +137,7 @@ func (s *ConlangServer) iterate(
 		s.channels.messagePool <- *s.newCommand(v, commands.Unlatch)
 	}
 
-	var initMsg chat.Content = "Hello, let's begin."
+	var initMsg chat.Content = "Hello, let's begin. You go first."
 
 	// Select the first client in the layer to be the initializer.
 
@@ -133,19 +145,18 @@ func (s *ConlangServer) iterate(
 
 	s.channels.messagePool <- *s.newCommand(
 		initializerClient,
-		commands.SendInitialMessage, initMsg,
+		commands.SendInitialMessage,
+		initMsg,
 	)
 
 	// Dispatch iterate commands to clients on Layer.
 
-	exchanges := 10
+	exchanges := 5
 
 	for i := range exchanges {
 		<-s.channels.exchanged
 		s.logger.Infof("Exchange Total: %d", i+1)
 	}
-
-	// Send every client in the Layer clear memory command.
 
 	err = s.sendCommands(clients, commands.Latch, commands.ClearMemory)
 	if err != nil {
@@ -154,22 +165,33 @@ func (s *ConlangServer) iterate(
 
 	sysClient := s.getClientsByLayer(chat.SystemLayer)[0]
 
-	add := chat.Content(fmt.Sprintf("You are responsible for developing: %s ", initialLayer))
+	sb.Reset()
+	sb.WriteString(
+		fmt.Sprintf(
+			"You are responsible for developing: %s \nHere is the current specification.",
+			initialLayer,
+		),
+	)
+
+	// Use the current spec so the LLM can compare to the chat logs.
+
+	sb.WriteString(specs[initialLayer].String())
 
 	s.channels.messagePool <- *s.newCommand(
 		sysClient,
 		commands.AppendInstructions,
-		add+s.specification[initialLayer],
+		chat.Content(sb.String()),
 	)
+
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Unlatch)
 
-	text := chat.Content(s.memory.String())
+	chatLog := chat.Content(s.memory.String())
 
 	msg := &memory.Message{
 		Sender:   s.name,
 		Receiver: "",
 		Layer:    chat.SystemLayer,
-		Text:     text,
+		Text:     chatLog,
 	}
 
 	s.channels.messagePool <- *msg
@@ -177,13 +199,15 @@ func (s *ConlangServer) iterate(
 	// When SYSTEM LLM sends response back, adjust the corresponding
 	// specification.
 	s.logger.Infof("Waiting for systemLayerMessagePool...")
+
 	specPrime := <-s.channels.systemLayerMessagePool
-	if iteration != nil {
-		newSpecs[initialLayer] = specPrime.Text
-	} else {
-		newSpecs = append(newSpecs, specPrime.Text)
-	}
+
+	newSpecs[initialLayer] = specPrime.Text
+	// newSpecs = append(newSpecs, specPrime.Text)
+
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Latch)
+
+	s.channels.messagePool <- *s.newCommand(sysClient, commands.ClearMemory)
 
 	return newSpecs, nil
 }
