@@ -154,7 +154,7 @@ func (s *ConlangServer) iterate(
 
 	sysClient := s.getClientsByLayer(chat.SystemLayer)[0]
 
-	add := chat.Content(fmt.Sprintf("You are responsible for developing: %s", initialLayer))
+	add := chat.Content(fmt.Sprintf("You are responsible for developing: %s ", initialLayer))
 
 	s.channels.messagePool <- *s.newCommand(
 		sysClient,
