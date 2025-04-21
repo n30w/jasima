@@ -106,7 +106,7 @@ func (s *ConlangServer) iterate(
 
 	clients := s.getClientsByLayer(initialLayer)
 
-	s.logger.Infof("Sending %s to %s", commands.Unlatch, chat.PhoneticsLayer)
+	s.logger.Infof("Sending %s to %s", commands.Unlatch, initialLayer)
 
 	for _, v := range clients {
 
