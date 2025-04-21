@@ -39,6 +39,11 @@ type config struct {
 	NetworkConfig networkConfig
 }
 
+type channels struct {
+	responses chan memory.Message
+	llm       chan memory.Message
+}
+
 type client struct {
 	*config
 	memory MemoryService
@@ -58,12 +63,14 @@ type client struct {
 	// service. The number will differ based on model, but use the fastest time
 	// for this value.
 	sleepDuration time.Duration
+
+	channels *channels
 }
 
 func newClient(
 	ctx context.Context,
 	userConf userConfig,
-	memory MemoryService,
+	mem MemoryService,
 	logger *log.Logger,
 ) (*client, error) {
 	var err error
@@ -71,7 +78,7 @@ func newClient(
 	var llm LLMService
 	var sleepDuration time.Duration = 18
 
-	var peerNames []chat.Name = make([]chat.Name, 0)
+	peerNames := make([]chat.Name, 0)
 	for _, peer := range userConf.Peers {
 		peerNames = append(peerNames, chat.Name(peer))
 	}
@@ -139,8 +146,13 @@ func newClient(
 		return nil, err
 	}
 
+	channels := &channels{
+		responses: make(chan memory.Message),
+		llm:       make(chan memory.Message),
+	}
+
 	c := &client{
-		memory:     memory,
+		memory:     mem,
 		llm:        llm,
 		config:     cfg,
 		logger:     logger,
@@ -154,14 +166,11 @@ func newClient(
 		// sleepDuration is the number of seconds to wait between each request
 		// and receive from an LLM.
 		sleepDuration: sleepDuration,
+
+		channels: channels,
 	}
 
 	// Initialize the connection to the server.
-
-	err = c.initConnection()
-	if err != nil {
-		return nil, err
-	}
 
 	return c, nil
 }
@@ -169,63 +178,15 @@ func newClient(
 // initConnection runs to establish an initial connection to the server.
 func (c *client) initConnection() error {
 	content := chat.Content(c.llm.String())
-	err := c.sendMessage(content)
-	if err != nil {
-		return err
-	}
+
+	msg := c.NewMessageTo(c.Peers[0], content)
+
+	c.channels.responses <- msg
 
 	c.logger.Debugf(
 		"Established connection to the server @ %s",
 		c.NetworkConfig.Router,
 	)
-
-	return nil
-}
-
-func (c *client) SendInitialMessage(ctx context.Context) error {
-	recipient := c.Peers[0]
-
-	initMsg := c.ModelConfig.Initialize
-
-	if initMsg != "" {
-
-		c.logger.Infof(
-			"Initialization path is %s, sending initial message to %s",
-			initMsg,
-			recipient,
-		)
-
-		time.Sleep(1 * time.Second)
-
-		file, err := os.Open(initMsg)
-		if err != nil {
-			return err
-		}
-
-		defer file.Close()
-
-		data, err := io.ReadAll(file)
-		if err != nil {
-			return err
-		}
-
-		fileText := chat.Content(string(data))
-
-		msg := c.NewMessageTo(recipient, fileText)
-		msg.Layer = c.Layer
-
-		err = c.memory.Save(ctx, msg)
-		if err != nil {
-			return err
-		}
-
-		err = c.sendMessage(fileText)
-		if err != nil {
-			return err
-		}
-
-		c.logger.Info("Initial message sent successfully")
-	}
 
 	return nil
 }
@@ -303,9 +264,8 @@ func (c *client) request(ctx context.Context, prompt chat.Content) (
 
 func (c *client) SendMessages(
 	errs chan<- error,
-	responses <-chan chat.Content,
 ) {
-	for res := range responses {
+	for res := range c.channels.responses {
 
 		c.logger.Debug("Sending message 📧")
 
@@ -319,10 +279,10 @@ func (c *client) SendMessages(
 	}
 }
 
-func (c *client) sendMessage(content chat.Content) error {
-	msg := chat.NewPbMessage(c.Name, c.Peers[0], content, c.Layer)
+func (c *client) sendMessage(msg memory.Message) error {
+	m := chat.NewPbMessage(c.Name, c.Peers[0], msg.Text, c.Layer)
 
-	err := c.conn.Send(msg)
+	err := c.conn.Send(m)
 	if err != nil {
 		return err
 	}
@@ -333,16 +293,14 @@ func (c *client) sendMessage(content chat.Content) error {
 func (c *client) DispatchToLLM(
 	ctx context.Context,
 	errs chan<- error,
-	responses chan<- chat.Content,
-	llmChan <-chan chat.Content,
 ) {
-	for input := range llmChan {
+	for input := range c.channels.llm {
 		if c.latch {
 			log.Debug("Discarding response...", "latch", c.latch)
 			continue
 		}
 
-		content := input
+		content := input.Text
 		receiver := c.Peers[0]
 
 		// First save the incoming message.
@@ -373,7 +331,6 @@ func (c *client) DispatchToLLM(
 		// Save the LLM's response to memory.
 
 		newMsg := c.NewMessageTo(c.Name, llmResponse)
-		newMsg.Role = memory.ModelRole
 
 		err = c.memory.Save(ctx, newMsg)
 		if err != nil {
@@ -387,7 +344,7 @@ func (c *client) DispatchToLLM(
 
 		c.logger.Debug("Piping message to response channel...")
 
-		responses <- llmResponse
+		c.channels.responses <- newMsg
 	}
 }
 
@@ -396,7 +353,6 @@ func (c *client) ReceiveMessages(
 	ctx context.Context,
 	online bool,
 	errs chan<- error,
-	llmChan chan<- chat.Content,
 ) {
 	for online {
 		pbMsg, err := c.conn.Recv()
@@ -455,19 +411,15 @@ func (c *client) ReceiveMessages(
 				content := msg.Text
 				recipient := c.Peers[0]
 
-				msg := c.NewMessageTo(recipient, content)
+				m := c.NewMessageTo(recipient, content)
 
-				err = c.memory.Save(ctx, msg)
+				err = c.memory.Save(ctx, m)
 				if err != nil {
 					errs <- err
 					return
 				}
 
-				err = c.sendMessage(content)
-				if err != nil {
-					errs <- err
-					return
-				}
+				c.channels.responses <- m
 
 				c.logger.Info("Initial message sent successfully")
 
@@ -482,7 +434,6 @@ func (c *client) ReceiveMessages(
 
 			default:
 				// Send the data to the LLM.
-
 				if c.latch {
 					c.logger.Debug("Latch is TRUE. Only saving message...")
 					err = c.memory.Save(
@@ -497,7 +448,7 @@ func (c *client) ReceiveMessages(
 					}
 				} else {
 					c.logger.Debug("Piping message to LLM service...")
-					llmChan <- msg.Text
+					c.channels.llm <- *msg
 				}
 			}
 		}
@@ -505,15 +456,18 @@ func (c *client) ReceiveMessages(
 }
 
 func (c *client) Run(ctx context.Context, errs chan error) {
-	responses := make(chan chat.Content)
-	chatting := make(chan chat.Content)
-
 	// Send any message in the response channel.
-	go c.SendMessages(errs, responses)
+	go c.SendMessages(errs)
 
 	// Wait for messages to come in and process them accordingly.
-	go c.ReceiveMessages(ctx, true, errs, chatting)
+	go c.ReceiveMessages(ctx, true, errs)
 
 	// Watch for possible LLM dispatches.
-	go c.DispatchToLLM(ctx, errs, chatting, chatting)
+	go c.DispatchToLLM(ctx, errs)
+
+	err := c.initConnection()
+	if err != nil {
+		errs <- err
+		return
+	}
 }
