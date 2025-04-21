@@ -1,6 +1,6 @@
 module codeberg.org/n30w/jasima
 
-go 1.24.0
+go 1.24.2
 
 require (
 	github.com/BurntSushi/toml v1.4.0
