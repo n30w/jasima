@@ -24,6 +24,7 @@ const (
 	GrammarLayer
 	DictionaryLayer
 	LogographyLayer
+	ChattingLayer
 	UnknownLayer
 )
 
@@ -34,15 +35,17 @@ func (l Layer) Int32() int32 {
 func (l Layer) String() string {
 	switch l {
 	case SystemLayer:
-		return "System Layer"
+		return "system"
 	case PhoneticsLayer:
-		return "Phonetics Layer"
+		return "phonetics"
 	case GrammarLayer:
-		return "Grammar Layer"
+		return "grammar"
 	case DictionaryLayer:
-		return "Dictionary Layer"
+		return "dictionary"
 	case LogographyLayer:
-		return "Logography Layer"
+		return "logography"
+	case ChattingLayer:
+		return "chatting"
 	default:
 		return "Unknown Layer"
 	}
@@ -60,6 +63,8 @@ func SetLayer(l int32) Layer {
 		return DictionaryLayer
 	case 4:
 		return LogographyLayer
+	case 5:
+		return ChattingLayer
 	default:
 		return UnknownLayer
 	}
