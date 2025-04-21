@@ -67,11 +67,7 @@ func main() {
 
 	cs := server.NewConlangServer("SERVER", logger, store, specifications)
 
-	// Wait for system agent to connect...
-
-	go cs.TestExchangeEvent(errors)
-
-	go cs.ListenAndServe(errors)
+	cs.Run(errors)
 
 	for e := range errors {
 		if e != nil {

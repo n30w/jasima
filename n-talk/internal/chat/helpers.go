@@ -68,6 +68,16 @@ func SetLayer(l int32) Layer {
 // LayerMessageSet defines content of a message for each layer.
 type LayerMessageSet map[Layer]Content
 
+func (l LayerMessageSet) ToSlice() []Content {
+	s := make([]Content, 0, len(l))
+	s = append(s, l[PhoneticsLayer])
+	s = append(s, l[GrammarLayer])
+	s = append(s, l[DictionaryLayer])
+	s = append(s, l[LogographyLayer])
+
+	return s
+}
+
 // NewPbMessage constructs a new protobuf Message.
 func NewPbMessage(
 	sender, receiver Name,

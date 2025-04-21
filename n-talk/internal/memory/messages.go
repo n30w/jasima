@@ -67,3 +67,5 @@ func NewChatMessage(
 
 	return &msg
 }
+
+type MessageChannel chan Message

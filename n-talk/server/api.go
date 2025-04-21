@@ -15,17 +15,30 @@ import (
 	"google.golang.org/grpc"
 )
 
+type channels struct {
+	// messagePool contains messages that need to be sent to the clients
+	// connected to the server.
+	messagePool memory.MessageChannel
+
+	// systemLayerMessagePool contains messages that are destined for the server.
+	systemLayerMessagePool memory.MessageChannel
+
+	// exchanged is a signaling channel to detect whether an exchange
+	// between two clients has been completed.
+	exchanged chan bool
+
+	// hitJoinTarget signals when the number of wanted client joins is filled.
+	hitJoinTarget chan struct{}
+}
+
 type Server struct {
 	chat.UnimplementedChatServiceServer
-	clients *clientele
-	mu      sync.Mutex
-	name    chat.Name
-	logger  *log.Logger
-	memory  LocalMemory
-
-	// exchangeComplete is a signaling channel to detect whether
-	// an exchange between two clients has been completed.
-	exchangeComplete chan bool
+	clients  *clientele
+	mu       sync.Mutex
+	name     chat.Name
+	logger   *log.Logger
+	memory   LocalMemory
+	channels channels
 }
 
 func (s *Server) ListenAndServe(errors chan<- error) {
@@ -58,6 +71,10 @@ func (s *Server) ListenAndServe(errors chan<- error) {
 // Chat is called by the `client`. The lifetime of this function is for as
 // long as the client using this function is connected.
 func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
 	firstMsg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -70,10 +87,6 @@ func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 
 	// Enter an infinite listening session when the client is connected.
 	// Each client receives their own context.
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
 
 	err = s.listen(ctx, stream, c)
 	if err != nil {
@@ -93,10 +106,11 @@ func (s *Server) listen(
 	client *client,
 ) error {
 	var err error
+	var pbMsg *chat.Message
+
 	disconnected := false
 
 	for !disconnected {
-		var pbMsg *chat.Message
 
 		// Wait for a message to come in from the client. This is a blocking call.
 
@@ -128,32 +142,21 @@ func (s *Server) listen(
 
 		} else {
 
-			// Strip away any `Command` that came from a client by making
-			// a new pb message.
+			// Strip away any `Command`
 
 			fromSender := memory.NewChatMessage(
 				pbMsg.Sender, pbMsg.Receiver,
 				pbMsg.Content, pbMsg.Layer,
 			)
 
-			err = s.handleMessage(fromSender)
-			if err != nil {
-				s.logger.Errorf("%v", err)
-				continue
-			}
+			s.channels.messagePool <- *fromSender
 
 			// If all is well, save the message to transcript.
-
-			err = s.saveToTranscript(ctx, fromSender)
-			if err != nil {
-				s.logger.Errorf("error saving to transcript: %v", err)
-				continue
-			}
 
 			s.logger.Infof("%s: %s", fromSender.Sender, fromSender.Text)
 
 			// Emit done signal for evolution function.
-			s.exchangeComplete <- true
+			s.channels.exchanged <- true
 		}
 	}
 
@@ -164,21 +167,31 @@ func (s *Server) listen(
 	return nil
 }
 
-// handleMessage decides what happens to a message, based on sender, receiver,
-// and the state of the Layer.
-func (s *Server) handleMessage(msg *memory.Message) error {
-	// If a message is from a system agent.
+// router routes messages to clients based on message parameters. It listens
+// on the `messagePool` channel for messages.
+func (s *Server) router() {
+	for msg := range s.channels.messagePool {
 
-	if msg.Sender == chat.SystemName && msg.Receiver == "SERVER" {
-		return nil
+		// Inspect sender.
+
+		if msg.Layer == chat.SystemLayer && msg.Sender == chat.
+			SystemName && msg.
+			Receiver == "SERVER" {
+			s.channels.systemLayerMessagePool <- msg
+			continue
+		}
+
+		err := s.saveToTranscript(nil, &msg)
+		if err != nil {
+			s.logger.Errorf("error saving to transcript: %v", err)
+			continue
+		}
+
+		err = s.broadcast(&msg)
+		if err != nil {
+			s.logger.Errorf("%v", err)
+		}
 	}
-
-	err := s.broadcast(msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // forward forwards a message `msg` to a client. The client should exist in
@@ -190,7 +203,7 @@ func (s *Server) forward(msg *memory.Message) error {
 		return err
 	}
 
-	err = c.Send(msg)
+	err = c.Send(msg, msg.Command)
 	if err != nil {
 		return err
 	}
@@ -199,17 +212,30 @@ func (s *Server) forward(msg *memory.Message) error {
 }
 
 // broadcast forwards a message `msg` to all clients on a layer, excluding the
-// sender.
+// sender. If a message has peers to send to, the message will not be broadcast
+// across the entire layer but only broadcasted to the peer in question.
 func (s *Server) broadcast(msg *memory.Message) error {
 	var err error
 
+	if msg.Receiver != "" {
+		err = s.forward(msg)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	clients := s.getClientsByLayer(msg.Layer)
+
+	s.logger.Debugf("broadcast message to all clients on %s", msg.Layer)
+
 	for _, v := range clients {
 		if v.name == msg.Sender {
 			continue
 		}
 
-		err = v.Send(msg)
+		err = v.Send(msg, msg.Command)
 		if err != nil {
 			return fmt.Errorf("error sending message to client: %v", err)
 		}
@@ -224,7 +250,7 @@ func (s *Server) sendCommand(
 	to *client,
 	content ...chat.Content,
 ) error {
-	msg := memory.NewMessage(memory.ChatRole(0), "command")
+	msg := memory.NewMessage(memory.UserRole, "command")
 
 	if len(content) > 0 {
 		msg.Text = content[0]

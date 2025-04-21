@@ -40,8 +40,8 @@ type config struct {
 }
 
 type channels struct {
-	responses chan memory.Message
-	llm       chan memory.Message
+	responses memory.MessageChannel
+	llm       memory.MessageChannel
 }
 
 type client struct {
