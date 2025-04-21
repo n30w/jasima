@@ -4,6 +4,12 @@ Capstone II project for IMA at NYU Shanghai.
 
 Jasima is Toki Pona for "reflect", "echo", "mirror", or "duplicate". Similarly, the agents in this simulation reflect reality.
 
+## Todo
+
+- \[ \] Implement Server Side Events
+  - See <https://medium.com/@rian.eka.cahya/server-sent-event-sse-with-go-10592d9c2aa1>
+- \[ \] Develop website view with SvelteKit
+
 ## Getting Started
 
 There are a few required system dependencies needed regardless of whether you use the provided `flake.nix` file to setup the development environment.
