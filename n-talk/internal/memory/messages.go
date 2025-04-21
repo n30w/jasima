@@ -29,7 +29,7 @@ func (c ChatRole) String() string {
 
 type Message struct {
 	Role      ChatRole
-	Text      string
+	Text      chat.Content
 	Timestamp time.Time
 	Id        int64
 
@@ -46,7 +46,7 @@ type Message struct {
 func NewMessage(role ChatRole, text string) Message {
 	return Message{
 		Role: role,
-		Text: text,
+		Text: chat.Content(text),
 	}
 }
 
@@ -57,7 +57,7 @@ func NewChatMessage(
 	msg := Message{
 		Sender:   chat.Name(sender),
 		Receiver: chat.Name(receiver),
-		Text:     text,
+		Text:     chat.Content(text),
 		Layer:    chat.Layer(layer),
 	}
 
