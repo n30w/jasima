@@ -12,6 +12,10 @@ const SystemName Name = "SYSTEM"
 
 type Content string
 
+func (c Content) String() string {
+	return string(c)
+}
+
 type Layer int32
 
 const (
@@ -61,17 +65,20 @@ func SetLayer(l int32) Layer {
 	}
 }
 
+// LayerMessageSet defines content of a message for each layer.
+type LayerMessageSet map[Layer]Content
+
 // NewPbMessage constructs a new protobuf Message.
 func NewPbMessage(
 	sender, receiver Name,
-	content string,
+	content Content,
 	layer Layer,
 	cmd ...commands.Command,
 ) *Message {
 	m := &Message{
 		Sender:   sender.String(),
 		Receiver: receiver.String(),
-		Content:  content,
+		Content:  content.String(),
 		Command:  -1,
 		Layer:    layer.Int32(),
 	}
