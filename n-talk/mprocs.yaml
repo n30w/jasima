@@ -15,3 +15,5 @@ procs:
     shell: "task run-agent-tako"
   ono:
     shell: "task run-agent-ono"
+  system-a:
+    shell: "task run-agent-system"
