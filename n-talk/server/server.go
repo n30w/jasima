@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -81,10 +82,8 @@ func (s *ConlangServer) iterate(
 	specs []chat.Content,
 	initialLayer chat.Layer,
 ) ([]chat.Content, error) {
-	newSpecs := make([]chat.Content, 0)
-
 	if initialLayer == chat.SystemLayer {
-		return newSpecs, nil
+		return nil, nil
 	}
 
 	s.logger.Infof("RECURSED on %s", initialLayer)
@@ -96,10 +95,14 @@ func (s *ConlangServer) iterate(
 		return nil, err
 	}
 
-	newSpecs = append(
-		newSpecs,
-		iteration...,
-	)
+	newSpecs := make([]chat.Content, 0)
+
+	if iteration != nil {
+		newSpecs = append(newSpecs, specs...)
+		for i, iter := range iteration {
+			newSpecs[i] = iter
+		}
+	}
 
 	clients := s.getClientsByLayer(initialLayer)
 
@@ -139,7 +142,7 @@ func (s *ConlangServer) iterate(
 
 	for i := range exchanges {
 		<-s.channels.exchanged
-		s.logger.Infof("Exchange Total: %d", i)
+		s.logger.Infof("Exchange Total: %d", i+1)
 	}
 
 	// Send every client in the Layer clear memory command.
@@ -149,17 +152,14 @@ func (s *ConlangServer) iterate(
 		return nil, err
 	}
 
-	// When the chatting is complete, compile the chat records and
-	// send to SYSTEM LLM service.
-	//
-	// For each Layer, ask for updates on specification.
-
 	sysClient := s.getClientsByLayer(chat.SystemLayer)[0]
+
+	add := chat.Content(fmt.Sprintf("You are responsible for developing: %s", initialLayer))
 
 	s.channels.messagePool <- *s.newCommand(
 		sysClient,
 		commands.AppendInstructions,
-		s.specification[initialLayer],
+		add+s.specification[initialLayer],
 	)
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Unlatch)
 
@@ -176,8 +176,13 @@ func (s *ConlangServer) iterate(
 
 	// When SYSTEM LLM sends response back, adjust the corresponding
 	// specification.
+	s.logger.Infof("Waiting for systemLayerMessagePool...")
 	specPrime := <-s.channels.systemLayerMessagePool
-	newSpecs[initialLayer] = specPrime.Text
+	if iteration != nil {
+		newSpecs[initialLayer] = specPrime.Text
+	} else {
+		newSpecs = append(newSpecs, specPrime.Text)
+	}
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Latch)
 
 	return newSpecs, nil
