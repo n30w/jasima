@@ -228,7 +228,7 @@ func (s *Server) broadcast(msg *memory.Message) error {
 
 	clients := s.getClientsByLayer(msg.Layer)
 
-	s.logger.Debugf("broadcast message to all clients on %s", msg.Layer)
+	s.logger.Debugf("broadcast message to all clients on layer %s", msg.Layer)
 
 	for _, v := range clients {
 		if v.name == msg.Sender {
