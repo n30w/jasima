@@ -15,10 +15,10 @@ tasks:
       - go run ./agent -debug=true -temperature=1.62 -layer=2 -name="tails" -peers="penny" -model=0
   run-agent-nickel:
     cmds:
-      - go run ./agent -debug=true -temperature=1.62 -layer=2 -name="nickel" -peers="dime" -model=0
+      - go run ./agent -debug=true -temperature=1.62 -layer=3 -name="nickel" -peers="dime" -model=0
   run-agent-dime:
     cmds:
-      - go run ./agent -debug=true -temperature=1.62 -layer=2 -name="dime" -peers="nickel" -model=0
+      - go run ./agent -debug=true -temperature=1.62 -layer=3 -name="dime" -peers="nickel" -model=0
   run-agent-tako:
     cmds:
       - go run ./agent -debug=true -temperature=1.62 -layer=4 -name="tako" -peers="ono" -model=0
