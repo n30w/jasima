@@ -74,7 +74,7 @@ func SetLayer(l int32) Layer {
 type LayerMessageSet map[Layer]Content
 
 func (l LayerMessageSet) ToSlice() []Content {
-	s := make([]Content, 0, len(l))
+	s := make([]Content, 0, len(l)+2)
 	s = append(s, l[PhoneticsLayer])
 	s = append(s, l[GrammarLayer])
 	s = append(s, l[DictionaryLayer])
