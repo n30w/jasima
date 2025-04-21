@@ -404,6 +404,8 @@ func (c *client) ReceiveMessages(
 
 			// Intercept commands from the server.
 
+			c.logger.Debugf("Received %s", msg.Command)
+
 			switch msg.Command {
 			case commands.SetInstructions:
 				c.llm.SetInstructions(msg.Text)
@@ -425,6 +427,34 @@ func (c *client) ReceiveMessages(
 
 				c.latch = true
 				c.logger.Debug("LATCH command received", "latch", c.latch)
+
+			case commands.SendInitialMessage:
+
+				if c.latch {
+					c.logger.Debug("please UNLATCH before sending initial message")
+					break
+				}
+
+				// Save the message body as the initial message.
+
+				content := msg.Text
+				recipient := c.Peers[0]
+
+				msg := c.NewMessageTo(recipient, content)
+
+				err = c.memory.Save(ctx, msg)
+				if err != nil {
+					errs <- err
+					return
+				}
+
+				err = c.sendMessage(content)
+				if err != nil {
+					errs <- err
+					return
+				}
+
+				c.logger.Info("Initial message sent successfully")
 
 			case commands.Unlatch:
 				if !c.latch {

@@ -122,10 +122,10 @@ func main() {
 
 	// Send an initial message, if the initialization config parameter is set.
 
-	err = client.SendInitialMessage(ctx)
-	if err != nil {
-		logger.Fatal(err)
-	}
+	// err = client.SendInitialMessage(ctx)
+	// if err != nil {
+	// 	logger.Fatal(err)
+	// }
 
 	// Set the status of the client to online.
 
@@ -137,10 +137,6 @@ func main() {
 	halt := make(chan os.Signal, 1)
 
 	signal.Notify(halt, os.Interrupt, syscall.SIGTERM)
-
-	// !!! UNLATCH FOR NOW !!!
-	client.latch = false
-	// !!! UNLATCH FOR NOW !!!
 
 	// Send any message in the response channel.
 	go client.SendMessages(errorChan, responseChan)

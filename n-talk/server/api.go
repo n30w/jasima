@@ -219,8 +219,11 @@ func (s *Server) broadcast(msg *memory.Message) error {
 }
 
 // sendCommand issues a command to a client.
-func (s *Server) sendCommand(command commands.Command, to *client) error {
+func (s *Server) sendCommand(command commands.Command, to *client, content ...string) error {
 	msg := memory.NewMessage(memory.ChatRole(0), "command")
+	if len(content) > 0 {
+		msg.Text = content[0]
+	}
 
 	msg.Command = command
 	msg.Sender = s.name
@@ -230,6 +233,8 @@ func (s *Server) sendCommand(command commands.Command, to *client) error {
 	if err != nil {
 		return err
 	}
+
+	s.logger.Debugf("Sent %s to %s", msg.Command, msg.Receiver)
 
 	return nil
 }

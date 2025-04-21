@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"codeberg.org/n30w/jasima/n-talk/internal/chat"
 	"codeberg.org/n30w/jasima/n-talk/internal/commands"
@@ -147,6 +148,45 @@ func (s *ConlangServer) EvolutionLoop() {
 }
 
 func (s *Server) TestExchangeEvent() {
+	// Wait for layer 1 to have reuqired clients.
+
+	allJoined := make(chan struct{})
+
+	go func(c chan<- struct{}) {
+		joined := false
+		for !joined {
+			time.Sleep(1 * time.Second)
+			s.mu.Lock()
+			v := s.clients.byLayerMap[chat.PhoneticsLayer]
+			if !(len(v) < 2) {
+				joined = true
+			}
+			s.mu.Unlock()
+		}
+		close(c)
+	}(allJoined)
+
+	<-allJoined
+
+	s.logger.Infof("%s clients all joined", chat.PhoneticsLayer)
+
+	// send the initialize command to first client
+
+	clients := s.getClientsByLayer(chat.PhoneticsLayer)
+
+	s.logger.Infof("Sending %s to %s", commands.Unlatch, chat.PhoneticsLayer)
+	for _, v := range clients {
+		err := s.sendCommand(commands.Unlatch, v)
+		if err != nil {
+			s.logger.Error(err)
+		}
+	}
+
+	initMsg := "Hello, let's begin."
+	initializerClient := s.getClientsByLayer(chat.PhoneticsLayer)[0]
+
+	s.sendCommand(commands.SendInitialMessage, initializerClient, initMsg)
+
 	i := 0
 
 	for i < 7 {
@@ -154,8 +194,6 @@ func (s *Server) TestExchangeEvent() {
 		i++
 		s.logger.Infof("Exchange Total: %d", i)
 	}
-
-	clients := s.getClientsByLayer(chat.Layer(1))
 
 	for _, v := range clients {
 		s.logger.Infof("Sending latch command to %s", v.name)
@@ -170,6 +208,14 @@ func (s *Server) TestExchangeEvent() {
 			s.logger.Error(err)
 		}
 	}
+
+	for i < 7 {
+		<-s.exchangeComplete
+		i++
+		s.logger.Infof("Exchange Total: %d", i)
+	}
+
+	clients = s.getClientsByLayer(chat.Layer(2))
 }
 
 type LangSpecification struct {

@@ -18,6 +18,10 @@ const (
 	// new ones from the message body.
 	SetInstructions Command = 3
 
+	// SendInitialMessage makes a client send an initial message to its
+	// peers.
+	SendInitialMessage Command = 4
+
 	// Latch requires a client go into `latch` mode.
 	Latch Command = 10
 
@@ -27,3 +31,22 @@ const (
 	// ClearMemory requires a client to clear its entire memory.
 	ClearMemory Command = -20
 )
+
+func (c Command) String() string {
+	switch c {
+	case AppendInstructions:
+		return "APPEND_INSTRUCTIONS"
+	case SetInstructions:
+		return "SET_INSTRUCTIONS"
+	case SendInitialMessage:
+		return "SEND_INITIAL_MESSAGE"
+	case Latch:
+		return "LATCH"
+	case Unlatch:
+		return "UNLATCH"
+	case ClearMemory:
+		return "CLEAR_MEMORY"
+	default:
+		return "NO COMMAND"
+	}
+}

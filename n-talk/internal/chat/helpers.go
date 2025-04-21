@@ -27,6 +27,23 @@ func (l Layer) Int32() int32 {
 	return int32(l)
 }
 
+func (l Layer) String() string {
+	switch l {
+	case SystemLayer:
+		return "System Layer"
+	case PhoneticsLayer:
+		return "Phonetics Layer"
+	case GrammarLayer:
+		return "Grammar Layer"
+	case DictionaryLayer:
+		return "Dictionary Layer"
+	case LogographyLayer:
+		return "Logography Layer"
+	default:
+		return "Unknown Layer"
+	}
+}
+
 func SetLayer(l int32) Layer {
 	switch l {
 	case 0:
