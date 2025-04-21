@@ -1,0 +1,17 @@
+procs:
+  toki:
+    shell: "task run-agent-toki"
+  pona:
+    shell: "task run-agent-pona"
+  penny:
+    shell: "task run-agent-penny"
+  tails:
+    shell: "task run-agent-tails"
+  nickel:
+    shell: "task run-agent-nickel"
+  dime:
+    shell: "task run-agent-dime"
+  tako:
+    shell: "task run-agent-tako"
+  ono:
+    shell: "task run-agent-ono"
