@@ -17,6 +17,14 @@ type OpenAIChatGPT struct {
 	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
 }
 
+func (c OpenAIChatGPT) SetInstructions(s string) {
+	c.instructions = s
+}
+
+func (c OpenAIChatGPT) AppendInstructions(s string) {
+	c.instructions = buildString(c.instructions, s)
+}
+
 func NewOpenAIChatGPT(
 	apiKey string,
 	mc ModelConfig,
@@ -77,10 +85,10 @@ func (c OpenAIChatGPT) prepare(
 
 			var content openai.ChatCompletionMessageParamUnion
 
-			content = openai.UserMessage(v.Text)
+			content = openai.UserMessage(v.Text.String())
 
 			if v.Role.String() == "model" {
-				content = openai.AssistantMessage(v.Text)
+				content = openai.AssistantMessage(v.Text.String())
 			}
 
 			contents[i] = content

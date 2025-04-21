@@ -1,6 +1,6 @@
 package llms
 
-// import "codeberg.org/n30w/jasima/n-talk/memory"
+import "strings"
 
 type llm struct {
 	// model is the name of the model.
@@ -45,4 +45,15 @@ type ModelConfig struct {
 	Instructions string
 	Temperature  float64
 	Initialize   string
+}
+
+func buildString(strs ...string) string {
+	var sb strings.Builder
+
+	for _, str := range strs {
+		sb.WriteString("\n")
+		sb.WriteString(str)
+	}
+
+	return sb.String()
 }

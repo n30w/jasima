@@ -26,6 +26,14 @@ type Ollama struct {
 	httpClient http.Client
 }
 
+func (c Ollama) SetInstructions(s string) {
+	c.instructions = s
+}
+
+func (c Ollama) AppendInstructions(s string) {
+	c.instructions = buildString(c.instructions, s)
+}
+
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
 // hosting the Ollama instance. If URL is nil, the default instance URL is used.
 func NewOllama(url *url.URL, mc ModelConfig) (
@@ -55,7 +63,7 @@ func NewOllama(url *url.URL, mc ModelConfig) (
 		return nil, errors.New("ollama is not running or invalid host URL")
 	}
 
-	// Then setup the chat API route.
+	// Then set up the chat API route.
 
 	ollamaUrl.Path = "/api/chat"
 	chatUrl := ollamaUrl.String()
@@ -147,7 +155,7 @@ func (c Ollama) prepare(messages []memory.Message) []ol.Message {
 	for i, v := range messages {
 		content := ol.Message{
 			Role:    v.Role.String(),
-			Content: v.Text,
+			Content: v.Text.String(),
 		}
 
 		// +1 because we added +1 to `l` to accommodate for system instructions.

@@ -15,6 +15,14 @@ type GoogleGemini struct {
 	genaiConfig *genai.GenerateContentConfig
 }
 
+func (c GoogleGemini) SetInstructions(s string) {
+	c.instructions = s
+}
+
+func (c GoogleGemini) AppendInstructions(s string) {
+	c.instructions = buildString(c.instructions, s)
+}
+
 func NewGoogleGemini(
 	ctx context.Context,
 	apiKey string,
@@ -96,10 +104,10 @@ func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 
 			var content *genai.Content
 
-			content = genai.NewUserContentFromText(v.Text)
+			content = genai.NewUserContentFromText(v.Text.String())
 
 			if v.Role.String() == "model" {
-				content = genai.NewModelContentFromText(v.Text)
+				content = genai.NewModelContentFromText(v.Text.String())
 			}
 
 			contents[i] = content

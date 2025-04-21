@@ -25,6 +25,10 @@ type LLMService interface {
 
 	// SetInstructions sets the initial instructions for the model.
 	SetInstructions(s string)
+
+	// AppendInstructions appends instructions to the initial instructions of
+	// the model.
+	AppendInstructions(s string)
 }
 
 // MemoryService is a memory storage. It supports saving and retrieving messages
