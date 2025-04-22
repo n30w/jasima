@@ -44,14 +44,14 @@ func NewGoogleGemini(
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(mc.Temperature),
-			MaxOutputTokens: genai.Ptr(int64(10000)),
+			Temperature:     genai.Ptr(float32(mc.Temperature)),
+			MaxOutputTokens: 10000,
 		},
 	}
 
 	if mc.Instructions != "" {
-		c.genaiConfig.SystemInstruction = genai.NewModelContentFromText(
-			mc.Instructions,
+		c.genaiConfig.SystemInstruction = genai.NewContentFromText(
+			mc.Instructions, genai.RoleModel,
 		)
 	}
 
@@ -64,7 +64,10 @@ func (c GoogleGemini) Request(
 	prompt string,
 ) (string, error) {
 	contents := c.prepare(messages)
-	contents = append(contents, genai.NewUserContentFromText(prompt))
+	contents = append(
+		contents,
+		genai.NewContentFromText(prompt, genai.RoleUser),
+	)
 
 	result, err := c.genaiClient.Models.GenerateContent(
 		ctx,
@@ -83,12 +86,7 @@ func (c GoogleGemini) Request(
 
 	// return string(res), nil
 
-	res, err := result.Text()
-	if err != nil {
-		return "", err
-	}
-
-	return res, nil
+	return result.Text(), nil
 }
 
 // prepare adheres memories to the `genai` library `content` type.
@@ -104,10 +102,13 @@ func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 
 			var content *genai.Content
 
-			content = genai.NewUserContentFromText(v.Text.String())
+			content = genai.NewContentFromText(v.Text.String(), genai.RoleUser)
 
 			if v.Role.String() == "model" {
-				content = genai.NewModelContentFromText(v.Text.String())
+				content = genai.NewContentFromText(
+					v.Text.String(),
+					genai.RoleModel,
+				)
 			}
 
 			contents[i] = content

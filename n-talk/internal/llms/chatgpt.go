@@ -12,9 +12,8 @@ import (
 
 type OpenAIChatGPT struct {
 	*llm
-	chatGptClient                      *openai.Client
-	chatGptCompletionParams            *openai.ChatCompletionNewParams
-	chatGptCompletionMessageParamUnion []openai.ChatCompletionMessageParamUnion
+	chatGptClient           *openai.Client
+	chatGptCompletionParams *openai.ChatCompletionNewParams
 }
 
 func (c OpenAIChatGPT) SetInstructions(s string) {
@@ -30,19 +29,21 @@ func NewOpenAIChatGPT(
 	mc ModelConfig,
 ) (*OpenAIChatGPT, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
-	messages = append(messages, openai.SystemMessage(""))
+	messages = append(messages, openai.SystemMessage(mc.Instructions))
+
+	c := openai.NewClient(option.WithAPIKey(apiKey))
 
 	gpt := &OpenAIChatGPT{
 		llm: &llm{
 			model: ProviderChatGPT,
 		},
-		chatGptClient: openai.NewClient(option.WithAPIKey(apiKey)),
+		chatGptClient: &c,
 		chatGptCompletionParams: &openai.ChatCompletionNewParams{
 			Seed:                openai.Int(1),
-			Model:               openai.F(openai.ChatModelGPT4o),
-			MaxCompletionTokens: openai.Int(2000),
+			Model:               openai.ChatModelGPT4o,
+			MaxCompletionTokens: openai.Int(10000),
 			Temperature:         openai.Float(mc.Temperature),
-			Messages:            openai.F(messages),
+			Messages:            messages,
 		},
 	}
 
@@ -52,11 +53,11 @@ func NewOpenAIChatGPT(
 func (c OpenAIChatGPT) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	prompt string,
+	_ string,
 ) (string, error) {
 	contents := c.prepare(messages)
 
-	c.chatGptCompletionParams.Messages = openai.F(contents)
+	c.chatGptCompletionParams.Messages = contents
 
 	result, err := c.chatGptClient.Chat.Completions.New(
 		ctx,
@@ -76,19 +77,23 @@ func (c OpenAIChatGPT) prepare(
 
 	// Append the current System Message to contents.
 
-	contents = append(contents, c.chatGptCompletionMessageParamUnion[0])
+	instructions := openai.SystemMessage(c.instructions)
+
+	contents = append(contents, instructions)
 
 	l := len(messages)
 
 	if l != 0 {
 		for i, v := range messages {
 
+			text := v.Text.String()
+
 			var content openai.ChatCompletionMessageParamUnion
 
-			content = openai.UserMessage(v.Text.String())
+			content = openai.UserMessage(text)
 
 			if v.Role.String() == "model" {
-				content = openai.AssistantMessage(v.Text.String())
+				content = openai.AssistantMessage(text)
 			}
 
 			contents[i] = content
