@@ -1,0 +1,46 @@
+version: "2"
+linters:
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    warn-unused: true
+  settings:
+    misspell:
+      locale: US
+    revive:
+      severity: warning
+      confidence: 0.8
+      rules:
+        - name: cyclomatic
+          arguments: [10]
+        - name: atomic
+        - name: line-length-limit
+          severity: error
+          arguments: [80]
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: waitgroup-by-value
+        - name: time-equal
