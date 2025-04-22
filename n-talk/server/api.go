@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	chat "codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/n-talk/internal/chat"
 	"codeberg.org/n30w/jasima/n-talk/internal/commands"
 	"codeberg.org/n30w/jasima/n-talk/internal/memory"
 
@@ -26,9 +26,6 @@ type channels struct {
 	// exchanged is a signaling channel to detect whether an exchange
 	// between two clients has been completed.
 	exchanged chan bool
-
-	// hitJoinTarget signals when the number of wanted client joins is filled.
-	hitJoinTarget chan struct{}
 }
 
 type Server struct {

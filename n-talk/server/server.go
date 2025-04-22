@@ -38,10 +38,6 @@ type MemoryService interface {
 type ConlangServer struct {
 	Server
 
-	// systemAgentOnline signifies whether the system LLM agent service has
-	// come online or not. The evolution cannot start without it.
-	systemAgentOnline bool
-
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
 

@@ -3,3 +3,6 @@ tasks:
   fmt:
     cmds:
       - nix fmt .
+  lint:
+    cmds:
+      - golangci-lint run
