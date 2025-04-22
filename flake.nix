@@ -90,12 +90,17 @@
         pre-commit-check = pre-commit-hooks.lib.${pkgs.system}.run {
           src = ./.;
           hooks = {
-            format = {
+            treefmt = {
               enable = true;
-              name = "Format files with treefmt";
-              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt";
-              stages = [ "pre-commit" ];
+              package = treefmtEval.${pkgs.system}.config.build.wrapper;
             };
+            golangci-lint = {
+              enable = true;
+              package = pkgs.golangci-lint;
+              require_serial = true;
+              pass_filenames = false;
+            };
+            actionlint.enable = true;
           };
         };
       });
