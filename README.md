@@ -9,8 +9,9 @@ Jasima is Toki Pona for "reflect", "echo", "mirror", or "duplicate". Similarly, 
 - \[\] Implement Server Side Events
   - See <https://medium.com/@rian.eka.cahya/server-sent-event-sse-with-go-10592d9c2aa1>
 - \[\] Develop website view with SvelteKit
-- \[\] Add GPT system instructions
+- \[x\] Add GPT system instructions
 - \[\] Unit testing for evolution function
+- \[\] Docker image building
 
 ## Getting Started
 
