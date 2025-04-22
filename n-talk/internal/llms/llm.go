@@ -28,9 +28,9 @@ func (l LLMProvider) String() string {
 
 	switch l {
 	case 0:
-		s = "gemini-2.0-flash"
+		s = "gemini-2.5-flash-preview-04-17"
 	case 1:
-		s = "4o"
+		s = "gpt-4.1-mini"
 	case 2:
 		s = "Deepseek"
 	case 3:
