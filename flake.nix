@@ -100,7 +100,6 @@
               require_serial = true;
               pass_filenames = false;
             };
-            actionlint.enable = true;
           };
         };
       });
