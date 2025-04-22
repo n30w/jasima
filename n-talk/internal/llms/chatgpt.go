@@ -49,6 +49,8 @@ func NewOpenAIChatGPT(
 		},
 	}
 
+	gpt.chatGptCompletionParams.Model = gpt.llm.model.String()
+
 	return gpt, nil
 }
 
