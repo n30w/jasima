@@ -16,7 +16,7 @@ instructions = "You are in charge of contributing to the Toki Pona language spec
 
 initialize = ""
 
-temperature = 1.55
+temperature = 1.10
 
 [network]
 
