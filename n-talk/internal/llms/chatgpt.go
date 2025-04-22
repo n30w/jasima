@@ -40,10 +40,12 @@ func NewOpenAIChatGPT(
 		chatGptClient: &c,
 		chatGptCompletionParams: &openai.ChatCompletionNewParams{
 			Seed:                openai.Int(1),
-			Model:               openai.ChatModelGPT4o,
-			MaxCompletionTokens: openai.Int(10000),
+			MaxCompletionTokens: openai.Int(3000),
 			Temperature:         openai.Float(mc.Temperature),
+			TopP:                openai.Float(1.0),
 			Messages:            messages,
+			FrequencyPenalty:    openai.Float(1.1),
+			PresencePenalty:     openai.Float(1.2),
 		},
 	}
 
