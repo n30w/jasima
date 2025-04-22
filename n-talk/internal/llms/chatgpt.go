@@ -84,7 +84,7 @@ func (c OpenAIChatGPT) prepare(
 	l := len(messages)
 
 	if l != 0 {
-		for i, v := range messages {
+		for _, v := range messages {
 
 			text := v.Text.String()
 
@@ -96,7 +96,7 @@ func (c OpenAIChatGPT) prepare(
 				content = openai.AssistantMessage(text)
 			}
 
-			contents[i] = content
+			contents = append(contents, content)
 		}
 	}
 
