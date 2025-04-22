@@ -20,7 +20,11 @@ func main() {
 		"../resources/specifications",
 		"path to directory containing specifications",
 	)
-	flagExchanges := flag.Int("exchanges", 20, "total exchanges between agents per layer")
+	flagExchanges := flag.Int(
+		"exchanges",
+		25,
+		"total exchanges between agents per layer",
+	)
 
 	flag.Parse()
 
@@ -68,7 +72,13 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	cs := server.NewConlangServer("SERVER", logger, store, specifications, *flagExchanges)
+	cs := server.NewConlangServer(
+		"SERVER",
+		logger,
+		store,
+		specifications,
+		*flagExchanges,
+	)
 
 	cs.Run(errors)
 
