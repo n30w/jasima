@@ -6,7 +6,7 @@
 *.toml     text diff=toml
 Cargo.lock text
 
-*.go -text diff=golang
+*.go       text diff=golang
 
 # Source code
 *.bash            text eol=lf
@@ -212,4 +212,3 @@ dist/*            binary
 
 # Ignores
 *.log linguist-detectable=false
-resources/*.html linguist-detectable=false
