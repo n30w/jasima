@@ -107,6 +107,13 @@ func newClient(
 			cfg.ModelConfig,
 		)
 	case llms.ProviderChatGPT:
+		if cfg.ModelConfig.Temperature > 1.0 {
+			logger.Warnf(
+				"GPT with a temperature of %2f"+
+					"may cause unexpected results! Consider values below 1.0.",
+				cfg.ModelConfig.Temperature,
+			)
+		}
 		apiKey = os.Getenv("CHATGPT_API_KEY")
 		llm, err = llms.NewOpenAIChatGPT(
 			apiKey,
