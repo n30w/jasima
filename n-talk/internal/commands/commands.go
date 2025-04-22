@@ -15,7 +15,7 @@ const (
 	AppendInstructions Command = 2
 
 	// SetInstructions changes the client's instructions to new
-	// new ones from the message body.
+	// ones from the message body.
 	SetInstructions Command = 3
 
 	// SendInitialMessage makes a client send an initial message to its

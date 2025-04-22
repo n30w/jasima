@@ -14,7 +14,7 @@ type LLMService interface {
 	// Request sends a request to the remote service. Returns a reply in the form
 	// of a string. Note that rather than serializing messages into a string,
 	// which would remove dependence on the `memory` package, a slice of
-	// messages are passed in directly, because it allows different services to
+	// messages is passed in directly, because it allows different services to
 	// adapt the messages to their different submission formats of their
 	// respective APIs.
 	Request(
