@@ -18,37 +18,41 @@ func (s *ConlangServer) iterate(
 	initialLayer chat.Layer,
 	exchanges int,
 ) ([]chat.Content, error) {
-	newSpecs := make([]chat.Content, initialLayer+1)
-
 	if initialLayer == chat.SystemLayer {
-		return newSpecs, nil
+		return specs, nil
 	}
 
 	s.logger.Infof("%d: Recursing on %s", initialLayer, initialLayer)
 
-	// Compile previous Layer's outputs to use in this current Layer's input.
-
-	nextLayer := initialLayer - 1
-
-	iteration, err := s.iterate(specs[:nextLayer], nextLayer, exchanges)
+	iteration, err := s.iterate(specs, initialLayer-1, exchanges)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(iteration) > 0 {
-		newSpecs = append(newSpecs, specs...)
-		copy(newSpecs, specs)
-	}
+	// Add 1 so that we can fit a new spec document into the specification.
+	// Instead of making a new variable `newSpecs`, one could easily
+	// just use the already defined `specs`.
+
+	newSpecs := make([]chat.Content, 0, initialLayer+1)
+
+	// Make a new specification from the original specification.
+
+	newSpecs = append(newSpecs, specs...)
+
+	// Then modify that specification with the previous layer's specification.
+
+	copy(newSpecs, iteration)
+
+	// Start of side effects.
 
 	clients := s.getClientsByLayer(initialLayer)
-
-	s.logger.Infof("Sending %s to %s", commands.Unlatch, initialLayer)
 
 	var sb strings.Builder
 
 	sb.WriteString(
 		fmt.Sprintf(
-			"You and your interlocutors are responsible for developing %s \nHere is the current specification.",
+			"You and your interlocutors are responsible for developing %s."+
+				"\nHere is the current specification.",
 			initialLayer,
 		),
 	)
@@ -58,6 +62,8 @@ func (s *ConlangServer) iterate(
 	}
 
 	content := chat.Content(sb.String())
+
+	s.logger.Infof("Sending %s to %s", commands.Unlatch, initialLayer)
 
 	for _, v := range clients {
 		s.channels.messagePool <- *s.newCommand(
@@ -101,14 +107,17 @@ func (s *ConlangServer) iterate(
 	sysClient := s.getClientsByLayer(chat.SystemLayer)[0]
 
 	sb.Reset()
+
+	// The system agent will ONLY summarize the chat log, and not read the
+	// other specifications for other layers (for now at least).
+
 	sb.WriteString(
 		fmt.Sprintf(
-			"You are responsible for developing: %s \nHere is the current specification.",
+			"The current specification is for: %s. "+
+				"Here is the current specification:\n",
 			initialLayer,
 		),
 	)
-
-	// Use the current spec so the LLM can compare to the chat logs.
 
 	sb.WriteString(specs[initialLayer].String())
 
@@ -120,13 +129,17 @@ func (s *ConlangServer) iterate(
 
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Unlatch)
 
-	chatLog := chat.Content(s.memory.String())
+	sb.Reset()
+
+	sb.WriteString("=== BEGIN CHAT LOG ===\n")
+	sb.WriteString(s.memory.String())
+	sb.WriteString("\n=== END CHAT LOG ===")
 
 	msg := &memory.Message{
 		Sender:   s.name,
 		Receiver: "",
 		Layer:    chat.SystemLayer,
-		Text:     chatLog,
+		Text:     chat.Content(sb.String()),
 	}
 
 	s.channels.messagePool <- *msg
@@ -137,12 +150,14 @@ func (s *ConlangServer) iterate(
 
 	specPrime := <-s.channels.systemLayerMessagePool
 
-	newSpecs[initialLayer] = specPrime.Text
-	// newSpecs = append(newSpecs, specPrime.Text)
+	sb.Reset()
 
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.Latch)
-
 	s.channels.messagePool <- *s.newCommand(sysClient, commands.ClearMemory)
+
+	// End of side effects.
+
+	newSpecs = append(newSpecs, specPrime.Text)
 
 	return newSpecs, nil
 }
