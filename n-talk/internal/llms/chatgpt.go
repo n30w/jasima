@@ -28,6 +28,8 @@ func NewOpenAIChatGPT(
 	apiKey string,
 	mc ModelConfig,
 ) (*OpenAIChatGPT, error) {
+	provider := ProviderChatGPT
+
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
 	messages = append(messages, openai.SystemMessage(mc.Instructions))
 
@@ -35,7 +37,8 @@ func NewOpenAIChatGPT(
 
 	gpt := &OpenAIChatGPT{
 		llm: &llm{
-			model: ProviderChatGPT,
+			model:        provider,
+			instructions: mc.Instructions,
 		},
 		chatGptClient: &c,
 		chatGptCompletionParams: &openai.ChatCompletionNewParams{
@@ -46,10 +49,9 @@ func NewOpenAIChatGPT(
 			Messages:            messages,
 			FrequencyPenalty:    openai.Float(1.1),
 			PresencePenalty:     openai.Float(1.2),
+			Model:               provider.String(),
 		},
 	}
-
-	gpt.chatGptCompletionParams.Model = gpt.llm.model.String()
 
 	return gpt, nil
 }
