@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 tasks:
   fmt:
     cmds:
@@ -6,3 +6,7 @@ tasks:
   lint:
     cmds:
       - golangci-lint run
+  up-deps:
+    cmds:
+      - go get -u ./...
+      - go mod vendor

@@ -14,6 +14,7 @@
     ".vscode/*"
     "outputs/*"
     "resources/*"
+    "vendor/**/*"
   ];
 
   programs.gofumpt.enable = true;

@@ -8,6 +8,24 @@ linters:
       - std-error-handling
     warn-unused: true
   settings:
+    gosmopolitan:
+      allow-time-local: false
+    dupl:
+      threshold: 150
+    gosec:
+      severity: low
+      confidence: low
+    nilnil:
+      only-two: true
+      detect-opposite: false
+    gocognit:
+      min-complexity: 10
+    godot:
+      period: true
+      capital: true
+    whitespace:
+      multi-if: true
+      multi-func: true
     misspell:
       locale: US
     revive:
@@ -44,3 +62,4 @@ linters:
         - name: redefines-builtin-id
         - name: waitgroup-by-value
         - name: time-equal
+        - name: redundant-import-alias
