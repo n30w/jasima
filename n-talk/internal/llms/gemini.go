@@ -46,6 +46,12 @@ func NewGoogleGemini(
 		genaiConfig: &genai.GenerateContentConfig{
 			Temperature:     genai.Ptr(float32(mc.Temperature)),
 			MaxOutputTokens: 10000,
+			// Gemini 2.5 lets you toggle whether thinking is on or off, via
+			// the `ThinkingBudget` parameter. Setting it to 0 makes it not
+			// think.
+			ThinkingConfig: &genai.ThinkingConfig{
+				ThinkingBudget: genai.Ptr(int32(0)),
+			},
 		},
 	}
 
