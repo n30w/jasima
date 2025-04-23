@@ -6,7 +6,6 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-utils.url = "github:numtide/flake-utils";
     gopkgs.url = "github:sagikazarmark/go-flake";
     gopkgs.inputs.nixpkgs.follows = "nixpkgs";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
@@ -59,6 +58,8 @@
             gopls
             golangci-lint
             gotestsum
+            gotools
+            pkgsite
             # goreleaser
             protobuf
             protoc-gen-go

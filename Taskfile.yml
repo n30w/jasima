@@ -10,3 +10,42 @@ tasks:
     cmds:
       - go get -u ./...
       - go mod vendor
+  gen-proto-chat:
+    cmds:
+      - protoc --go_out=./chat/ --go-grpc_out=./chat/ ./chat/chat.proto
+  run-agent-toki:
+    cmds:
+      - go run ./agent -debug=true -temperature=0.75 -layer=1 -name="toki" -peers="pona" -model=1
+  run-agent-pona:
+    cmds:
+      - go run ./agent -debug=true -temperature=1.57 -layer=1 -name="pona" -peers="toki" -model=0
+  run-agent-penny:
+    cmds:
+      - go run ./agent -debug=true -temperature=0.75 -layer=2 -name="penny" -peers="tails" -model=1
+  run-agent-tails:
+    cmds:
+      - go run ./agent -debug=true -temperature=1.62 -layer=2 -name="tails" -peers="penny" -model=0
+  run-agent-nickel:
+    cmds:
+      - go run ./agent -debug=true -temperature=0.78 -layer=3 -name="nickel" -peers="dime" -model=1
+  run-agent-dime:
+    cmds:
+      - go run ./agent -debug=true -temperature=1.62 -layer=3 -name="dime" -peers="nickel" -model=0
+  run-agent-tako:
+    cmds:
+      - go run ./agent -debug=true -temperature=0.78 -layer=4 -name="tako" -peers="ono" -model=1
+  run-agent-ono:
+    cmds:
+      - go run ./agent -debug=true -temperature=1.52 -layer=4 -name="ono" -peers="tako" -model=0
+  run-agent-toki-a1:
+    cmds:
+      - go run ./agent -configFile="./configs/a1.toml" -debug=true
+  run-agent-pona-a2:
+    cmds:
+      - go run ./agent -configFile="./configs/a2.toml" -debug=true
+  run-agent-system:
+    cmds:
+      - go run ./agent -configFile="./configs/sys_agent.toml" -debug=true
+  run-server:
+    cmds:
+      - go run ./server/server -debug=true -logToFile=false -exchanges=28

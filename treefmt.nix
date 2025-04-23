@@ -17,6 +17,10 @@
     "vendor/**/*"
   ];
 
+  settings.global.fail-on-change = false;
+  # Default is walk is "filesystem"
+  #  settings.global.walk = "git";
+
   programs.gofumpt.enable = true;
   programs.golines.enable = true;
   programs.goimports.enable = true;
