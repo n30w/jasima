@@ -1,6 +1,8 @@
 package chat
 
-import "codeberg.org/n30w/jasima/n-talk/internal/commands"
+import (
+	"codeberg.org/n30w/jasima/commands"
+)
 
 type Name string
 
