@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/memory"
 
 	ol "github.com/ollama/ollama/api"
 )

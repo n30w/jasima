@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"

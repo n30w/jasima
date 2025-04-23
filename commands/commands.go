@@ -18,6 +18,10 @@ const (
 	// ones from the message body.
 	SetInstructions Command = 3
 
+	// ResetInstructions resets a client's instructions to its original
+	// state.
+	ResetInstructions Command = 5
+
 	// SendInitialMessage makes a client send an initial message to its
 	// peers.
 	SendInitialMessage Command = 4
@@ -38,6 +42,8 @@ func (c Command) String() string {
 		return "APPEND_INSTRUCTIONS"
 	case SetInstructions:
 		return "SET_INSTRUCTIONS"
+	case ResetInstructions:
+		return "RESET_INSTRUCTIONS"
 	case SendInitialMessage:
 		return "SEND_INITIAL_MESSAGE"
 	case Latch:

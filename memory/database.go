@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
+	"codeberg.org/n30w/jasima/chat"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
