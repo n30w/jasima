@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
-	"codeberg.org/n30w/jasima/n-talk/internal/commands"
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/commands"
+	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
 )

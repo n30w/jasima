@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
-	"codeberg.org/n30w/jasima/n-talk/internal/commands"
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/commands"
+	"codeberg.org/n30w/jasima/memory"
 )
 
 // iterate begins the processing of a Layer. The function completes after the
@@ -99,7 +99,12 @@ func (s *ConlangServer) iterate(
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
-	err = s.sendCommands(clients, commands.Latch, commands.ClearMemory)
+	err = s.sendCommands(
+		clients,
+		commands.Latch,
+		commands.ClearMemory,
+		commands.ResetInstructions,
+	)
 	if err != nil {
 		return nil, err
 	}

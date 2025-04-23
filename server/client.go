@@ -3,10 +3,9 @@ package server
 import (
 	"fmt"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/commands"
-
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	chat2 "codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/commands"
+	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
 )
@@ -14,8 +13,8 @@ import (
 // initClient initializes a client connection and adds the client to the list
 // of clients currently maintaining a connection.
 func (s *Server) initClient(
-	stream chat.ChatService_ChatServer,
-	msg *chat.Message,
+	stream chat2.ChatService_ChatServer,
+	msg *chat2.Message,
 ) (*client, error) {
 	client, err := newClient(stream, msg.Sender, msg.Content, msg.Layer)
 	if err != nil {
@@ -59,7 +58,7 @@ func (s *Server) removeClient(client *client) {
 
 // getClientsByLayer retrieves all the clients of a Layer and returns them
 // in an array of pointers to those clients.
-func (s *Server) getClientsByLayer(layer chat.Layer) Clients {
+func (s *Server) getClientsByLayer(layer chat2.Layer) Clients {
 	var c Clients
 
 	s.mu.Lock()
@@ -69,7 +68,7 @@ func (s *Server) getClientsByLayer(layer chat.Layer) Clients {
 	return c
 }
 
-func (s *Server) getClientByName(name chat.Name) (*client, error) {
+func (s *Server) getClientByName(name chat2.Name) (*client, error) {
 	var c *client
 	var ok bool
 
@@ -84,14 +83,14 @@ func (s *Server) getClientByName(name chat.Name) (*client, error) {
 
 // client represents a client connected to the server.
 type client struct {
-	stream chat.ChatService_ChatServer
-	name   chat.Name
+	stream chat2.ChatService_ChatServer
+	name   chat2.Name
 	model  string
-	layer  chat.Layer
+	layer  chat2.Layer
 }
 
 func newClient(
-	stream chat.ChatService_ChatServer,
+	stream chat2.ChatService_ChatServer,
 	name, model string,
 	l int32,
 ) (*client, error) {
@@ -101,16 +100,16 @@ func newClient(
 
 	c := &client{
 		stream: stream,
-		name:   chat.Name(name),
+		name:   chat2.Name(name),
 		model:  model,
-		layer:  chat.Layer(l),
+		layer:  chat2.Layer(l),
 	}
 
 	return c, nil
 }
 
 func (c *client) Send(msg *memory.Message, command ...commands.Command) error {
-	pbMsg := chat.NewPbMessage(
+	pbMsg := chat2.NewPbMessage(
 		msg.Sender, msg.Receiver, msg.Text, msg.Layer,
 		command...,
 	)
@@ -118,7 +117,7 @@ func (c *client) Send(msg *memory.Message, command ...commands.Command) error {
 	return c.send(pbMsg)
 }
 
-func (c *client) send(msg *chat.Message) error {
+func (c *client) send(msg *chat2.Message) error {
 	err := c.stream.Send(msg)
 	if err != nil {
 		return fmt.Errorf(
@@ -135,13 +134,13 @@ func (c *client) String() string {
 	return fmt.Sprintf("%s<%s>", c.name, c.model)
 }
 
-type Names map[chat.Name]struct{}
+type Names map[chat2.Name]struct{}
 
 type Clients []*client
 
 type (
-	layerToNamesMap  map[chat.Layer]Names
-	nameToClientsMap map[chat.Name]*client
+	layerToNamesMap  map[chat2.Layer]Names
+	nameToClientsMap map[chat2.Name]*client
 )
 
 type clientele struct {
@@ -171,14 +170,14 @@ func (ct *clientele) removeByLayer(c *client) {
 	delete(ct.byLayerMap[c.layer], c.name)
 }
 
-func (ct *clientele) byName(n chat.Name) (*client, bool) {
+func (ct *clientele) byName(n chat2.Name) (*client, bool) {
 	c, ok := ct.byNameMap[n]
 	return c, ok
 }
 
 // byLayer receives a Layer parameter to retrieve an `n` list of clients with
 // that specified Layer.
-func (ct *clientele) byLayer(layer chat.Layer) Clients {
+func (ct *clientele) byLayer(layer chat2.Layer) Clients {
 	clients := make([]*client, 0)
 	l := ct.byLayerMap[layer]
 
