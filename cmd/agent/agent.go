@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/memory"
 )
 
 type LLMService interface {

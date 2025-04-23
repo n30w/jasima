@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/server"
 
-	"codeberg.org/n30w/jasima/n-talk/server"
 	"github.com/charmbracelet/log"
 )
 

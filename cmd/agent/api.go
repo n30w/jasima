@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/chat"
-	"codeberg.org/n30w/jasima/n-talk/internal/commands"
-	"codeberg.org/n30w/jasima/n-talk/internal/llms"
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/commands"
+	"codeberg.org/n30w/jasima/llms"
+	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
@@ -393,10 +393,8 @@ func (c *client) ReceiveMessages(
 					errs <- err
 					return
 				}
-				c.logger.Debug(
-					"Server commands CLEAR MEMORY",
-					"cleared", true,
-				)
+			case commands.ResetInstructions:
+				c.llm.SetInstructions(c.ModelConfig.Instructions)
 			case commands.Latch:
 				if c.latch {
 					c.logger.Debug("already latched, doing nothing...")

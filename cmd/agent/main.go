@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"codeberg.org/n30w/jasima/n-talk/internal/memory"
+	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
