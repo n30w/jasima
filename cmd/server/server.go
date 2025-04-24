@@ -1,15 +1,16 @@
-package server
+package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 // MemoryService is a memory storage. It supports saving and retrieving messages
@@ -30,6 +31,8 @@ type MemoryService interface {
 	)
 
 	Clear() error
+
+	fmt.Stringer
 }
 
 type ConlangServer struct {
@@ -46,7 +49,7 @@ type ConlangServer struct {
 func NewConlangServer(
 	name string,
 	l *log.Logger,
-	m LocalMemory,
+	m MemoryService,
 	s chat.LayerMessageSet,
 	e int,
 ) *ConlangServer {
@@ -77,7 +80,7 @@ func NewConlangServer(
 
 func (s *ConlangServer) newCommand(
 	c *client,
-	command commands.Command, content ...chat.Content,
+	command server.Command, content ...chat.Content,
 ) *memory.Message {
 	msg := &memory.Message{
 		Sender:   s.name,
@@ -96,7 +99,7 @@ func (s *ConlangServer) newCommand(
 
 func (s *ConlangServer) sendCommands(
 	clients []*client,
-	commands ...commands.Command,
+	commands ...server.Command,
 ) error {
 	var err error
 

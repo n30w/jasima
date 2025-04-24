@@ -1,4 +1,4 @@
-package commands
+package agent
 
 // Command defines integer values that represent server commands.
 // Server commands are sent to clients via messages. Clients must

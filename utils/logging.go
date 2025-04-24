@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"io"
@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// logOutput uses a logger to write outputs to both stdout and a file at
+// LogOutput uses a logger to write outputs to both stdout and a file at
 // `logFilePath`. logOutput writes to the error channel `errors` when an error
 // occurs.
 //
@@ -18,7 +18,7 @@ import (
 //
 // For a NON-annotated version of this function, see:
 // https://gist.github.com/n30w/bb7e1ab90838b398bba863ca486c1344#file-tee_with_channel-go
-func logOutput(
+func LogOutput(
 	log *log.Logger,
 	logFilePath string,
 	errors chan<- error,

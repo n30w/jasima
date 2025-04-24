@@ -1,13 +1,13 @@
-package server
+package main
 
 import (
 	"fmt"
 
 	chat2 "codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 // initClient initializes a client connection and adds the client to the list
@@ -108,7 +108,7 @@ func newClient(
 	return c, nil
 }
 
-func (c *client) Send(msg *memory.Message, command ...commands.Command) error {
+func (c *client) Send(msg *memory.Message, command ...server.Command) error {
 	pbMsg := chat2.NewPbMessage(
 		msg.Sender, msg.Receiver, msg.Text, msg.Layer,
 		command...,

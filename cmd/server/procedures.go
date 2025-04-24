@@ -1,14 +1,15 @@
-package server
+package main
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/utils"
 
 	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
 )
 
@@ -65,15 +66,15 @@ func (s *ConlangServer) iterate(
 
 	content := chat.Content(sb.String())
 
-	s.logger.Infof("Sending %s to %s", commands.Unlatch, initialLayer)
+	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
 
 	for _, v := range clients {
 		s.channels.messagePool <- *s.newCommand(
 			v,
-			commands.AppendInstructions,
+			agent.AppendInstructions,
 			content,
 		)
-		s.channels.messagePool <- *s.newCommand(v, commands.Unlatch)
+		s.channels.messagePool <- *s.newCommand(v, agent.Unlatch)
 	}
 
 	initMsg := chat.Content(
@@ -90,7 +91,7 @@ func (s *ConlangServer) iterate(
 
 	s.channels.messagePool <- *s.newCommand(
 		initializerClient,
-		commands.SendInitialMessage,
+		agent.SendInitialMessage,
 		initMsg,
 	)
 
@@ -103,9 +104,9 @@ func (s *ConlangServer) iterate(
 
 	err = s.sendCommands(
 		clients,
-		commands.Latch,
-		commands.ClearMemory,
-		commands.ResetInstructions,
+		agent.Latch,
+		agent.ClearMemory,
+		agent.ResetInstructions,
 	)
 	if err != nil {
 		return nil, err
@@ -130,11 +131,11 @@ func (s *ConlangServer) iterate(
 
 	s.channels.messagePool <- *s.newCommand(
 		sysClient,
-		commands.AppendInstructions,
+		agent.AppendInstructions,
 		chat.Content(sb.String()),
 	)
 
-	s.channels.messagePool <- *s.newCommand(sysClient, commands.Unlatch)
+	s.channels.messagePool <- *s.newCommand(sysClient, agent.Unlatch)
 
 	sb.Reset()
 
@@ -159,8 +160,8 @@ func (s *ConlangServer) iterate(
 
 	sb.Reset()
 
-	s.channels.messagePool <- *s.newCommand(sysClient, commands.Latch)
-	s.channels.messagePool <- *s.newCommand(sysClient, commands.ClearMemory)
+	s.channels.messagePool <- *s.newCommand(sysClient, agent.Latch)
+	s.channels.messagePool <- *s.newCommand(sysClient, agent.ClearMemory)
 
 	// End of side effects.
 

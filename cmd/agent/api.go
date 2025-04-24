@@ -7,10 +7,11 @@ import (
 	"os"
 	"time"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/utils"
 
 	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/llms"
 	"codeberg.org/n30w/jasima/memory"
 
@@ -78,7 +79,7 @@ func newClient(
 	var err error
 	var apiKey string
 	var llm LLMService
-	var sleepDuration time.Duration = 18
+	var sleepDuration time.Duration = 10
 
 	peerNames := make([]chat.Name, 0)
 	for _, peer := range userConf.Peers {
@@ -395,19 +396,19 @@ func (c *client) ReceiveMessages(
 			c.logger.Debugf("Received %s", msg.Command)
 
 			switch msg.Command {
-			case commands.AppendInstructions:
+			case agent.AppendInstructions:
 				c.llm.AppendInstructions(msg.Text.String())
-			case commands.SetInstructions:
+			case agent.SetInstructions:
 				c.llm.SetInstructions(msg.Text.String())
-			case commands.ClearMemory:
+			case agent.ClearMemory:
 				err = c.memory.Clear()
 				if err != nil {
 					errs <- err
 					return
 				}
-			case commands.ResetInstructions:
+			case agent.ResetInstructions:
 				c.llm.SetInstructions(c.ModelConfig.Instructions)
-			case commands.Latch:
+			case agent.Latch:
 				if c.latch {
 					c.logger.Debug("already latched, doing nothing...")
 					break
@@ -416,7 +417,7 @@ func (c *client) ReceiveMessages(
 				c.latch = true
 				c.logger.Debug("LATCH command received", "latch", c.latch)
 
-			case commands.SendInitialMessage:
+			case agent.SendInitialMessage:
 
 				if c.latch {
 					c.logger.Debug("please UNLATCH before sending initial message")
@@ -440,7 +441,7 @@ func (c *client) ReceiveMessages(
 
 				c.logger.Info("Initial message sent successfully")
 
-			case commands.Unlatch:
+			case agent.Unlatch:
 				if !c.latch {
 					c.logger.Debug("already unlatched, doing nothing...")
 					break

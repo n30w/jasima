@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
+	"github.com/nats-io/nats-server/v2/server"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +34,7 @@ type Server struct {
 	mu       sync.Mutex
 	name     chat.Name
 	logger   *log.Logger
-	memory   LocalMemory
+	memory   MemoryService
 	channels channels
 }
 
@@ -243,7 +243,7 @@ func (s *Server) broadcast(msg *memory.Message) error {
 
 // sendCommand issues a command to a client.
 func (s *Server) sendCommand(
-	command commands.Command,
+	command server.Command,
 	to *client,
 	content ...chat.Content,
 ) error {

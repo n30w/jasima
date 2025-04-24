@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/memory"
-	"codeberg.org/n30w/jasima/server"
+	"codeberg.org/n30w/jasima/utils"
 
+	"codeberg.org/n30w/jasima/memory"
 	"github.com/charmbracelet/log"
 )
 
@@ -76,21 +76,19 @@ func main() {
 			DefaultLogToFilePath,
 			time.Now().Format(time.RFC3339),
 		)
-		f := logOutput(logger, logFilePath, errors)
+		f := utils.LogOutput(logger, logFilePath, errors)
 		defer f()
 	}
 
-	store := server.LocalMemory{
-		MemoryService: memory.NewMemoryStore(0),
-	}
+	store := memory.NewMemoryStore(0)
 
 	// Load and serialize specifications.
-	specifications, err := server.NewLangSpecification(*flagSpecificationPath)
+	specifications, err := NewLangSpecification(*flagSpecificationPath)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	cs := server.NewConlangServer(
+	cs := NewConlangServer(
 		"SERVER",
 		logger,
 		store,

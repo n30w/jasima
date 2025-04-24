@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/commands"
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 type ChatRole uint8
@@ -40,7 +40,7 @@ type Message struct {
 	Sender     chat.Name
 	Receiver   chat.Name
 	Layer      chat.Layer
-	Command    commands.Command
+	Command    server.Command
 }
 
 func NewMessage(role ChatRole, text string) Message {
@@ -62,7 +62,7 @@ func NewChatMessage(
 	}
 
 	if len(command) > 0 {
-		msg.Command = commands.Command(command[0])
+		msg.Command = server.Command(command[0])
 	}
 
 	return &msg

@@ -1,9 +1,12 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"codeberg.org/n30w/jasima/chat"
@@ -198,4 +201,22 @@ func (in *InMemoryStore) Retrieve(
 func (in *InMemoryStore) Clear() error {
 	in.messages = nil
 	return nil
+}
+
+// String serializes all memories into a string.
+func (in *InMemoryStore) String() string {
+	var builder strings.Builder
+
+	t := template.New("t1")
+	t, _ = t.Parse("{{.Sender}}: {{.Text}}\n")
+
+	memories, _ := s.Retrieve(context.Background(), "", 0)
+
+	for _, v := range memories {
+		var buff bytes.Buffer
+		_ = t.Execute(&buff, v)
+		builder.Write(buff.Bytes())
+	}
+
+	return builder.String()
 }

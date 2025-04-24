@@ -1,8 +1,6 @@
 package chat
 
-import (
-	"codeberg.org/n30w/jasima/commands"
-)
+import "github.com/nats-io/nats-server/v2/server"
 
 type Name string
 
@@ -94,7 +92,7 @@ func NewPbMessage(
 	sender, receiver Name,
 	content Content,
 	layer Layer,
-	cmd ...commands.Command,
+	cmd ...server.Command,
 ) *Message {
 	m := &Message{
 		Sender:   sender.String(),
