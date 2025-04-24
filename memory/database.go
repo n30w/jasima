@@ -210,7 +210,7 @@ func (in *InMemoryStore) String() string {
 	t := template.New("t1")
 	t, _ = t.Parse("{{.Sender}}: {{.Text}}\n")
 
-	memories, _ := s.Retrieve(context.Background(), "", 0)
+	memories, _ := in.Retrieve(context.Background(), "", 0)
 
 	for _, v := range memories {
 		var buff bytes.Buffer

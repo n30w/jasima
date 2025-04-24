@@ -10,6 +10,8 @@ func (c Command) Int32() int32 {
 }
 
 const (
+	NoCommand Command = 0
+
 	// AppendInstructions appends additional initial instructions
 	// for an LLM model.
 	AppendInstructions Command = 2
@@ -38,6 +40,8 @@ const (
 
 func (c Command) String() string {
 	switch c {
+	case NoCommand:
+		return "NO_COMMAND"
 	case AppendInstructions:
 		return "APPEND_INSTRUCTIONS"
 	case SetInstructions:
@@ -53,6 +57,6 @@ func (c Command) String() string {
 	case ClearMemory:
 		return "CLEAR_MEMORY"
 	default:
-		return "NO COMMAND"
+		return "UNKNOWN COMMAND"
 	}
 }

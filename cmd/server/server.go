@@ -6,11 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
-	"github.com/nats-io/nats-server/v2/server"
 )
 
 // MemoryService is a memory storage. It supports saving and retrieving messages
@@ -56,6 +57,7 @@ func NewConlangServer(
 	c := channels{
 		messagePool:            make(memory.MessageChannel),
 		systemLayerMessagePool: make(memory.MessageChannel),
+		eventsMessagePool:      make(memory.MessageChannel),
 		exchanged:              make(chan bool),
 	}
 
@@ -80,7 +82,7 @@ func NewConlangServer(
 
 func (s *ConlangServer) newCommand(
 	c *client,
-	command server.Command, content ...chat.Content,
+	command agent.Command, content ...chat.Content,
 ) *memory.Message {
 	msg := &memory.Message{
 		Sender:   s.name,
@@ -99,7 +101,7 @@ func (s *ConlangServer) newCommand(
 
 func (s *ConlangServer) sendCommands(
 	clients []*client,
-	commands ...server.Command,
+	commands ...agent.Command,
 ) error {
 	var err error
 
@@ -116,9 +118,10 @@ func (s *ConlangServer) sendCommands(
 }
 
 func (s *ConlangServer) Run(errs chan error) {
-	go s.ListenAndServe(errs)
+	go s.ListenAndServeRouter(errs)
 	go s.router()
 	go s.Evolve(errs)
+	go s.ListenAndServeWebEvents(errs)
 }
 
 func NewLangSpecification(p string) (chat.LayerMessageSet, error) {

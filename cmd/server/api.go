@@ -7,11 +7,12 @@ import (
 	"net"
 	"sync"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/charmbracelet/log"
-	"github.com/nats-io/nats-server/v2/server"
 	"google.golang.org/grpc"
 )
 
@@ -22,6 +23,10 @@ type channels struct {
 
 	// systemLayerMessagePool contains messages that are destined for the server.
 	systemLayerMessagePool memory.MessageChannel
+
+	// eventsMessagePool contains messages and data that are to be published as
+	// web events.
+	eventsMessagePool memory.MessageChannel
 
 	// exchanged is a signaling channel to detect whether an exchange
 	// between two clients has been completed.
@@ -38,7 +43,7 @@ type Server struct {
 	channels channels
 }
 
-func (s *Server) ListenAndServe(errors chan<- error) {
+func (s *Server) ListenAndServeRouter(errors chan<- error) {
 	protocol := "tcp"
 	port := ":50051"
 
@@ -153,7 +158,7 @@ func (s *Server) listen(
 			s.logger.Infof("%s: %s", fromSender.Sender, fromSender.Text)
 
 			// Emit done signal for evolution function.
-			s.channels.exchanged <- true
+			// s.channels.exchanged <- true
 		}
 	}
 
@@ -188,6 +193,13 @@ func (s *Server) router() {
 			s.logger.Errorf("%v", err)
 		}
 
+		// Non-blocking channel sends.
+
+		select {
+		case s.channels.eventsMessagePool <- msg:
+		case s.channels.exchanged <- true:
+		default:
+		}
 	}
 }
 
@@ -243,7 +255,7 @@ func (s *Server) broadcast(msg *memory.Message) error {
 
 // sendCommand issues a command to a client.
 func (s *Server) sendCommand(
-	command server.Command,
+	command agent.Command,
 	to *client,
 	content ...chat.Content,
 ) error {

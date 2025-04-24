@@ -3,8 +3,9 @@ package memory
 import (
 	"time"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/chat"
-	"github.com/nats-io/nats-server/v2/server"
 )
 
 type ChatRole uint8
@@ -28,19 +29,19 @@ func (c ChatRole) String() string {
 }
 
 type Message struct {
-	Role      ChatRole
-	Text      chat.Content
-	Timestamp time.Time
-	Id        int64
+	Role      ChatRole     `json:"role,omitempty"`
+	Text      chat.Content `json:"text,omitempty"`
+	Timestamp time.Time    `json:"timestamp"`
+	Id        int64        `json:"id,omitempty"`
 
 	// InsertedBy represents the agent who inserted the message. This is
 	// used to identify and query for a specific user's messages, since only
 	// one SQL table is used for all messages.
-	InsertedBy chat.Name
-	Sender     chat.Name
-	Receiver   chat.Name
-	Layer      chat.Layer
-	Command    server.Command
+	InsertedBy chat.Name     `json:"insertedBy,omitempty"`
+	Sender     chat.Name     `json:"sender,omitempty"`
+	Receiver   chat.Name     `json:"receiver,omitempty"`
+	Layer      chat.Layer    `json:"layer,omitempty"`
+	Command    agent.Command `json:"command,omitempty"`
 }
 
 func NewMessage(role ChatRole, text string) Message {
@@ -62,7 +63,7 @@ func NewChatMessage(
 	}
 
 	if len(command) > 0 {
-		msg.Command = server.Command(command[0])
+		msg.Command = agent.Command(command[0])
 	}
 
 	return &msg
