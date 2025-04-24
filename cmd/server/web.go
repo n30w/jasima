@@ -18,7 +18,7 @@ func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
 
 	s.logger.Infof("Starting web events server on %s", port)
 
-	err := http.ListenAndServe(port, addCORSHeaders(s.sseChat))
+	err := http.ListenAndServe(port, handler)
 	if err != nil {
 		errs <- err
 		return
@@ -26,13 +26,13 @@ func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
 }
 
 func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("hello")
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
 	// You may need this locally for CORS requests
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
 
@@ -42,14 +42,11 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 	defer t.Stop()
 
 	for {
-		fmt.Println("hello")
 		select {
 		case <-clientGone:
-			fmt.Println("hello")
 			fmt.Println("Client disconnected")
 			return
 		case <-t.C:
-			s.logger.Info("tick")
 			// Send an event to the client
 			// Here we send only the "data" field, but there are few others
 			_, err := fmt.Fprintf(
@@ -69,6 +66,13 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// You may need this locally for CORS requests
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
 
