@@ -41,13 +41,14 @@ type Message struct {
 	Sender     chat.Name     `json:"sender,omitempty"`
 	Receiver   chat.Name     `json:"receiver,omitempty"`
 	Layer      chat.Layer    `json:"layer,omitempty"`
-	Command    agent.Command `json:"command,omitempty"`
+	Command    agent.Command `json:"command"`
 }
 
 func NewMessage(role ChatRole, text string) Message {
 	return Message{
-		Role: role,
-		Text: chat.Content(text),
+		Timestamp: time.Now(),
+		Role:      role,
+		Text:      chat.Content(text),
 	}
 }
 
@@ -56,10 +57,11 @@ func NewChatMessage(
 	command ...int32,
 ) *Message {
 	msg := Message{
-		Sender:   chat.Name(sender),
-		Receiver: chat.Name(receiver),
-		Text:     chat.Content(text),
-		Layer:    chat.Layer(layer),
+		Timestamp: time.Now(),
+		Sender:    chat.Name(sender),
+		Receiver:  chat.Name(receiver),
+		Text:      chat.Content(text),
+		Layer:     chat.Layer(layer),
 	}
 
 	if len(command) > 0 {
