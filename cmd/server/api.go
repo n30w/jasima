@@ -174,7 +174,14 @@ func (s *Server) listen(
 func (s *Server) router() {
 	for msg := range s.channels.messagePool {
 
-		// Inspect sender.
+		var err error
+
+		// Put message in Server Side Events message pool so the frontend can
+		// use it. Only publish messages that are not commands.
+
+		if msg.Command == agent.NoCommand {
+			s.channels.eventsMessagePool <- msg
+		}
 
 		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == "SERVER" {
@@ -182,23 +189,25 @@ func (s *Server) router() {
 			continue
 		}
 
-		err := s.saveToTranscript(context.TODO(), &msg)
-		if err != nil {
-			s.logger.Errorf("error saving to transcript: %v", err)
-			continue
+		// If the message sender is NOT server, in other words, the message
+		// is not from the server itself, save the message to memory and
+		// notify that an exchange has occurred.
+
+		if msg.Sender != "SERVER" {
+			err = s.saveToTranscript(context.TODO(), &msg)
+			if err != nil {
+				s.logger.Errorf("error saving to transcript: %v", err)
+			}
+
+			select {
+			case s.channels.exchanged <- true:
+			default:
+			}
 		}
 
 		err = s.broadcast(&msg)
 		if err != nil {
 			s.logger.Errorf("%v", err)
-		}
-
-		// Non-blocking channel sends.
-
-		select {
-		case s.channels.eventsMessagePool <- msg:
-		case s.channels.exchanged <- true:
-		default:
 		}
 	}
 }
