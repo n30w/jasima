@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	chat2 "codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
 
@@ -29,10 +29,10 @@ type channels struct {
 }
 
 type Server struct {
-	chat2.UnimplementedChatServiceServer
+	chat.UnimplementedChatServiceServer
 	clients  *clientele
 	mu       sync.Mutex
-	name     chat2.Name
+	name     chat.Name
 	logger   *log.Logger
 	memory   LocalMemory
 	channels channels
@@ -54,7 +54,7 @@ func (s *Server) ListenAndServe(errors chan<- error) {
 
 	s.logger.Debug("gRPC server created")
 
-	chat2.RegisterChatServiceServer(grpcServer, s)
+	chat.RegisterChatServiceServer(grpcServer, s)
 
 	s.logger.Debug("registered server with gRPC service")
 
@@ -67,7 +67,7 @@ func (s *Server) ListenAndServe(errors chan<- error) {
 
 // Chat is called by the `client`. The lifetime of this function is for as
 // long as the client using this function is connected.
-func (s *Server) Chat(stream chat2.ChatService_ChatServer) error {
+func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
@@ -99,11 +99,11 @@ func (s *Server) Chat(stream chat2.ChatService_ChatServer) error {
 // from the connected client.
 func (s *Server) listen(
 	ctx context.Context,
-	stream chat2.ChatService_ChatServer,
+	stream chat.ChatService_ChatServer,
 	client *client,
 ) error {
 	var err error
-	var pbMsg *chat2.Message
+	var pbMsg *chat.Message
 
 	disconnected := false
 
@@ -171,7 +171,7 @@ func (s *Server) router() {
 
 		// Inspect sender.
 
-		if msg.Layer == chat2.SystemLayer && msg.Sender == chat2.SystemName && msg.
+		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == "SERVER" {
 			s.channels.systemLayerMessagePool <- msg
 			continue
@@ -245,7 +245,7 @@ func (s *Server) broadcast(msg *memory.Message) error {
 func (s *Server) sendCommand(
 	command commands.Command,
 	to *client,
-	content ...chat2.Content,
+	content ...chat.Content,
 ) error {
 	msg := memory.NewMessage(memory.UserRole, "command")
 
