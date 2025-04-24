@@ -1,10 +1,10 @@
-package main
+package utils
 
 import (
 	"time"
 )
 
-func timer(start time.Time) func() time.Duration {
+func Timer(start time.Time) func() time.Duration {
 	return func() time.Duration {
 		return time.Since(start)
 	}
