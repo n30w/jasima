@@ -55,13 +55,14 @@ func (s *ConlangServer) iterate(
 	sb.WriteString(
 		fmt.Sprintf(
 			"You and your interlocutors are responsible for developing %s."+
-				"\nHere is the current specification.",
+				"\nHere is the current specification.\n",
 			initialLayer,
 		),
 	)
 
 	for i := initialLayer; i > 0; i-- {
 		sb.WriteString(newSpecs[i].String())
+		sb.WriteString("\n")
 	}
 
 	content := chat.Content(sb.String())
@@ -165,7 +166,7 @@ func (s *ConlangServer) iterate(
 
 	// End of side effects.
 
-	newSpecs = append(newSpecs, specPrime.Text)
+	newSpecs[initialLayer] = specPrime.Text
 
 	return newSpecs, nil
 }
@@ -198,7 +199,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	specs := s.specification.ToSlice()
 
-	for range 1 {
+	for i := range 1 {
 		elapsedTime := utils.Timer(time.Now())
 		// Starts on Layer 4, recurses to 1.
 		specs, err = s.iterate(specs, chat.LogographyLayer, s.exchangeTotal)
@@ -207,7 +208,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			return
 		}
 		s.logger.Infof(
-			"Iteration %d completed in %s", targetTotal,
+			"Iteration %d completed in %s", i+1,
 			elapsedTime(),
 		)
 		// Save specs to memory
