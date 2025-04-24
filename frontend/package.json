@@ -43,6 +43,7 @@
 		]
 	},
 	"dependencies": {
+		"@humanspeak/svelte-markdown": "^0.8.3",
 		"eventsource": "^3.0.6"
 	}
 }
