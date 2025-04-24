@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/n30w/jasima/utils"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/memory"
@@ -196,12 +198,17 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	specs := s.specification.ToSlice()
 
 	for range 1 {
+		elapsedTime := utils.Timer(time.Now())
 		// Starts on Layer 4, recurses to 1.
 		specs, err = s.iterate(specs, chat.LogographyLayer, s.exchangeTotal)
 		if err != nil {
 			errs <- err
 			return
 		}
+		s.logger.Infof(
+			"Iteration %d completed in %s", targetTotal,
+			elapsedTime(),
+		)
 		// Save specs to memory
 		// send results to SYSTEM LLM
 		// Save result to LLM.
