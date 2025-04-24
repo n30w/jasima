@@ -78,7 +78,7 @@
           shellHook = ''
             ${self.checks.${pkgs.system}.pre-commit-check.shellHook}
 
-            go mod vendor
+            # go mod vendor
             go mod tidy
           '';
         };
@@ -94,7 +94,7 @@
             format = {
               enable = true;
               name = "Format files";
-              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt --no-cache";
+              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt --no-cache --walk git";
               stages = [ "pre-commit" ];
             };
             golangci-lint = {

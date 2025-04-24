@@ -19,7 +19,7 @@
 
   settings.global.fail-on-change = false;
   # Default is walk is "filesystem"
-  settings.global.walk = "auto";
+  settings.global.walk = "filesystem";
 
   programs.gofumpt.enable = true;
   programs.golines.enable = true;

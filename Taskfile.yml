@@ -15,16 +15,16 @@ tasks:
       - protoc --go_out=./chat/ --go-grpc_out=./chat/ ./chat/chat.proto
   run-agent-toki:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="toki" -peers="pona" -model=1
+      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="toki" -peers="pona" -model=4
   run-agent-pona:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=1.57 -layer=1 -name="pona" -peers="toki" -model=0
+      - go run ./cmd/agent -debug=true -temperature=1.57 -layer=1 -name="pona" -peers="toki" -model=2
   run-agent-penny:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.75 -layer=2 -name="penny" -peers="tails" -model=1
   run-agent-tails:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=1.62 -layer=2 -name="tails" -peers="penny" -model=0
+      - go run ./cmd/agent -debug=true -temperature=0.72 -layer=2 -name="tails" -peers="penny" -model=4
   run-agent-nickel:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.78 -layer=3 -name="nickel" -peers="dime" -model=1
@@ -42,4 +42,4 @@ tasks:
       - go run ./cmd/agent -configFile="./cmd/configs/sys_agent.toml" -debug=true
   run-server:
     cmds:
-      - go run ./cmd/server -debug=true -logToFile=true -exchanges=28
+      - go run ./cmd/server -debug=true -logToFile=true -exchanges=16
