@@ -13,30 +13,68 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+const (
+	DefaultAgentName = ""
+	// DefaultAgentConfigPath is in relation to where the binary was run and
+	// not the path where the binary exists.
+	DefaultAgentConfigPath        = "./cmd/configs/default_agent.toml"
+	DefaultServerAddress          = "localhost:50051"
+	DefaultPeers                  = ""
+	DefaultInitializationFilePath = ""
+	DefaultTemperatureFloat       = 1.5
+	DefaultModel                  = -1
+	DefaultLayer                  = -1
+	DefaultDebugToggle            = false
+)
+
 func main() {
 	var err error
 
-	flagName := flag.String("name", "", "name of the agent")
+	flagName := flag.String(
+		"name",
+		DefaultAgentName,
+		"name of the agent",
+	)
 	flagPeers := flag.String(
 		"peers",
-		"",
+		DefaultPeers,
 		"comma separated list of agent's peers",
 	)
-	flagServer := flag.String("server", "", "communication server")
-	flagProvider := flag.Int("model", -1, "LLM model to use")
-	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
+	flagServer := flag.String(
+		"server",
+		DefaultServerAddress,
+		"main communication server and routing service",
+	)
+	flagProvider := flag.Int(
+		"model",
+		DefaultModel,
+		"LLM service provider model to use",
+	)
+	flagDebug := flag.Bool(
+		"debug",
+		DefaultDebugToggle,
+		"debug mode, extra logging",
+	)
 	flagConfigPath := flag.String(
 		"configFile",
-		"./configs/default_agent.toml",
+		DefaultAgentConfigPath,
 		"configuration file path",
 	)
 	flagTemperature := flag.Float64(
 		"temperature",
-		1.50,
+		DefaultTemperatureFloat,
 		"float64 model temperature",
 	)
-	flagInitializePath := flag.String("initialize", "", "initial message path")
-	flagLayer := flag.Int("layer", -1, "agent's functional layer")
+	flagInitializePath := flag.String(
+		"initialize",
+		DefaultInitializationFilePath,
+		"initial message file path",
+	)
+	flagLayer := flag.Int(
+		"layer",
+		DefaultLayer,
+		"agent's functional layer",
+	)
 
 	flag.Parse()
 
@@ -57,34 +95,35 @@ func main() {
 
 	_, err = toml.DecodeFile(*flagConfigPath, &userConf)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error(err.Error())
+		logger.Warnf("Failed to load agent config! Using defaults.")
 	}
 
-	if *flagName != "" {
+	if *flagName != DefaultAgentName {
 		userConf.Name = *flagName
 	}
 
-	if *flagPeers != "" {
+	if *flagPeers != DefaultPeers {
 		userConf.Peers[0] = *flagPeers
 	}
 
-	if *flagServer != "" {
+	if *flagServer != DefaultServerAddress {
 		userConf.Network.Router = *flagServer
 	}
 
-	if *flagProvider != -1 {
+	if *flagProvider != DefaultModel {
 		userConf.Model.Provider = *flagProvider
 	}
 
-	if *flagTemperature != 1.50 {
+	if *flagTemperature != DefaultTemperatureFloat {
 		userConf.Model.Temperature = *flagTemperature
 	}
 
-	if *flagInitializePath != "" {
+	if *flagInitializePath != DefaultInitializationFilePath {
 		userConf.Model.Initialize = *flagInitializePath
 	}
 
-	if *flagLayer != -1 {
+	if *flagLayer != DefaultLayer {
 		userConf.Layer = int32(*flagLayer)
 	}
 

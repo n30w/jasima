@@ -12,17 +12,35 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+const (
+	// DefaultSpecificationResourcePath is in relation to where the command
+	// was run, not where the binary exists.
+	DefaultSpecificationResourcePath = "./resources/specifications"
+	DefaultDebugToggle               = false
+	DefaultMaxExchanges              = 25
+	DefaultLogToFileToggle           = false
+	DefaultLogToFilePath             = "./outputs/server_log_%s.log"
+)
+
 func main() {
-	flagDebug := flag.Bool("debug", false, "debug mode, extra logging")
-	flagLogToFile := flag.Bool("logToFile", false, "also logs output to file")
+	flagDebug := flag.Bool(
+		"debug",
+		DefaultDebugToggle,
+		"debug mode, extra logging",
+	)
+	flagLogToFile := flag.Bool(
+		"logToFile",
+		DefaultLogToFileToggle,
+		"also logs output to file",
+	)
 	flagSpecificationPath := flag.String(
 		"specs",
-		"../resources/specifications",
+		DefaultSpecificationResourcePath,
 		"path to directory containing specifications",
 	)
 	flagExchanges := flag.Int(
 		"exchanges",
-		25,
+		DefaultMaxExchanges,
 		"total exchanges between agents per layer",
 	)
 
@@ -55,7 +73,7 @@ func main() {
 
 	if *flagLogToFile {
 		logFilePath := fmt.Sprintf(
-			"../outputs/server_log_%s.log",
+			DefaultLogToFilePath,
 			time.Now().Format(time.RFC3339),
 		)
 		f := logOutput(logger, logFilePath, errors)
