@@ -179,9 +179,8 @@ func (s *Server) router() {
 		// Put message in Server Side Events message pool so the frontend can
 		// use it. Only publish messages that are not commands.
 
-		if msg.Command == agent.NoCommand {
-			s.channels.eventsMessagePool <- msg
-		}
+		// if msg.Command == agent.NoCommand {
+		// }
 
 		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == "SERVER" {
@@ -198,11 +197,15 @@ func (s *Server) router() {
 			if err != nil {
 				s.logger.Errorf("error saving to transcript: %v", err)
 			}
-
 			select {
 			case s.channels.exchanged <- true:
 			default:
 			}
+		}
+
+		select {
+		case s.channels.eventsMessagePool <- msg:
+		default:
 		}
 
 		err = s.broadcast(&msg)
