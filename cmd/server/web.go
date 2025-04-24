@@ -10,14 +10,15 @@ import (
 )
 
 func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
+	port := ":7070"
 	handler := http.NewServeMux()
 
-	handler.HandleFunc("/time", addCORSHeaders(s.sseTime))
+	handler.HandleFunc("/time", s.sseTime)
 	handler.HandleFunc("/events", addCORSHeaders(s.sseChat))
 
-	s.logger.Info("Starting web events server...")
+	s.logger.Infof("Starting web events server on %s", port)
 
-	err := http.ListenAndServe(":7070", addCORSHeaders(s.sseChat))
+	err := http.ListenAndServe(port, addCORSHeaders(s.sseChat))
 	if err != nil {
 		errs <- err
 		return
@@ -25,6 +26,13 @@ func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
 }
 
 func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("hello")
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// You may need this locally for CORS requests
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
 
@@ -34,11 +42,14 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 	defer t.Stop()
 
 	for {
+		fmt.Println("hello")
 		select {
 		case <-clientGone:
+			fmt.Println("hello")
 			fmt.Println("Client disconnected")
 			return
 		case <-t.C:
+			s.logger.Info("tick")
 			// Send an event to the client
 			// Here we send only the "data" field, but there are few others
 			_, err := fmt.Fprintf(
@@ -78,9 +89,10 @@ func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
 
 			// Send an event to the client
 			// Here we send only the "data" field, but there are few others
-			_, err = fmt.Fprint(
+			_, err = fmt.Fprintf(
 				w,
-				data,
+				"data: %s\n\n",
+				string(data),
 			)
 			if err != nil {
 				s.logger.Errorf("error writing message: %s", err)
