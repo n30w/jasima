@@ -21,27 +21,32 @@ const (
 	ProviderChatGPT
 	ProviderDeepseek
 	ProviderOllama
+	ProviderClaude
 )
 
 func (l LLMProvider) String() string {
 	s := "INVALID PROVIDER"
 
 	switch l {
-	case 0:
+	case ProviderGoogleGemini:
 		s = "gemini-2.5-flash-preview-04-17"
-	case 1:
+	case ProviderChatGPT:
 		s = "gpt-4.1-mini"
-	case 2:
-		s = "Deepseek"
-	case 3:
+	case ProviderDeepseek:
+		s = "deepseek-chat"
+	case ProviderOllama:
 		s = "qwen2.5:32b"
+	case ProviderClaude:
+		s = "claude-3-5-haiku-20241022"
+	default:
+		s = "unknown provider"
 	}
 
 	return s
 }
 
 type ModelConfig struct {
-	Provider     int
+	Provider     LLMProvider
 	Instructions string
 	Temperature  float64
 	Initialize   string
