@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"codeberg.org/n30w/jasima/llms"
+
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/BurntSushi/toml"
@@ -112,7 +114,7 @@ func main() {
 	}
 
 	if *flagProvider != DefaultModel {
-		userConf.Model.Provider = *flagProvider
+		userConf.Model.Provider = llms.LLMProvider(*flagProvider)
 	}
 
 	if *flagTemperature != DefaultTemperatureFloat {

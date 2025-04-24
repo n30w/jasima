@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"codeberg.org/n30w/jasima/utils"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/commands"
 	"codeberg.org/n30w/jasima/llms"
@@ -98,7 +100,7 @@ func newClient(
 		return nil, err
 	}
 
-	switch llms.LLMProvider(cfg.ModelConfig.Provider) {
+	switch cfg.ModelConfig.Provider {
 	case llms.ProviderGoogleGemini:
 		apiKey = os.Getenv("GEMINI_API_KEY")
 		llm, err = llms.NewGoogleGemini(
@@ -120,13 +122,23 @@ func newClient(
 			cfg.ModelConfig,
 		)
 	case llms.ProviderDeepseek:
-		panic("not implemented")
+		apiKey = os.Getenv("DEEPSEEK_API_KEY")
+		llm, err = llms.NewDeepseek(
+			apiKey,
+			cfg.ModelConfig,
+		)
 	case llms.ProviderOllama:
 		llm, err = llms.NewOllama(
 			nil,
 			cfg.ModelConfig,
 		)
 		sleepDuration = 2
+	case llms.ProviderClaude:
+		apiKey = os.Getenv("CLAUDE_API_KEY")
+		llm, err = llms.NewClaude(
+			apiKey,
+			cfg.ModelConfig,
+		)
 	default:
 		err = errors.New("invalid LLM provider")
 	}
@@ -252,7 +264,7 @@ func (c *client) request(ctx context.Context, prompt chat.Content) (
 
 	c.logger.Debug("Dispatching request to LLM...")
 
-	t := timer(time.Now())
+	t := utils.Timer(time.Now())
 
 	result, err := c.llm.Request(ctx, a, prompt.String())
 	if err != nil {
