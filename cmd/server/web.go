@@ -14,7 +14,8 @@ func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/time", s.sseTime)
-	handler.HandleFunc("/events", addCORSHeaders(s.sseChat))
+	handler.HandleFunc("/events", s.sseChat)
+	handler.HandleFunc("/test/chat", s.sseChat)
 
 	s.logger.Infof("Starting web events server on %s", port)
 
