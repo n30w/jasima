@@ -220,3 +220,17 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.logger.Info("EVOLUTION COMPLETE")
 }
+
+// OutputTestData continuously outputs messages to the test API. This is
+// useful for frontend testing without having to run agent queries
+// over and over again.
+func (s *ConlangServer) OutputTestData(data []memory.Message) {
+	waitTime := time.Second * 3
+	i := 0
+	l := len(data)
+	for {
+		// Send message to channel.
+		s.channels.eventsMessagePool <- data[i%l]
+		time.Sleep(waitTime)
+	}
+}
