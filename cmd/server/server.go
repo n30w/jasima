@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -117,11 +119,33 @@ func (s *ConlangServer) sendCommands(
 	return nil
 }
 
-func (s *ConlangServer) Run(errs chan error) {
+func (s *ConlangServer) Run(errs chan error, debug bool) {
 	go s.ListenAndServeRouter(errs)
 	go s.router()
 	go s.Evolve(errs)
 	go s.ListenAndServeWebEvents(errs)
+
+	if debug {
+		go func(errs chan error) {
+			// Load test data from file JSON.
+			jsonFile, err := os.Open("./testing/chats_1.json")
+			if err != nil {
+				errs <- err
+				return
+			}
+
+			defer jsonFile.Close()
+
+			b, _ := io.ReadAll(jsonFile)
+
+			var msgs []memory.Message
+
+			json.Unmarshal(b, &msgs)
+
+			// Output test data to channel.
+			s.OutputTestData(msgs)
+		}(errs)
+	}
 }
 
 func NewLangSpecification(p string) (chat.LayerMessageSet, error) {

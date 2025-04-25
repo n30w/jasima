@@ -96,7 +96,7 @@ func main() {
 		*flagExchanges,
 	)
 
-	cs.Run(errors)
+	cs.Run(errors, *flagDebug)
 
 	for e := range errors {
 		if e != nil {
