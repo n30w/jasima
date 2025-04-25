@@ -225,12 +225,16 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 // useful for frontend testing without having to run agent queries
 // over and over again.
 func (s *ConlangServer) OutputTestData(data []memory.Message) {
-	waitTime := time.Second * 3
+	waitTime := time.Millisecond * 1500
 	i := 0
 	l := len(data)
 	for {
 		// Send message to channel.
-		s.channels.eventsMessagePool <- data[i%l]
+		select {
+		case s.channels.eventsMessagePool <- data[i%l]:
+		default:
+		}
 		time.Sleep(waitTime)
+		i++
 	}
 }
