@@ -62,6 +62,7 @@ func NewChatMessage(
 		Receiver:  chat.Name(receiver),
 		Text:      chat.Content(text),
 		Layer:     chat.Layer(layer),
+		Command:   agent.NoCommand,
 	}
 
 	if len(command) > 0 {
