@@ -216,5 +216,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		// Save result to LLM.
 	}
 
+	s.listening = false
+
 	s.logger.Info("EVOLUTION COMPLETE")
 }

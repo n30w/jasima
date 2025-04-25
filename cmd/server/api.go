@@ -41,6 +41,10 @@ type Server struct {
 	logger   *log.Logger
 	memory   MemoryService
 	channels channels
+
+	// listening determines whether the server will operate on messages,
+	// whether it be through routing, saving, etc.
+	listening bool
 }
 
 func (s *Server) ListenAndServeRouter(errors chan<- error) {

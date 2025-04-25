@@ -71,11 +71,12 @@ func NewConlangServer(
 
 	return &ConlangServer{
 		Server: Server{
-			clients:  ct,
-			name:     chat.Name(name),
-			logger:   l,
-			memory:   m,
-			channels: c,
+			clients:   ct,
+			name:      chat.Name(name),
+			logger:    l,
+			memory:    m,
+			channels:  c,
+			listening: true,
 		},
 		specification: s,
 		exchangeTotal: e,
