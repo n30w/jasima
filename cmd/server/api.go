@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -168,18 +169,20 @@ func (s *Server) listen(
 	return nil
 }
 
-// router routes messages to clients based on message parameters. It listens
-// on the `messagePool` channel for messages.
+// router routes messages to different services based on message parameters.
+// It listens on the `messagePool` channel for messages.
 func (s *Server) router() {
 	for msg := range s.channels.messagePool {
 
+		// Discard if the server is not listening.
+
+		if s.listening == false {
+			continue
+		}
+
+		saveMessageTo(context.Background(), s.memory, msg)
+
 		var err error
-
-		// Put message in Server Side Events message pool so the frontend can
-		// use it. Only publish messages that are not commands.
-
-		// if msg.Command == agent.NoCommand {
-		// }
 
 		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == "SERVER" {
@@ -192,7 +195,7 @@ func (s *Server) router() {
 		// notify that an exchange has occurred.
 
 		if msg.Sender != "SERVER" {
-			err = s.saveToTranscript(context.TODO(), &msg)
+			err = saveMessageTo(context.TODO(), s.memory, msg)
 			if err != nil {
 				s.logger.Errorf("error saving to transcript: %v", err)
 			}
@@ -290,16 +293,11 @@ func (s *Server) sendCommand(
 	return nil
 }
 
-// saveToTranscript saves a message to the server's memory storage.
-func (s *Server) saveToTranscript(
-	ctx context.Context,
-	msg *memory.Message,
-) error {
+func saveMessageTo(ctx context.Context, mem MemoryService, msg memory.Message) error {
 	msg.Role = memory.UserRole
-
-	err := s.memory.Save(ctx, *msg)
+	err := mem.Save(ctx, msg)
 	if err != nil {
-		return err
+		return errors.Join(errors.New("failed to save message"), err)
 	}
 
 	return nil
