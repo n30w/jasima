@@ -102,7 +102,9 @@ func newClient(
 	}
 
 	switch cfg.ModelConfig.Provider {
-	case llms.ProviderGoogleGemini:
+	case llms.ProviderGoogleGemini_2_0_Flash:
+		fallthrough
+	case llms.ProviderGoogleGemini_2_5_Flash:
 		apiKey = os.Getenv("GEMINI_API_KEY")
 		llm, err = llms.NewGoogleGemini(
 			ctx,

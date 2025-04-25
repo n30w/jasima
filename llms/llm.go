@@ -1,6 +1,8 @@
 package llms
 
-import "strings"
+import (
+	"strings"
+)
 
 type llm struct {
 	// model is the name of the model.
@@ -17,18 +19,21 @@ func (l *llm) SetInstructions(s string) {
 type LLMProvider int
 
 const (
-	ProviderGoogleGemini LLMProvider = iota
+	ProviderGoogleGemini_2_0_Flash LLMProvider = iota
 	ProviderChatGPT
 	ProviderDeepseek
 	ProviderOllama
 	ProviderClaude
+	ProviderGoogleGemini_2_5_Flash
 )
 
 func (l LLMProvider) String() string {
 	s := "INVALID PROVIDER"
 
 	switch l {
-	case ProviderGoogleGemini:
+	case ProviderGoogleGemini_2_0_Flash:
+		s = "gemini-2.0-flash"
+	case ProviderGoogleGemini_2_5_Flash:
 		s = "gemini-2.5-flash-preview-04-17"
 	case ProviderChatGPT:
 		s = "gpt-4.1-mini"

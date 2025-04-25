@@ -40,18 +40,12 @@ func NewGoogleGemini(
 
 	c := &GoogleGemini{
 		llm: &llm{
-			model: ProviderGoogleGemini,
+			model: mc.Provider,
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
 			Temperature:     genai.Ptr(float32(mc.Temperature)),
 			MaxOutputTokens: 10000,
-			// Gemini 2.5 lets you toggle whether thinking is on or off, via
-			// the `ThinkingBudget` parameter. Setting it to 0 makes it not
-			// think.
-			ThinkingConfig: &genai.ThinkingConfig{
-				ThinkingBudget: genai.Ptr(int32(0)),
-			},
 		},
 	}
 
@@ -59,6 +53,15 @@ func NewGoogleGemini(
 		c.genaiConfig.SystemInstruction = genai.NewContentFromText(
 			mc.Instructions, genai.RoleModel,
 		)
+	}
+
+	if mc.Provider == ProviderGoogleGemini_2_5_Flash {
+		// Gemini 2.5 lets you toggle whether thinking is on or off, via
+		// the `ThinkingBudget` parameter. Setting it to 0 makes it not
+		// think. Gemini 2.0 does not provide this capability.
+		c.genaiConfig.ThinkingConfig = &genai.ThinkingConfig{
+			ThinkingBudget: genai.Ptr(int32(0)),
+		}
 	}
 
 	return c, nil
