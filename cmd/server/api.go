@@ -144,21 +144,16 @@ func (s *Server) listen(
 
 		} else {
 
-			// Strip away any `Command`
-
-			fromSender := memory.NewChatMessage(
+			msg := memory.NewChatMessage(
 				pbMsg.Sender, pbMsg.Receiver,
 				pbMsg.Content, pbMsg.Layer,
 			)
 
-			s.channels.messagePool <- *fromSender
-
-			// If all is well, save the message to transcript.
-
-			s.logger.Infof("%s: %s", fromSender.Sender, fromSender.Text)
-
-			// Emit done signal for evolution function.
-			// s.channels.exchanged <- true
+			select {
+			case s.channels.messagePool <- *msg:
+				s.logger.Infof("%s: %s", msg.Sender, msg.Text)
+			default:
+			}
 		}
 	}
 
