@@ -6,12 +6,11 @@ Jasima is Toki Pona for "reflect", "echo", "mirror", or "duplicate". Similarly, 
 
 ## Todo
 
-- \[\] Implement Server Side Events
-  - See <https://medium.com/@rian.eka.cahya/server-sent-event-sse-with-go-10592d9c2aa1>
-- \[\] Develop website view with SvelteKit
-- \[x\] Add GPT system instructions
-- \[\] Unit testing for evolution function
-- \[\] Docker image building
+- Docker image building
+- Write runs to JSON file using server memory
+- Export chat logs to json during chatting
+- File reader to read JSON data and send to SSE handler
+- Side scroll view per evolution iteration
 
 ## Getting Started
 
