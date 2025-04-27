@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
+
 	"codeberg.org/n30w/jasima/memory"
 
 	"google.golang.org/genai"
@@ -45,7 +47,7 @@ func NewGoogleGemini(
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
 			Temperature:     genai.Ptr(float32(mc.Temperature)),
-			MaxOutputTokens: 10000,
+			MaxOutputTokens: 8192,
 		},
 	}
 
@@ -62,6 +64,8 @@ func NewGoogleGemini(
 		c.genaiConfig.ThinkingConfig = &genai.ThinkingConfig{
 			ThinkingBudget: genai.Ptr(int32(0)),
 		}
+		// Jack it up because we can.
+		c.genaiConfig.MaxOutputTokens = 32767
 	}
 
 	return c, nil
@@ -85,7 +89,7 @@ func (c GoogleGemini) Request(
 		c.genaiConfig,
 	)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "gemini client failed to make request")
 	}
 
 	// res, err := json.MarshalIndent(*result, "", "  ")

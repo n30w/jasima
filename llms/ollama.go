@@ -89,7 +89,7 @@ func (c Ollama) Request(
 ) (string, error) {
 	contents := c.prepare(messages)
 
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 
 	options["temperature"] = c.options.Temperature
 

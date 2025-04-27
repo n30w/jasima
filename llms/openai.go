@@ -3,6 +3,8 @@ package llms
 import (
 	"context"
 
+	"github.com/pkg/errors"
+
 	"codeberg.org/n30w/jasima/memory"
 
 	"github.com/openai/openai-go"
@@ -76,7 +78,10 @@ func (c openAIClient) Request(
 		*c.completionParams,
 	)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(
+			err,
+			"openai client failed to send request to llm",
+		)
 	}
 
 	return result.Choices[0].Message.Content, nil
