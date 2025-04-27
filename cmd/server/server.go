@@ -7,9 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"codeberg.org/n30w/jasima/agent"
-
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 
@@ -80,6 +80,7 @@ func NewConlangServer(
 			memory:    m,
 			channels:  c,
 			listening: true,
+			messages:  make([]memory.Message, 0),
 		},
 		specification: s,
 		exchangeTotal: e,
@@ -117,6 +118,10 @@ func (s *ConlangServer) sendCommands(
 			if err != nil {
 				return err
 			}
+
+			// Sleep in between commands so that agents can breathe.
+
+			time.Sleep(time.Millisecond * 200)
 		}
 	}
 
@@ -132,7 +137,7 @@ func (s *ConlangServer) Run(errs chan error, debug bool) {
 	if debug {
 		go func(errs chan error) {
 			// Load test data from file JSON.
-			jsonFile, err := os.Open("./testing/chats_1.json")
+			jsonFile, err := os.Open("./outputs/chats/chat_2.json")
 			if err != nil {
 				errs <- err
 				return
@@ -144,10 +149,14 @@ func (s *ConlangServer) Run(errs chan error, debug bool) {
 
 			var msgs []memory.Message
 
-			json.Unmarshal(b, &msgs)
+			err = json.Unmarshal(b, &msgs)
+			if err != nil {
+				errs <- err
+				return
+			}
 
 			// Output test data to channel.
-			s.OutputTestData(msgs)
+			s.outputTestData(msgs)
 		}(errs)
 	}
 }
