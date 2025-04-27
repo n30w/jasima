@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/agent"
 
@@ -43,18 +43,21 @@ type Server struct {
 	memory   MemoryService
 	channels channels
 
+	// messages contains all messages sent back and forth. Used for debugging.
+	messages []memory.Message
+
 	// listening determines whether the server will operate on messages,
 	// whether it be through routing, saving, etc.
 	listening bool
 }
 
-func (s *Server) ListenAndServeRouter(errors chan<- error) {
+func (s *Server) ListenAndServeRouter(errs chan<- error) {
 	protocol := "tcp"
 	port := ":50051"
 
 	lis, err := net.Listen(protocol, port)
 	if err != nil {
-		errors <- err
+		errs <- err
 		return
 	}
 
@@ -70,7 +73,7 @@ func (s *Server) ListenAndServeRouter(errors chan<- error) {
 
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		errors <- err
+		errs <- err
 		return
 	}
 }
@@ -149,6 +152,12 @@ func (s *Server) listen(
 
 		} else {
 
+			// Discard if the server is not listening.
+
+			if !s.listening {
+				continue
+			}
+
 			msg := memory.NewChatMessage(
 				pbMsg.Sender, pbMsg.Receiver,
 				pbMsg.Content, pbMsg.Layer,
@@ -156,7 +165,7 @@ func (s *Server) listen(
 
 			select {
 			case s.channels.messagePool <- *msg:
-				s.logger.Infof("%s: %s", msg.Sender, msg.Text)
+				s.logger.Printf("%s: %s", msg.Sender, msg.Text)
 			default:
 			}
 		}
@@ -174,15 +183,22 @@ func (s *Server) listen(
 func (s *Server) router() {
 	for msg := range s.channels.messagePool {
 
-		// Discard if the server is not listening.
-
-		if s.listening == false {
-			continue
+		select {
+		case s.channels.eventsMessagePool <- msg:
+		default:
 		}
 
-		saveMessageTo(context.Background(), s.memory, msg)
-
 		var err error
+
+		s.messages = append(s.messages, msg)
+
+		err = saveMessageTo(context.Background(), s.memory, msg)
+		if err != nil {
+			s.logger.Errorf("failed to save message: %s", err)
+		}
+
+		// Route messages for the server that come from the system layer
+		// agents.
 
 		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == "SERVER" {
@@ -190,24 +206,19 @@ func (s *Server) router() {
 			continue
 		}
 
-		// If the message sender is NOT server, in other words, the message
-		// is not from the server itself, save the message to memory and
-		// notify that an exchange has occurred.
+		// If the message is not from the server itself, save it to memory
+		// and notify that an exchange has occurred.
 
 		if msg.Sender != "SERVER" {
-			err = saveMessageTo(context.TODO(), s.memory, msg)
+			err = saveMessageTo(context.Background(), s.memory, msg)
 			if err != nil {
 				s.logger.Errorf("error saving to transcript: %v", err)
 			}
+
 			select {
 			case s.channels.exchanged <- true:
 			default:
 			}
-		}
-
-		select {
-		case s.channels.eventsMessagePool <- msg:
-		default:
 		}
 
 		err = s.broadcast(&msg)
@@ -243,7 +254,7 @@ func (s *Server) broadcast(msg *memory.Message) error {
 	if msg.Receiver != "" {
 		err = s.forward(msg)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "message has no receiver")
 		}
 
 		return nil
@@ -260,7 +271,11 @@ func (s *Server) broadcast(msg *memory.Message) error {
 
 		err = v.Send(msg, msg.Command)
 		if err != nil {
-			return fmt.Errorf("error sending message to client: %v", err)
+			return errors.Wrapf(
+				err,
+				"failed to broadcast message on layer %s",
+				msg.Layer,
+			)
 		}
 	}
 
@@ -285,7 +300,7 @@ func (s *Server) sendCommand(
 
 	err := to.Send(&msg, msg.Command)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to send command")
 	}
 
 	s.logger.Debugf("Sent %s to %s", msg.Command, msg.Receiver)
@@ -293,11 +308,15 @@ func (s *Server) sendCommand(
 	return nil
 }
 
-func saveMessageTo(ctx context.Context, mem MemoryService, msg memory.Message) error {
+func saveMessageTo(
+	ctx context.Context,
+	mem MemoryService,
+	msg memory.Message,
+) error {
 	msg.Role = memory.UserRole
 	err := mem.Save(ctx, msg)
 	if err != nil {
-		return errors.Join(errors.New("failed to save message"), err)
+		return errors.Wrap(err, "failed to save message")
 	}
 
 	return nil
