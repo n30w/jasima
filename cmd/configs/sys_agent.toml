@@ -12,7 +12,7 @@ layer = 0
 provider = 0
 
 # Initial system instructions.
-instructions = "You are in charge of contributing to the Toki Pona language specification. More specifically, you must read the following conversation between some interlocutors and also read the current specification included in this chat. You must then write a new specification based on the old one and the given conversation. Reply with and ONLY with the revised specification."
+instructions = "You are in charge of contributing to the Toki Pona language specification. More specifically, you must read the following conversation between some interlocutors and also read the current specification included in this chat. You must then write a new specification based on the old one and the given conversation. Reply with and ONLY with the revised specification. Reply using Markdown, however, it should NOT start and end with three backticks."
 
 initialize = ""
 
