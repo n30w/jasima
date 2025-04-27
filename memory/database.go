@@ -203,6 +203,17 @@ func (in *InMemoryStore) Clear() error {
 	return nil
 }
 
+// All returns all the memory store in the form of an array of messages.
+func (in *InMemoryStore) All() ([]Message, error) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if len(in.messages) == 0 {
+		return nil, errors.New("no messages found")
+	}
+
+	return in.messages, nil
+}
+
 // String serializes all memories into a string.
 func (in *InMemoryStore) String() string {
 	var builder strings.Builder

@@ -35,6 +35,9 @@ type MemoryService interface {
 
 	Clear() error
 
+	// All retrieves all memories.
+	All() ([]memory.Message, error)
+
 	fmt.Stringer
 }
 
