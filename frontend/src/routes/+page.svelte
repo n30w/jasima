@@ -2,10 +2,28 @@
 	import { EventSource } from 'eventsource';
 	import { tick } from 'svelte';
 	import SvelteMarkdown from '@humanspeak/svelte-markdown';
+	// import Typewriter from 'svelte-typewriter';
+	import { TypeWriter } from 'svelte-typewrite';
+	import { animate, stagger, utils } from 'animejs';
+	import { customHtmlRenderers } from '$lib';
+	import CustomUnorderedList from '$lib/CustomUnorderedList.svelte';
+	import CustomListItem from '$lib/CustomListItem.svelte';
+	import CustomOrderedList from '$lib/CustomOrderedList.svelte';
+	import CustomParagraph from '$lib/CustomParagraph.svelte';
+	import Heading from '@humanspeak/svelte-markdown';
 
-	const src = 'http://127.0.0.1:7070/events';
+	// const src = 'http://127.0.0.1:7070/events';
+	const src = 'http://127.0.0.1:7070/test/chat';
 
-	let messages: { message; timestamp: string }[] = $state.raw([]);
+	type message = {
+		text?: string;
+		timestamp: string;
+		sender: string;
+		command: number;
+	};
+
+	let messages: message[] = $state.raw([]);
+	let val: message = $state.raw({});
 	let element: HTMLElement;
 
 	$effect.pre(() => {
@@ -23,7 +41,10 @@
 		es.onmessage = (event) => {
 			try {
 				const json = JSON.parse(event.data);
-				messages = [...messages, json];
+				if (json.sender !== 'SERVER') {
+					messages = [...messages, json];
+					val = json;
+				}
 			} catch (err) {
 				console.error('Failed to parse JSON from event:', err);
 			}
@@ -36,19 +57,79 @@
 
 		return () => es.close(); // Clean up when component unmounts
 	});
+
+	// function animateGrid() {
+	// 	animate('.square', {
+	// 		scale: [{ to: [0, 1.25] }, { to: 0 }],
+	// 		boxShadow: [{ to: '0 0 1rem 0 currentColor' }, { to: '0 0 0rem 0 currentColor' }],
+	// 		delay: stagger(100, {
+	// 			grid: [11, 4],
+	// 			from: utils.random(0, 11 * 4)
+	// 		}),
+	// 		onComplete: animateGrid
+	// 	});
+	// }
+
+	// $effect(() => {
+	// 	animate('.square', {
+	// 		x: window.innerWidth - 100,
+	// 		rotate: { from: -180 },
+	// 		duration: 4000,
+	// 		delay: stagger(135, { from: 'first' }),
+	// 		ease: 'inOutQuint',
+	// 		loop: true,
+	// 		alternate: true
+	// 	});
+	// 	// animateGrid();
+	// });
 </script>
 
-<!-- <div class="h-1/2"> -->
-<ul class="h-screen overflow-auto" bind:this={element}>
-	{#each messages as { timestamp, text, sender, command }, i (i)}
-		{#if command == 0}
-			<li class="m-2 border-b-1 p-2 font-mono text-base">
-				<strong>{timestamp} {sender}</strong>:
-				<article>
-					<SvelteMarkdown source={text} />
-				</article>
-			</li>
-		{/if}
-	{/each}
-</ul>
-<!-- </div> -->
+<!-- <div class="h-20 w-20">
+	<svg viewBox="0 0 100 100"
+		><path
+			d="M47.576 202.99q.024.177.044.354.04.337.067.675a82 82 0 0 0 .139 1.523l.106 1.043.13 1.22q.075.714.14 1.428.07.768.124 1.537.055.783.097 1.566a71 71 0 0 1 .097 3.516q.005.984.004 1.968l-.004 2.13q-.004 1.179.008 2.356c.01.87.03 1.74.05 2.609l.065 2.863q.033 1.485.06 2.97l.05 2.987c.013.977.043 1.954.08 2.93.039 1.003.092 2.005.147 3.007l.176 3.082q.089 1.547.182 3.093.09 1.481.175 2.963.078 1.352.145 2.705a1002 1002 0 0 0 .231 4.43l.091 1.6.075 1.282.059 1.027.018.345c.245 4.858-6.626 5.204-6.87.346l-.016-.299-.06-1.022-.073-1.283q-.048-.81-.092-1.62a937 937 0 0 1-.233-4.458q-.067-1.33-.143-2.66-.084-1.47-.174-2.943a957 957 0 0 1-.183-3.112q-.09-1.549-.177-3.098a196 196 0 0 1-.153-3.126 131 131 0 0 1-.084-3.073q-.022-1.488-.05-2.975-.025-1.47-.059-2.942l-.065-2.862c-.02-.899-.041-1.798-.05-2.696q-.014-1.218-.009-2.436l.003-2.12q0-.955-.003-1.91a64 64 0 0 0-.176-4.645 72 72 0 0 0-.245-2.74l-.13-1.233-.11-1.062a73 73 0 0 1-.148-1.63 13 13 0 0 0-.083-.767c-.596-4.827 6.231-5.67 6.827-.842m-.163 72.075c.395.397.884.642 1.42.782.148.044.305.036.457.055q-.17.06-.34.124c-.307.12-.603.267-.895.42a7 7 0 0 0-.975.622c-.385.29-.748.606-1.1.932-.35.322-.665.678-.962 1.047-.311.388-.589.8-.846 1.226-.252.42-.455.865-.637 1.319a15 15 0 0 0-.475 1.528q-.205.782-.343 1.579c-.052.32-.093.646-.067.971-.004.098.032.078.075.126.055.074.11.156.188.202-.078-.128-.237-.195-.37-.25a1.2 1.2 0 0 0-.51-.062c-.11.014.349-.277.35-.278.375-.278.713-.6 1.04-.932.39-.403.732-.846 1.06-1.3.37-.52.688-1.072.995-1.63.32-.588.6-1.196.87-1.808q.394-.904.775-1.814l.635-1.506.503-1.201q.187-.442.364-.886a9 9 0 0 1 .319-.753c1.51-2.34.377-.997 6.502 1.254.081.03 0 .759-.012.904q-.032.361-.053.722-.03.555-.046 1.11c-.014.434-.006.869.013 1.303a20 20 0 0 0 .421 3.132c.117.55.26 1.093.419 1.632.118.394.252.782.433 1.152a.8.8 0 0 0 .243.303c.163.123.338.23.515.333.176.096.355.193.552.238.072-.034-.244-.046-.272-.046-.227.034.151-.115.168-.123.316-.159.632-.318.955-.463 4.448-1.97 7.233 4.32 2.785 6.29-.262.102-.5.262-.758.372-.66.316-1.339.597-2.065.717-.978.132-1.922.12-2.872-.183-.7-.228-1.378-.509-2.01-.89-.672-.403-1.324-.846-1.883-1.4-.637-.661-1.198-1.386-1.585-2.224a15 15 0 0 1-.808-2.143 27.4 27.4 0 0 1-1.111-6.414 25 25 0 0 1-.017-1.79q.02-.66.056-1.32.026-.436.064-.872c.023-.272-.015.327.022.34 6.162 2.07 4.991 3.511 6.471 1.192.03-.064.071-.124.088-.193.002-.01-.009.02-.013.031l-.127.326q-.201.505-.413 1.005l-.506 1.21-.64 1.516c-.272.646-.544 1.292-.825 1.934-.352.79-.717 1.576-1.133 2.335-.447.808-.916 1.605-1.457 2.355-.536.734-1.1 1.45-1.739 2.098-.603.605-1.232 1.186-1.926 1.686-.775.547-1.589 1.044-2.508 1.308-1.063.267-2.014.351-3.091.082-1.035-.304-1.856-.704-2.648-1.453-.636-.635-1.2-1.333-1.597-2.146-.423-.908-.728-1.86-.76-2.87a11.5 11.5 0 0 1 .168-2.433c.13-.725.282-1.445.472-2.157.213-.793.444-1.583.75-2.346.326-.793.688-1.572 1.136-2.306a19 19 0 0 1 1.38-1.983 17 17 0 0 1 1.639-1.765c.548-.503 1.112-.99 1.712-1.432a14.4 14.4 0 0 1 1.84-1.159 15 15 0 0 1 1.682-.77c.577-.211 1.164-.4 1.774-.487.612-.08 1.231-.113 1.842.01.764.178 1.478.479 2.045 1.04 3.483 3.396-1.32 8.321-4.803 4.925"
+			style="opacity:1;fill:#020900;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+			transform="translate(0 -197)"
+		/></svg
+	>
+</div> -->
+
+<div class="h-screen">
+	<!-- <Typewriter cursor={false} mode="scramble" scrambleDuration={500}> -->
+	<SvelteMarkdown
+		source={val.text ? val.text : ``}
+		renderers={{
+			heading: Heading,
+			list: CustomUnorderedList,
+			listitem: CustomListItem,
+			paragraph: CustomParagraph
+		}}
+	/>
+	<!-- <SvelteMarkdown source={text} /> -->
+	<!-- </Typewriter> -->
+	<!-- <ul class="h-1/2 overflow-x-clip overflow-y-auto" bind:this={element}>
+		{#each messages as { timestamp, text, sender, command }, i (i)}
+			{#if command == 0}
+				<li class="m-2 border-b-1 p-2 font-mono text-sm">
+					<strong>{timestamp} {sender}</strong>:
+					<article>
+						<p>
+							{text}
+						</p>
+					</article>
+				</li>
+			{/if}
+		{/each}
+	</ul> -->
+</div>
+
+<!-- <div class="absolute top-0">
+	<div class="square m-4 h-20 w-20 bg-orange-200"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-300"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-100"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-300"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-400"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-300"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-200"></div>
+	<div class="square m-4 h-20 w-20 bg-orange-100"></div>
+</div> -->

@@ -31,6 +31,7 @@
 		"prettier-plugin-tailwindcss": "^0.6.11",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
+		"svelte-typewriter": "^3.2.3",
 		"sveltekit-sse": "^0.13.19",
 		"tailwindcss": "^4.0.0",
 		"typescript": "^5.0.0",
@@ -44,7 +45,9 @@
 	},
 	"dependencies": {
 		"@humanspeak/svelte-markdown": "^0.8.3",
-		"eventsource": "^3.0.6"
+		"animejs": "^4.0.2",
+		"eventsource": "^3.0.6",
+		"svelte-typewrite": "^3.0.0"
 	},
-	"packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"
+	"packageManager": "pnpm@10.9.0+sha512.0486e394640d3c1fb3c9d43d49cf92879ff74f8516959c235308f5a8f62e2e19528a65cdc2a3058f587cde71eba3d5b56327c8c33a97e4c4051ca48a10ca2d5f"
 }
