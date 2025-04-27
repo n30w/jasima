@@ -27,12 +27,7 @@ func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
 }
 
 func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	// You may need this locally for CORS requests
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	addEventHeaders(w)
 
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
@@ -52,8 +47,7 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 			// Here we send only the "data" field, but there are few others
 			_, err := fmt.Fprintf(
 				w,
-				"data: The time is %s\n\n",
-				time.Now().Format(time.UnixDate),
+				makeDataString(time.Now().Format(time.UnixDate)),
 			)
 			if err != nil {
 				return
@@ -67,12 +61,7 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	// You may need this locally for CORS requests
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	addEventHeaders(w)
 
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
@@ -96,8 +85,7 @@ func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
 			// Here we send only the "data" field, but there are few others
 			_, err = fmt.Fprintf(
 				w,
-				"data: %s\n\n",
-				string(data),
+				makeDataString(string(data)),
 			)
 			if err != nil {
 				s.logger.Errorf("error writing message: %s", err)
@@ -113,16 +101,13 @@ func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func addCORSHeaders(f http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Set http headers required for SSE
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
+func addEventHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+}
 
-		// You may need this locally for CORS requests
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		f(w, r)
-	}
+func makeDataString(s string) string {
+	return fmt.Sprintf("data: %s\n\n", s)
 }
