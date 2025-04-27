@@ -1,16 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"codeberg.org/n30w/jasima/agent"
-
-	"codeberg.org/n30w/jasima/utils"
-
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/utils"
 )
 
 // iterate begins the processing of a Layer. The function completes after the
@@ -31,6 +31,8 @@ func (s *ConlangServer) iterate(
 	if err != nil {
 		return nil, err
 	}
+
+	timer := utils.Timer(time.Now())
 
 	// Add 1 so that we can fit a new spec document into the specification.
 	// Instead of making a new variable `newSpecs`, one could easily
@@ -161,12 +163,25 @@ func (s *ConlangServer) iterate(
 
 	sb.Reset()
 
-	s.channels.messagePool <- *s.newCommand(sysClient, agent.Latch)
-	s.channels.messagePool <- *s.newCommand(sysClient, agent.ClearMemory)
+	err = s.sendCommands(
+		clients,
+		agent.Latch,
+		agent.ClearMemory,
+		agent.ResetInstructions,
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	// End of side effects.
 
 	newSpecs[initialLayer] = specPrime.Text
+
+	s.logger.Infof(
+		"%s took %s to complete",
+		initialLayer,
+		timer().Truncate(1*time.Millisecond),
+	)
 
 	return newSpecs, nil
 }
@@ -195,7 +210,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	<-allJoined
 
-	s.logger.Info("all clients joined.")
+	s.logger.Info("All clients joined!")
 
 	specs := s.specification.ToSlice()
 
@@ -209,7 +224,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		}
 		s.logger.Infof(
 			"Iteration %d completed in %s", i+1,
-			elapsedTime(),
+			elapsedTime().Truncate(10*time.Millisecond),
 		)
 		// Save specs to memory
 		// send results to SYSTEM LLM
@@ -219,13 +234,27 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	s.listening = false
 
 	s.logger.Info("EVOLUTION COMPLETE")
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(s.messages, "", "  ")
+	if err != nil {
+		errs <- err
+		return
+	}
+
+	// Write to file
+	err = os.WriteFile("messages.json", data, 0o644)
+	if err != nil {
+		errs <- err
+		return
+	}
 }
 
-// OutputTestData continuously outputs messages to the test API. This is
+// outputTestData continuously outputs messages to the test API. This is
 // useful for frontend testing without having to run agent queries
 // over and over again.
-func (s *ConlangServer) OutputTestData(data []memory.Message) {
-	waitTime := time.Millisecond * 1500
+func (s *ConlangServer) outputTestData(data []memory.Message) {
+	waitTime := time.Millisecond * 2000
 	i := 0
 	l := len(data)
 	for {
