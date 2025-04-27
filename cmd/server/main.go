@@ -19,7 +19,7 @@ const (
 	DefaultDebugToggle               = false
 	DefaultMaxExchanges              = 25
 	DefaultLogToFileToggle           = false
-	DefaultLogToFilePath             = "./outputs/server_log_%s.log"
+	DefaultLogToFilePath             = "./outputs/logs/server_log_%s.log"
 )
 
 func main() {
@@ -83,6 +83,7 @@ func main() {
 	store := memory.NewMemoryStore(0)
 
 	// Load and serialize specifications.
+
 	specifications, err := NewLangSpecification(*flagSpecificationPath)
 	if err != nil {
 		logger.Fatal(err)
