@@ -17,22 +17,22 @@ func (s *Server) initClient(
 	stream chat.ChatService_ChatServer,
 	msg *chat.Message,
 ) (*client, error) {
-	client, err := newClient(stream, msg.Sender, msg.Content, msg.Layer)
+	c, err := newClient(stream, msg.Sender, msg.Content, msg.Layer)
 	if err != nil {
 		return nil, err
 	}
 
-	s.addClient(client)
+	s.addClient(c)
 
 	s.logger.Info(
 		"Client connected",
 		"client",
-		client.String(),
+		c.String(),
 		"Layer",
-		client.layer,
+		c.layer,
 	)
 
-	return client, nil
+	return c, nil
 }
 
 // addClient adds a client to the list of clients that maintain an active
