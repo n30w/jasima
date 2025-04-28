@@ -125,18 +125,16 @@ func sendCommandBuilder(
 	}
 }
 
-func memoryToString(m MemoryService) string {
-	return fmt.Sprintf(
-		"=== BEGIN CHAT LOG ===\n%s\n=== END CHAT LOG ===",
-		m.String(),
-	)
-}
-
 func transcriptToString(transcript []memory.Message) string {
 	var sb strings.Builder
+
+	sb.WriteString("=== BEGIN CHAT LOG ===\n")
+
 	for _, m := range transcript {
-		sb.WriteString(fmt.Sprintf("%s: %s", m.Sender, m.Text))
+		sb.WriteString(fmt.Sprintf("%s: %s\n", m.Sender, m.Text))
 	}
+
+	sb.WriteString("=== END CHAT LOG ===\n")
 
 	return sb.String()
 }
