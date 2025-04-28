@@ -41,6 +41,19 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 
 	defer t.Stop()
 
+	clientChan := make(chan memory.Message, 10)
+
+	s.mu.Lock()
+	s.webClients[clientChan] = struct{}{}
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.webClients, clientChan)
+		s.mu.Unlock()
+		close(clientChan)
+	}()
+
 	for {
 		select {
 		case <-clientGone:
@@ -67,26 +80,48 @@ func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
 func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
 	addEventHeaders(w)
 
+	s.logger.Infof("Web client connected %s", r.RemoteAddr)
+
 	// Create a channel for client disconnection
 	clientGone := r.Context().Done()
 
 	rc := http.NewResponseController(w)
 	var msg memory.Message
 
+	clientChan := make(chan memory.Message, 10)
+
+	s.mu.Lock()
+	s.webClients[clientChan] = struct{}{}
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.webClients, clientChan)
+		s.mu.Unlock()
+		close(clientChan)
+	}()
+
+	d, _ := json.Marshal(s.mostRecentEvent)
+
+	fmt.Fprintf(w, makeDataString(string(d)))
+
+	err := rc.Flush()
+	if err != nil {
+		return
+	}
+
 	for {
 		select {
 		case <-clientGone:
-			fmt.Println("Client disconnected")
+			s.logger.Info("Web client disconnected")
 			return
-		case msg = <-s.channels.eventsMessagePool:
+		case msg = <-clientChan:
 			data, err := json.Marshal(msg)
 			if err != nil {
 				s.logger.Printf("error marshalling message: %s", err)
 				return
 			}
 
-			// Send an event to the client
-			// Here we send only the "data" field, but there are few others
 			_, err = fmt.Fprintf(
 				w,
 				makeDataString(string(data)),

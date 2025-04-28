@@ -42,8 +42,9 @@ type MemoryService interface {
 
 type ConlangServer struct {
 	Server
-
-	config *config
+	config          *config
+	mostRecentEvent memory.Message
+	webClients      map[chan memory.Message]struct{}
 
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
@@ -105,6 +106,7 @@ func NewConlangServer(
 			listening: true,
 			messages:  make([]memory.Message, 0),
 		},
+		webClients:    make(map[chan memory.Message]struct{}),
 		specification: s,
 		config:        cfg,
 	}
@@ -117,10 +119,17 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		select {
-		case s.channels.eventsMessagePool <- msg:
-			s.logger.Debug("Emitted event message")
-		default:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		s.mostRecentEvent = msg
+
+		for ch := range s.webClients {
+			select {
+			case ch <- msg:
+			default:
+				s.logger.Warn("Client channel full, dropping message")
+			}
 		}
 
 		return nil
