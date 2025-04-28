@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
@@ -181,6 +183,11 @@ func (s *ConlangServer) iterate(
 		timer().Truncate(1*time.Millisecond),
 	)
 
+	err = s.memory.Clear()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to clear memory")
+	}
+
 	return newSpecs, nil
 }
 
@@ -234,6 +241,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	s.logger.Info("EVOLUTION COMPLETE")
 
 	// Marshal to JSON
+
 	data, err := json.MarshalIndent(s.messages, "", "  ")
 	if err != nil {
 		errs <- err
@@ -241,7 +249,13 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	}
 
 	// Write to file
-	err = os.WriteFile("messages.json", data, 0o644)
+
+	fileName := fmt.Sprintf(
+		"./outputs/chats/chat_%s.json",
+		time.Now().Format("20060102150405"),
+	)
+
+	err = os.WriteFile(fileName, data, 0o644)
 	if err != nil {
 		errs <- err
 		return
