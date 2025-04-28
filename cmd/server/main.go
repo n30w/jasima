@@ -13,15 +13,14 @@ import (
 )
 
 const (
-	// DefaultSpecificationResourcePath is in relation to where the command
-	// was run, not where the binary exists.
-	DefaultSpecificationResourcePath = "./resources/specifications"
-	DefaultDebugToggle               = false
-	DefaultMaxExchanges              = 25
-	DefaultMaxGenerations            = 1
-	DefaultLogToFileToggle           = false
-	DefaultLogToFilePath             = "./outputs/logs/server_log_%s.log"
-	DefaultServerName                = "SERVER"
+	DefaultSpecResourcePath = "./resources/specifications"
+	DefaultSvgResourcePath  = "./resources/logography"
+	DefaultLogToFilePath    = "./outputs/logs/server_log_%s.log"
+	DefaultDebugToggle      = false
+	DefaultMaxExchanges     = 25
+	DefaultMaxGenerations   = 1
+	DefaultLogToFileToggle  = false
+	DefaultServerName       = "SERVER"
 )
 
 func main() {
@@ -37,8 +36,8 @@ func main() {
 			"also logs output to file",
 		)
 		flagSpecificationPath = flag.String(
-			"specs",
-			DefaultSpecificationResourcePath,
+			"specPath",
+			DefaultSpecResourcePath,
 			"path to directory containing specifications",
 		)
 		flagExchanges = flag.Int(
@@ -50,6 +49,16 @@ func main() {
 			"generations",
 			DefaultMaxGenerations,
 			"maximum number of generations in evolution",
+		)
+		flagSvgPath = flag.String(
+			"svgPath",
+			DefaultSvgResourcePath,
+			"path to svg files of the Toki Pona logography",
+		)
+		flagServerName = flag.String(
+			"name",
+			DefaultServerName,
+			"server name",
 		)
 	)
 
@@ -76,11 +85,17 @@ func main() {
 		*flagSpecificationPath,
 		"exchanges",
 		*flagExchanges,
+		"name",
+		*flagServerName,
 	)
 
 	cfg := &config{
-		name:         DefaultServerName,
+		name:         *flagServerName,
 		debugEnabled: *flagDebug,
+		files: filePathConfig{
+			specifications: *flagSpecificationPath,
+			logography:     *flagSvgPath,
+		},
 		procedures: procedureConfig{
 			maxExchanges:          *flagExchanges,
 			maxGenerations:        *flagGenerations,
@@ -89,38 +104,31 @@ func main() {
 		},
 	}
 
-	errors := make(chan error)
+	errs := make(chan error)
 
 	if *flagLogToFile {
 		logFilePath := fmt.Sprintf(
 			DefaultLogToFilePath,
 			time.Now().Format(time.RFC3339),
 		)
-		f := utils.LogOutput(logger, logFilePath, errors)
+		f := utils.LogOutput(logger, logFilePath, errs)
 		defer f()
 	}
 
 	store := memory.NewMemoryStore(0)
 
-	// Load and serialize specifications.
-
-	specifications, err := newLangSpecification(*flagSpecificationPath)
+	cs, err := NewConlangServer(
+		cfg,
+		logger,
+		store,
+	)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	// Load and serialize Toki Pona SVGs.
+	cs.Run(errs)
 
-	cs := NewConlangServer(
-		cfg,
-		logger,
-		store,
-		specifications,
-	)
-
-	cs.Run(errors)
-
-	for e := range errors {
+	for e := range errs {
 		if e != nil {
 			logger.Fatal(e)
 		}

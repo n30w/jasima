@@ -43,9 +43,6 @@ type Server struct {
 	memory   MemoryService
 	channels channels
 
-	// messages contains all messages sent back and forth. Used for debugging.
-	messages []memory.Message
-
 	// listening determines whether the server will operate on messages,
 	// whether it be through routing, saving, etc.
 	listening bool
@@ -122,12 +119,6 @@ func (s *Server) listen(
 		msg, err = stream.Recv()
 		if err != nil {
 			disconnected = true
-			continue
-		}
-
-		// Discard if the server is not listening.
-
-		if !s.listening {
 			continue
 		}
 

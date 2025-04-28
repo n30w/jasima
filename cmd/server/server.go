@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	"codeberg.org/n30w/jasima/agent"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 
@@ -40,15 +42,27 @@ type MemoryService interface {
 	fmt.Stringer
 }
 
+// generation contains all generational information related to a single
+// iteration of a conlang's development.
+type generation struct {
+	transcript     []memory.Message
+	logography     logographyGeneration
+	specifications chat.LayerMessageSet
+}
+
 type ConlangServer struct {
 	Server
 	config          *config
 	mostRecentEvent memory.Message
 	webClients      map[chan memory.Message]struct{}
+	procedureChan   chan memory.Message
+	generations     []generation
 
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
 }
+
+type logographyGeneration map[string]string
 
 type procedureConfig struct {
 	// maxExchanges represents the total exchanges allowed per layer
@@ -63,9 +77,15 @@ type procedureConfig struct {
 	specifications        []chat.LayerMessageSet
 }
 
+type filePathConfig struct {
+	specifications string
+	logography     string
+}
+
 type config struct {
 	name         string
 	debugEnabled bool
+	files        filePathConfig
 	procedures   procedureConfig
 }
 
@@ -73,20 +93,20 @@ func NewConlangServer(
 	cfg *config,
 	l *log.Logger,
 	m MemoryService,
-	s chat.LayerMessageSet,
-) *ConlangServer {
-	c := channels{
-		messagePool:            make(chan *chat.Message),
-		systemLayerMessagePool: make(memory.MessageChannel),
-		eventsMessagePool:      make(memory.MessageChannel),
-		exchanged:              make(chan bool),
-	}
-
-	ct := &clientele{
-		byNameMap:  make(nameToClientsMap),
-		byLayerMap: make(layerToNamesMap),
-		logger:     l,
-	}
+) (*ConlangServer, error) {
+	var (
+		c = channels{
+			messagePool:            make(chan *chat.Message),
+			systemLayerMessagePool: make(memory.MessageChannel),
+			eventsMessagePool:      make(memory.MessageChannel),
+			exchanged:              make(chan bool),
+		}
+		ct = &clientele{
+			byNameMap:  make(nameToClientsMap),
+			byLayerMap: make(layerToNamesMap),
+			logger:     l,
+		}
+	)
 
 	if cfg.procedures.maxGenerations == 0 {
 		l.Infof(
@@ -96,6 +116,29 @@ func NewConlangServer(
 		cfg.procedures.maxGenerations = DefaultMaxGenerations
 	}
 
+	initialGen := generation{}
+
+	// Load and serialize specifications.
+
+	specifications, err := newLangSpecification(cfg.files.specifications)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize server")
+	}
+
+	initialGen.specifications = specifications
+
+	// Load and serialize Logography SVGs.
+
+	logographyGen1, err := loadSVGsFromDirectory(cfg.files.logography)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load logography")
+	}
+
+	initialGen.logography = logographyGen1
+
+	generations := make([]generation, 0)
+	generations = append(generations, initialGen)
+
 	return &ConlangServer{
 		Server: Server{
 			clients:   ct,
@@ -104,67 +147,71 @@ func NewConlangServer(
 			memory:    m,
 			channels:  c,
 			listening: true,
-			messages:  make([]memory.Message, 0),
 		},
 		webClients:    make(map[chan memory.Message]struct{}),
-		specification: s,
+		generations:   generations,
+		procedureChan: make(chan memory.Message),
+		specification: specifications,
 		config:        cfg,
+	}, nil
+}
+
+func (s *ConlangServer) sendEventMessage(msg memory.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for ch := range s.webClients {
+		select {
+		case ch <- msg:
+		default:
+			s.logger.Warn("Client channel full, dropping message")
+		}
 	}
 }
 
 func (s *ConlangServer) Router(errs chan<- error) {
+	errMsg := "failed to route message"
+
 	eventsRoute := func(ctx context.Context, pbMsg *chat.Message) error {
 		msg := *memory.NewChatMessage(
 			pbMsg.Sender, pbMsg.Receiver,
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
 		s.mostRecentEvent = msg
 
-		for ch := range s.webClients {
-			select {
-			case ch <- msg:
-			default:
-				s.logger.Warn("Client channel full, dropping message")
-			}
-		}
+		s.sendEventMessage(msg)
 
 		return nil
 	}
 
-	messageRoute := func(ctx context.Context, pbMsg *chat.Message) error {
-		errMsg := "failed to route message"
-
-		// Convert pbMsg into domain type
-
+	printConsoleData := func(ctx context.Context, pbMsg *chat.Message) error {
 		msg := *memory.NewChatMessage(
 			pbMsg.Sender, pbMsg.Receiver,
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		if msg.Sender == s.name {
+		s.logger.Debugf("MESSAGE: %+v", msg)
+
+		if msg.Command != agent.NoCommand {
 			s.logger.Debugf(
 				"Issued command %s to %s", msg.Command,
 				msg.Receiver,
 			)
 		}
 
-		s.messages = append(s.messages, msg)
-
-		err := saveMessageTo(ctx, s.memory, msg)
-		if err != nil {
-			return errors.Wrap(err, errMsg)
-		}
-
 		if msg.Text != "" {
-			s.logger.Printf("%s: %s", msg.Sender, msg.Text)
+			// s.logger.Printf("%s: %s", msg.Sender, msg.Text)
 		}
 
-		// Route messages for the server that come from the system layer
-		// agents.
+		return nil
+	}
+
+	messageRoute := func(ctx context.Context, pbMsg *chat.Message) error {
+		msg := *memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
 
 		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
 			Receiver == s.name {
@@ -172,22 +219,39 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			return nil
 		}
 
-		// If the message is not from the server itself, save it to memory
-		// and notify that an exchange has occurred.
+		err := s.broadcast(&msg)
+		if err != nil {
+			return errors.Wrap(err, errMsg)
+		}
+
+		return nil
+	}
+
+	procedureRoute := func(ctx context.Context, pbMsg *chat.Message) error {
+		msg := *memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
 
 		if msg.Sender != s.name {
-			err = saveMessageTo(ctx, s.memory, msg)
-			if err != nil {
-				return errors.Wrap(err, errMsg)
-			}
-
+			// This is necessary so the procedure channel does NOT block
+			// the main router loop.
 			select {
-			case s.channels.exchanged <- true:
+			case s.procedureChan <- msg:
+				s.logger.Debug("Dispatching message to procedure channel")
 			default:
 			}
 		}
+		return nil
+	}
 
-		err = s.broadcast(&msg)
+	saveMessage := func(ctx context.Context, pbMsg *chat.Message) error {
+		msg := *memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
+
+		err := saveMessageTo(ctx, s.memory, msg)
 		if err != nil {
 			return errors.Wrap(err, errMsg)
 		}
@@ -197,8 +261,11 @@ func (s *ConlangServer) Router(errs chan<- error) {
 
 	routeMessages := chat.BuildRouter[chat.Message](
 		s.channels.messagePool,
-		eventsRoute,
+		printConsoleData,
+		saveMessage,
 		messageRoute,
+		procedureRoute,
+		eventsRoute,
 	)
 
 	go routeMessages(errs)
@@ -214,7 +281,6 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 
 	if s.config.debugEnabled {
 		go func(errs chan<- error) {
-			s.logger.Info("Loading and emitting test output data...")
 			// Load test data from file JSON.
 			jsonFile, err := os.Open("./outputs/chats/chat_4.json")
 			if err != nil {
@@ -235,7 +301,9 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 			}
 
 			// Output test data to channel.
-			go s.outputTestData(msgs)
+			if !s.config.debugEnabled {
+				go s.outputTestData(msgs)
+			}
 		}(errs)
 	}
 }
