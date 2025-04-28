@@ -98,7 +98,7 @@ func NewPbMessage(
 		Sender:   sender.String(),
 		Receiver: receiver.String(),
 		Content:  content.String(),
-		Command:  -1,
+		Command:  0,
 		Layer:    layer.Int32(),
 	}
 
