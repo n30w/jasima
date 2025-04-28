@@ -80,7 +80,7 @@ func main() {
 
 	cfg := &config{
 		name:         DefaultServerName,
-		debugEnabled: !*flagDebug,
+		debugEnabled: *flagDebug,
 		procedures: procedureConfig{
 			maxExchanges:          *flagExchanges,
 			maxGenerations:        *flagGenerations,
