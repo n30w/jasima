@@ -456,22 +456,27 @@ func (c *client) ReceiveMessages(
 				c.logger.Debug("UNLATCH command received", "latch", c.latch)
 
 			default:
-				// Send the data to the LLM.
-				if c.latch {
-					c.logger.Debug("Latch is TRUE. Only saving message...")
-					err = c.memory.Save(
-						ctx, c.NewMessageFrom(
-							msg.Receiver,
-							msg.Text,
-						),
-					)
-					if err != nil {
-						errs <- err
-						return
-					}
+				// Empty message and NO_COMMAND, do nothing.
+				if msg.Text == "" {
+					break
 				} else {
-					c.logger.Debug("Piping message to LLM service...")
-					c.channels.llm <- *msg
+					// Send the data to the LLM.
+					if c.latch {
+						c.logger.Debug("Latch is TRUE. Only saving message...")
+						err = c.memory.Save(
+							ctx, c.NewMessageFrom(
+								msg.Receiver,
+								msg.Text,
+							),
+						)
+						if err != nil {
+							errs <- err
+							return
+						}
+					} else {
+						c.logger.Debug("Piping message to LLM service...")
+						c.channels.llm <- *msg
+					}
 				}
 			}
 		}
