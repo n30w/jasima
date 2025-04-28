@@ -54,9 +54,9 @@ type ConlangServer struct {
 	Server
 	config          *config
 	mostRecentEvent memory.Message
-	webClients      map[chan memory.Message]struct{}
 	procedureChan   chan memory.Message
 	generations     []generation
+	broadcasters    *Broadcasters
 
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
@@ -98,8 +98,6 @@ func NewConlangServer(
 		c = channels{
 			messagePool:            make(chan *chat.Message),
 			systemLayerMessagePool: make(memory.MessageChannel),
-			eventsMessagePool:      make(memory.MessageChannel),
-			exchanged:              make(chan bool),
 		}
 		ct = &clientele{
 			byNameMap:  make(nameToClientsMap),
@@ -139,6 +137,15 @@ func NewConlangServer(
 	generations := make([]generation, 0)
 	generations = append(generations, initialGen)
 
+	// Initialize web broadcasters
+
+	b := &Broadcasters{
+		messages:        NewBroadcaster[memory.Message](l),
+		generation:      NewBroadcaster[generation](l),
+		currentTime:     NewBroadcaster[string](l),
+		testMessageFeed: NewBroadcaster[memory.Message](l),
+	}
+
 	return &ConlangServer{
 		Server: Server{
 			clients:   ct,
@@ -148,25 +155,12 @@ func NewConlangServer(
 			channels:  c,
 			listening: true,
 		},
-		webClients:    make(map[chan memory.Message]struct{}),
 		generations:   generations,
 		procedureChan: make(chan memory.Message),
 		specification: specifications,
+		broadcasters:  b,
 		config:        cfg,
 	}, nil
-}
-
-func (s *ConlangServer) sendEventMessage(msg memory.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for ch := range s.webClients {
-		select {
-		case ch <- msg:
-		default:
-			s.logger.Warn("Client channel full, dropping message")
-		}
-	}
 }
 
 func (s *ConlangServer) Router(errs chan<- error) {
@@ -180,7 +174,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 
 		s.mostRecentEvent = msg
 
-		s.sendEventMessage(msg)
+		s.broadcasters.messages.Broadcast(msg)
 
 		return nil
 	}
@@ -273,6 +267,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 }
 
 func (s *ConlangServer) WebEvents(errs chan<- error) {
+	go broadcastTime(s.broadcasters.currentTime)
 	go s.ListenAndServeWebEvents("7070", errs)
 }
 
@@ -301,9 +296,7 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 			}
 
 			// Output test data to channel.
-			if !s.config.debugEnabled {
-				go s.outputTestData(msgs)
-			}
+			go s.outputTestData(msgs)
 		}(errs)
 	}
 }

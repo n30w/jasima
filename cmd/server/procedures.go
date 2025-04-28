@@ -257,21 +257,16 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 // over and over again.
 func (s *ConlangServer) outputTestData(data []memory.Message) {
 	var (
-		waitTime = time.Millisecond * 1000
-		i        = 0
-		l        = len(data)
+		i = 0
+		l = len(data)
+		t = time.NewTicker(time.Second)
 	)
 
 	s.logger.Info("Emitting test output data...")
 
 	for {
-		// Send message to channel.
-		// s.sendEventMessage(data[i%l])
-		select {
-		case s.channels.eventsMessagePool <- data[i%l]:
-		default:
-		}
-		time.Sleep(waitTime)
+		<-t.C
+		s.broadcasters.testMessageFeed.Broadcast(data[i%l])
 		i++
 	}
 }

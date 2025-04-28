@@ -1,13 +1,118 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"codeberg.org/n30w/jasima/memory"
+	"github.com/charmbracelet/log"
 )
+
+type WebClient[T any] struct {
+	send   chan T
+	conn   http.ResponseWriter
+	done   <-chan struct{}
+	cancel context.CancelFunc
+}
+
+func (c *WebClient[T]) write() {
+	rc := http.NewResponseController(c.conn)
+
+	for {
+		select {
+		case msg, ok := <-c.send:
+			if !ok {
+				return
+			}
+
+			j, err := json.Marshal(msg)
+			if err != nil {
+				c.cancel()
+				return
+			}
+
+			d := string(j)
+
+			_, err = fmt.Fprintf(c.conn, "data: %s\n\n", d)
+			if err != nil {
+				c.cancel()
+				return
+			}
+
+			rc.Flush()
+
+		case <-c.done:
+			return
+		}
+	}
+}
+
+type Broadcaster[T any] struct {
+	mu         sync.Mutex
+	webClients map[*WebClient[T]]struct{}
+	logger     *log.Logger
+}
+
+func NewBroadcaster[T any](logger *log.Logger) *Broadcaster[T] {
+	return &Broadcaster[T]{
+		mu:         sync.Mutex{},
+		webClients: make(map[*WebClient[T]]struct{}),
+		logger:     logger,
+	}
+}
+
+func (b *Broadcaster[T]) Broadcast(msg T) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for c := range b.webClients {
+		select {
+		case c.send <- msg:
+		default:
+		}
+	}
+}
+
+func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
+	addEventHeaders(w)
+
+	ctx, cancel := context.WithCancel(r.Context())
+
+	client := &WebClient[T]{
+		send:   make(chan T, 10),
+		conn:   w,
+		done:   ctx.Done(),
+		cancel: cancel,
+	}
+
+	b.mu.Lock()
+	b.webClients[client] = struct{}{}
+	b.mu.Unlock()
+
+	b.logger.Infof("Web client connected %s", r.RemoteAddr)
+
+	defer func() {
+		b.mu.Lock()
+		delete(b.webClients, client)
+		b.mu.Unlock()
+		client.cancel()
+		close(client.send)
+		b.logger.Infof("Web client disconnected %s", r.RemoteAddr)
+	}()
+
+	client.write()
+}
+
+type Broadcasters struct {
+	messages        *Broadcaster[memory.Message]
+	generation      *Broadcaster[generation]
+	currentTime     *Broadcaster[string]
+	testMessageFeed *Broadcaster[memory.Message]
+}
 
 func (s *ConlangServer) ListenAndServeWebEvents(
 	port string,
@@ -17,9 +122,9 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 
 	handler := http.NewServeMux()
 
-	handler.HandleFunc("/time", s.sseTime)
-	handler.HandleFunc("/events", s.sseChat)
-	handler.HandleFunc("/test/chat", s.sseChat)
+	handler.HandleFunc("/time", s.broadcasters.currentTime.HandleClient)
+	handler.HandleFunc("/chat", s.broadcasters.messages.HandleClient)
+	handler.HandleFunc("/test/chat", s.broadcasters.testMessageFeed.HandleClient)
 
 	s.logger.Infof("Starting web events service on %s", p)
 
@@ -30,113 +135,13 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 	}
 }
 
-func (s *ConlangServer) sseTime(w http.ResponseWriter, r *http.Request) {
-	addEventHeaders(w)
-
-	// Create a channel for client disconnection
-	clientGone := r.Context().Done()
-
-	rc := http.NewResponseController(w)
+func broadcastTime(b *Broadcaster[string]) {
 	t := time.NewTicker(time.Second)
-
 	defer t.Stop()
-
-	clientChan := make(chan memory.Message, 10)
-
-	s.mu.Lock()
-	s.webClients[clientChan] = struct{}{}
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.webClients, clientChan)
-		s.mu.Unlock()
-		close(clientChan)
-	}()
-
 	for {
-		select {
-		case <-clientGone:
-			fmt.Println("Client disconnected")
-			return
-		case <-t.C:
-			// Send an event to the client
-			// Here we send only the "data" field, but there are few others
-			_, err := fmt.Fprintf(
-				w,
-				makeDataString(time.Now().Format(time.UnixDate)),
-			)
-			if err != nil {
-				return
-			}
-			err = rc.Flush()
-			if err != nil {
-				return
-			}
-		}
-	}
-}
-
-func (s *ConlangServer) sseChat(w http.ResponseWriter, r *http.Request) {
-	addEventHeaders(w)
-
-	s.logger.Infof("Web client connected %s", r.RemoteAddr)
-
-	// Create a channel for client disconnection
-	clientGone := r.Context().Done()
-
-	rc := http.NewResponseController(w)
-	var msg memory.Message
-
-	clientChan := make(chan memory.Message, 10)
-
-	s.mu.Lock()
-	s.webClients[clientChan] = struct{}{}
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.webClients, clientChan)
-		s.mu.Unlock()
-		close(clientChan)
-	}()
-
-	d, _ := json.Marshal(s.mostRecentEvent)
-
-	fmt.Fprintf(w, makeDataString(string(d)))
-
-	err := rc.Flush()
-	if err != nil {
-		return
-	}
-
-	for {
-		select {
-		case <-clientGone:
-			s.logger.Info("Web client disconnected")
-			return
-		case msg = <-clientChan:
-			data, err := json.Marshal(msg)
-			if err != nil {
-				s.logger.Printf("error marshalling message: %s", err)
-				return
-			}
-
-			_, err = fmt.Fprintf(
-				w,
-				makeDataString(string(data)),
-			)
-			if err != nil {
-				s.logger.Errorf("error writing message: %s", err)
-				return
-			}
-
-			err = rc.Flush()
-			if err != nil {
-				s.logger.Errorf("error flushing response controller: %s", err)
-				return
-			}
-		}
+		<-t.C
+		d := time.Now().Format(time.UnixDate)
+		b.Broadcast(d)
 	}
 }
 

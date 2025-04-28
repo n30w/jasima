@@ -8,8 +8,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"codeberg.org/n30w/jasima/agent"
-
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 
@@ -24,14 +22,6 @@ type channels struct {
 
 	// systemLayerMessagePool contains messages that are destined for the server.
 	systemLayerMessagePool memory.MessageChannel
-
-	// eventsMessagePool contains messages and data that are to be published as
-	// web events.
-	eventsMessagePool memory.MessageChannel
-
-	// exchanged is a signaling channel to detect whether an exchange
-	// between two clients has been completed.
-	exchanged chan bool
 }
 
 type Server struct {
@@ -185,32 +175,6 @@ func (s *Server) broadcast(msg *memory.Message) error {
 			)
 		}
 	}
-
-	return nil
-}
-
-// sendCommand issues a command to a client.
-func (s *Server) sendCommand(
-	command agent.Command,
-	to *client,
-	content ...chat.Content,
-) error {
-	msg := memory.NewMessage(memory.UserRole, "command")
-
-	if len(content) > 0 {
-		msg.Text = content[0]
-	}
-
-	msg.Command = command
-	msg.Sender = s.name
-	msg.Receiver = to.name
-
-	err := to.Send(&msg, msg.Command)
-	if err != nil {
-		return errors.Wrap(err, "failed to send command")
-	}
-
-	s.logger.Debugf("Sent %s to %s", msg.Command, msg.Receiver)
 
 	return nil
 }
