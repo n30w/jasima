@@ -86,6 +86,9 @@ func newClient(
 		peerNames = append(peerNames, chat.Name(peer))
 	}
 
+	userConf.Model.Instructions = userConf.Model.
+		Instructions + "Your name in this conversation is: " + userConf.Name
+
 	cfg := &config{
 		Name:          chat.Name(userConf.Name),
 		Peers:         peerNames,
