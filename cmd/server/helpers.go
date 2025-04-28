@@ -4,13 +4,51 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/memory"
 )
 
 func makePortString(p string) string {
 	return ":" + p
+}
+
+func loadSVGsFromDirectory(dirPath string) (logographyGeneration, error) {
+	svgs := make(logographyGeneration)
+
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		f := file.Name()
+		ext := filepath.Ext(f)
+		name := f[0 : len(f)-len(ext)]
+
+		if ext == ".svg" {
+			fullPath := filepath.Join(dirPath, file.Name())
+
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to read file %s: %w",
+					file.Name(),
+					err,
+				)
+			}
+
+			svgs[name] = string(data)
+		}
+	}
+
+	return svgs, nil
 }
 
 func newLangSpecification(p string) (chat.LayerMessageSet, error) {
@@ -92,4 +130,13 @@ func memoryToString(m MemoryService) string {
 		"=== BEGIN CHAT LOG ===\n%s\n=== END CHAT LOG ===",
 		m.String(),
 	)
+}
+
+func transcriptToString(transcript []memory.Message) string {
+	var sb strings.Builder
+	for _, m := range transcript {
+		sb.WriteString(fmt.Sprintf("%s: %s", m.Sender, m.Text))
+	}
+
+	return sb.String()
 }
