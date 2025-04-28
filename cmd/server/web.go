@@ -21,7 +21,7 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 	handler.HandleFunc("/events", s.sseChat)
 	handler.HandleFunc("/test/chat", s.sseChat)
 
-	s.logger.Infof("Starting web events server on %s", p)
+	s.logger.Infof("Starting web events service on %s", p)
 
 	err := http.ListenAndServe(p, handler)
 	if err != nil {

@@ -64,7 +64,7 @@ func (s *Server) ListenAndServeRPC(protocol, port string, errs chan<- error) {
 
 	chat.RegisterChatServiceServer(grpcServer, s)
 
-	s.logger.Debugf("gRPC servicing @ %s%s", protocol, p)
+	s.logger.Infof("Starting gRPC service on %s%s", protocol, p)
 
 	err = grpcServer.Serve(lis)
 	if err != nil {

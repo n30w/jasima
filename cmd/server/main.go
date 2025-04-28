@@ -67,7 +67,7 @@ func main() {
 	logger := log.NewWithOptions(os.Stderr, logOptions)
 
 	logger.Info(
-		"starting with these options",
+		"Initializing with these options",
 		"debug",
 		*flagDebug,
 		"logToFile",

@@ -205,6 +205,7 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 
 	if s.config.debugEnabled {
 		go func(errs chan<- error) {
+			s.logger.Info("Loading and emitting test output data...")
 			// Load test data from file JSON.
 			jsonFile, err := os.Open("./outputs/chats/chat_4.json")
 			if err != nil {
