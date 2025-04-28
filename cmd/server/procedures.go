@@ -34,13 +34,54 @@ func (s *ConlangServer) iterate(
 		return nil, err
 	}
 
-	timer := utils.Timer(time.Now())
+	var (
+		timer        = utils.Timer(time.Now())
+		clients      = s.getClientsByLayer(initialLayer)
+		sysClient    = s.getClientsByLayer(chat.SystemLayer)[0]
+		cmd          = buildCommand(s.config.name)
+		sendCommands = sendCommandBuilder(s.channels.messagePool)
 
-	// Add 1 so that we can fit a new spec document into the specification.
-	// Instead of making a new variable `newSpecs`, one could easily
-	// just use the already defined `specs`.
+		// kickoff is the command that is sent to kick off the layer's
+		// iteration exchanges. It consists of the initializer client, which
+		// is the first client of the layer, and content, which is the text
+		// in the message that the initializer client will send to other
+		// clients on the layer.
+		kickoff = cmd(
+			agent.SendInitialMessage,
+			fmt.Sprintf(
+				"Hello, "+
+					"let's begin developing Toki Pona %s. You go first.",
+				initialLayer,
+			),
+		)(s.getClientsByLayer(initialLayer)[0])
 
-	newSpecs := make([]chat.Content, 0, initialLayer+1)
+		// initialInstructions are the initial instructions each agent on the
+		// layer is given for its system prompt.
+		initialInstructions = fmt.Sprintf(
+			"You and your interlocutors are responsible for developing %s."+
+				"\nHere is the current specification.\n",
+			initialLayer,
+		)
+
+		// addSysAgentInstructions is a command to append the current
+		// specification to the system agent(s).
+		addSysAgentInstructions = cmd(
+			agent.AppendInstructions,
+			fmt.Sprintf(
+				"The current specification is for: %s. "+
+					"Here is the current specification:\n%s",
+				initialLayer, specs[initialLayer].String(),
+			),
+		)(sysClient)
+
+		// newSpecs is the new specification that will have been developed by
+		// the end of this iteration. `1` is added because the new document
+		// needs to be fit into the specification, because the system layer is
+		// at index 0.
+		newSpecs = make([]chat.Content, 0, initialLayer+1)
+
+		sb strings.Builder
+	)
 
 	// Make a new specification from the original specification.
 
@@ -50,137 +91,62 @@ func (s *ConlangServer) iterate(
 
 	copy(newSpecs, iteration)
 
-	// Start of side effects.
-
-	clients := s.getClientsByLayer(initialLayer)
-
-	var sb strings.Builder
-
-	sb.WriteString(
-		fmt.Sprintf(
-			"You and your interlocutors are responsible for developing %s."+
-				"\nHere is the current specification.\n",
-			initialLayer,
-		),
-	)
+	sb.WriteString(initialInstructions)
 
 	for i := initialLayer; i > 0; i-- {
 		sb.WriteString(newSpecs[i].String())
 		sb.WriteString("\n")
 	}
 
-	content := chat.Content(sb.String())
-
 	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
 
-	for _, v := range clients {
-		s.channels.messagePool <- *s.newCommand(
-			v,
-			agent.AppendInstructions,
-			content,
-		)
-		s.channels.messagePool <- *s.newCommand(v, agent.Unlatch)
-	}
-
-	initMsg := chat.Content(
-		fmt.Sprintf(
-			"Hello, "+
-				"let's begin developing Toki Pona %s. You go first.",
-			initialLayer,
-		),
+	sendCommands(
+		clients,
+		cmd(agent.AppendInstructions, sb.String()),
+		cmd(agent.Unlatch),
 	)
 
-	// Select the first client in the layer to be the initializer.
-
-	initializerClient := s.getClientsByLayer(initialLayer)[0]
-
-	s.channels.messagePool <- *s.newCommand(
-		initializerClient,
-		agent.SendInitialMessage,
-		initMsg,
-	)
-
-	// Dispatch iterate commands to clients on Layer.
+	s.channels.messagePool <- kickoff
 
 	for i := range exchanges {
 		<-s.channels.exchanged
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
-	err = s.sendCommands(
+	sendCommands(
 		clients,
-		agent.Latch,
-		agent.ClearMemory,
-		agent.ResetInstructions,
+		cmd(agent.Latch),
+		cmd(agent.ClearMemory),
+		cmd(agent.ResetInstructions),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	sysClient := s.getClientsByLayer(chat.SystemLayer)[0]
 
 	sb.Reset()
 
 	// The system agent will ONLY summarize the chat log, and not read the
 	// other specifications for other layers (for now at least).
-
-	sb.WriteString(
-		fmt.Sprintf(
-			"The current specification is for: %s. "+
-				"Here is the current specification:\n",
-			initialLayer,
-		),
-	)
-
-	sb.WriteString(specs[initialLayer].String())
-
-	s.channels.messagePool <- *s.newCommand(
-		sysClient,
-		agent.AppendInstructions,
-		chat.Content(sb.String()),
-	)
-
-	s.channels.messagePool <- *s.newCommand(sysClient, agent.Unlatch)
-
-	sb.Reset()
-
-	sb.WriteString("=== BEGIN CHAT LOG ===\n")
-	sb.WriteString(s.memory.String())
-	sb.WriteString("\n=== END CHAT LOG ===")
+	s.channels.messagePool <- addSysAgentInstructions
+	s.channels.messagePool <- cmd(agent.Unlatch)(sysClient)
 
 	msg := chat.NewPbMessage(
 		s.name, "SYSTEM",
-		chat.Content(sb.String()), chat.SystemLayer,
+		chat.Content(memoryToString(s.memory)), chat.SystemLayer,
 	)
 
-	s.channels.messagePool <- *msg
+	s.channels.messagePool <- msg
 
 	// When SYSTEM LLM sends response back, adjust the corresponding
 	// specification.
-	s.logger.Infof("Waiting for systemLayerMessagePool...")
+	s.logger.Infof("Waiting for system agent response...")
 
 	specPrime := <-s.channels.systemLayerMessagePool
 
 	sb.Reset()
 
-	err = s.sendCommands(
+	sendCommands(
 		clients,
-		agent.Latch,
-		agent.ClearMemory,
-		agent.ResetInstructions,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// End of side effects.
-
-	newSpecs[initialLayer] = specPrime.Text
-
-	s.logger.Infof(
-		"%s took %s to complete",
-		initialLayer,
-		timer().Truncate(1*time.Millisecond),
+		cmd(agent.Latch),
+		cmd(agent.ClearMemory),
+		cmd(agent.ResetInstructions),
 	)
 
 	err = s.memory.Clear()
@@ -188,27 +154,36 @@ func (s *ConlangServer) iterate(
 		return nil, errors.Wrap(err, "failed to clear memory")
 	}
 
+	s.logger.Infof(
+		"%s took %s to complete",
+		initialLayer,
+		timer().Truncate(1*time.Millisecond),
+	)
+
+	// End of side effects.
+
+	newSpecs[initialLayer] = specPrime.Text
+
 	return newSpecs, nil
 }
 
 // Evolve manages the entire evolutionary function loop.
 func (s *ConlangServer) Evolve(errs chan<- error) {
-	var err error
-
-	targetTotal := 9
-
-	allJoined := make(chan struct{})
+	var (
+		err         error
+		targetTotal = 9
+		allJoined   = make(chan struct{})
+		specs       = s.specification.ToSlice()
+		generations = s.config.procedures.maxGenerations
+	)
 
 	go func(c chan<- struct{}) {
 		joined := false
 		for !joined {
 			time.Sleep(1 * time.Second)
-			s.mu.Lock()
-			v := s.clients.byNameMap
-			if len(v) >= targetTotal {
+			if s.clients.total >= targetTotal {
 				joined = true
 			}
-			s.mu.Unlock()
 		}
 		close(c)
 	}(allJoined)
@@ -217,20 +192,24 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.logger.Info("All clients joined!")
 
-	specs := s.specification.ToSlice()
-
-	for i := range 1 {
+	for i := range generations {
 		elapsedTime := utils.Timer(time.Now())
 		// Starts on Layer 4, recurses to 1.
-		specs, err = s.iterate(specs, chat.LogographyLayer, s.exchangeTotal)
+		specs, err = s.iterate(
+			specs,
+			chat.LogographyLayer,
+			s.config.procedures.maxExchanges,
+		)
 		if err != nil {
 			errs <- err
 			return
 		}
+
 		s.logger.Infof(
 			"Iteration %d completed in %s", i+1,
 			elapsedTime().Truncate(10*time.Millisecond),
 		)
+
 		// Save specs to memory
 		// send results to SYSTEM LLM
 		// Save result to LLM.
@@ -266,9 +245,12 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 // useful for frontend testing without having to run agent queries
 // over and over again.
 func (s *ConlangServer) outputTestData(data []memory.Message) {
-	waitTime := time.Millisecond * 2000
-	i := 0
-	l := len(data)
+	var (
+		waitTime = time.Millisecond * 2000
+		i        = 0
+		l        = len(data)
+	)
+
 	for {
 		// Send message to channel.
 		select {

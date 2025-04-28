@@ -18,30 +18,39 @@ const (
 	DefaultSpecificationResourcePath = "./resources/specifications"
 	DefaultDebugToggle               = false
 	DefaultMaxExchanges              = 25
+	DefaultMaxGenerations            = 1
 	DefaultLogToFileToggle           = false
 	DefaultLogToFilePath             = "./outputs/logs/server_log_%s.log"
+	DefaultServerName                = "SERVER"
 )
 
 func main() {
-	flagDebug := flag.Bool(
-		"debug",
-		DefaultDebugToggle,
-		"debug mode, extra logging",
-	)
-	flagLogToFile := flag.Bool(
-		"logToFile",
-		DefaultLogToFileToggle,
-		"also logs output to file",
-	)
-	flagSpecificationPath := flag.String(
-		"specs",
-		DefaultSpecificationResourcePath,
-		"path to directory containing specifications",
-	)
-	flagExchanges := flag.Int(
-		"exchanges",
-		DefaultMaxExchanges,
-		"total exchanges between agents per layer",
+	var (
+		flagDebug = flag.Bool(
+			"debug",
+			DefaultDebugToggle,
+			"debug mode, extra logging",
+		)
+		flagLogToFile = flag.Bool(
+			"logToFile",
+			DefaultLogToFileToggle,
+			"also logs output to file",
+		)
+		flagSpecificationPath = flag.String(
+			"specs",
+			DefaultSpecificationResourcePath,
+			"path to directory containing specifications",
+		)
+		flagExchanges = flag.Int(
+			"exchanges",
+			DefaultMaxExchanges,
+			"total exchanges between agents per layer",
+		)
+		flagGenerations = flag.Int(
+			"generations",
+			DefaultMaxGenerations,
+			"maximum number of generations in evolution",
+		)
 	)
 
 	flag.Parse()
@@ -69,6 +78,17 @@ func main() {
 		*flagExchanges,
 	)
 
+	cfg := &config{
+		name:         DefaultServerName,
+		debugEnabled: !*flagDebug,
+		procedures: procedureConfig{
+			maxExchanges:          *flagExchanges,
+			maxGenerations:        *flagGenerations,
+			originalSpecification: nil,
+			specifications:        nil,
+		},
+	}
+
 	errors := make(chan error)
 
 	if *flagLogToFile {
@@ -84,20 +104,21 @@ func main() {
 
 	// Load and serialize specifications.
 
-	specifications, err := NewLangSpecification(*flagSpecificationPath)
+	specifications, err := newLangSpecification(*flagSpecificationPath)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
+	// Load and serialize Toki Pona SVGs.
+
 	cs := NewConlangServer(
-		"SERVER",
+		cfg,
 		logger,
 		store,
 		specifications,
-		*flagExchanges,
 	)
 
-	cs.Run(errors, *flagDebug)
+	cs.Run(errors)
 
 	for e := range errors {
 		if e != nil {

@@ -45,6 +45,7 @@ func (s *Server) addClient(client *client) {
 	s.mu.Lock()
 	s.clients.addByName(client)
 	s.clients.addByLayer(client)
+	s.clients.total++
 	s.mu.Unlock()
 }
 
@@ -54,6 +55,7 @@ func (s *Server) removeClient(client *client) {
 	s.mu.Lock()
 	s.clients.removeByName(client)
 	s.clients.removeByLayer(client)
+	s.clients.total--
 	s.mu.Unlock()
 }
 
@@ -147,6 +149,7 @@ type (
 type clientele struct {
 	byNameMap  nameToClientsMap
 	byLayerMap layerToNamesMap
+	total      int
 	logger     *log.Logger
 }
 

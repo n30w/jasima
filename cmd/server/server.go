@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/pkg/errors"
-
-	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
+
+	"github.com/pkg/errors"
 
 	"github.com/charmbracelet/log"
 )
@@ -46,23 +43,39 @@ type MemoryService interface {
 type ConlangServer struct {
 	Server
 
+	config *config
+
 	// specification are serialized versions of the Markdown specifications.
 	specification chat.LayerMessageSet
+}
 
-	// exchangeTotal represents the maximum number of exchanges between agents
-	// per layer.
-	exchangeTotal int
+type procedureConfig struct {
+	// maxExchanges represents the total exchanges allowed per layer
+	// of evolution.
+	maxExchanges int
+
+	// maxGenerations represents the maximum number of generations to evolve.
+	// When set to 0, the procedure evolves forever.
+	maxGenerations int
+
+	originalSpecification chat.LayerMessageSet
+	specifications        []chat.LayerMessageSet
+}
+
+type config struct {
+	name         string
+	debugEnabled bool
+	procedures   procedureConfig
 }
 
 func NewConlangServer(
-	name string,
+	cfg *config,
 	l *log.Logger,
 	m MemoryService,
 	s chat.LayerMessageSet,
-	e int,
 ) *ConlangServer {
 	c := channels{
-		messagePool:            make(chan chat.Message),
+		messagePool:            make(chan *chat.Message),
 		systemLayerMessagePool: make(memory.MessageChannel),
 		eventsMessagePool:      make(memory.MessageChannel),
 		exchanged:              make(chan bool),
@@ -74,10 +87,18 @@ func NewConlangServer(
 		logger:     l,
 	}
 
+	if cfg.procedures.maxGenerations == 0 {
+		l.Infof(
+			"Max generations not specified, setting to default %d",
+			DefaultMaxGenerations,
+		)
+		cfg.procedures.maxGenerations = DefaultMaxGenerations
+	}
+
 	return &ConlangServer{
 		Server: Server{
 			clients:   ct,
-			name:      chat.Name(name),
+			name:      chat.Name(cfg.name),
 			logger:    l,
 			memory:    m,
 			channels:  c,
@@ -85,48 +106,8 @@ func NewConlangServer(
 			messages:  make([]memory.Message, 0),
 		},
 		specification: s,
-		exchangeTotal: e,
+		config:        cfg,
 	}
-}
-
-func (s *ConlangServer) newCommand(
-	c *client,
-	command agent.Command, content ...chat.Content,
-) *chat.Message {
-	msg := &chat.Message{
-		Sender:   s.name.String(),
-		Receiver: c.name.String(),
-		Command:  command.Int32(),
-		Layer:    c.layer.Int32(),
-		Content:  "",
-	}
-
-	if len(content) > 0 {
-		msg.Content = string(content[0])
-	}
-
-	return msg
-}
-
-func (s *ConlangServer) sendCommands(
-	clients []*client,
-	commands ...agent.Command,
-) error {
-	var err error
-	for _, v := range clients {
-		for _, cmd := range commands {
-			err = s.sendCommand(cmd, v)
-			if err != nil {
-				return err
-			}
-
-			// Sleep in between commands so that agents can breathe.
-
-			time.Sleep(time.Millisecond * 200)
-		}
-	}
-
-	return nil
 }
 
 func (s *ConlangServer) Router(errs chan<- error) {
@@ -212,18 +193,20 @@ func (s *ConlangServer) Router(errs chan<- error) {
 	)
 
 	go routeMessages(errs)
+	go s.ListenAndServeRPC("tcp", "50051", errs)
 }
 
-func (s *ConlangServer) Run(errs chan error, debug bool) {
-	s.Router(errs)
-	go s.ListenAndServeRouter(errs)
-	go s.Evolve(errs)
-	go s.ListenAndServeWebEvents(errs)
+func (s *ConlangServer) WebEvents(errs chan<- error) {
+	go s.ListenAndServeWebEvents("7070", errs)
+}
 
-	if debug {
-		go func(errs chan error) {
+func (s *ConlangServer) StartProcedures(errs chan<- error) {
+	go s.Evolve(errs)
+
+	if s.config.debugEnabled {
+		go func(errs chan<- error) {
 			// Load test data from file JSON.
-			jsonFile, err := os.Open("./outputs/chats/chat_2.json")
+			jsonFile, err := os.Open("./outputs/chats/chat_4.json")
 			if err != nil {
 				errs <- err
 				return
@@ -247,36 +230,8 @@ func (s *ConlangServer) Run(errs chan error, debug bool) {
 	}
 }
 
-func NewLangSpecification(p string) (chat.LayerMessageSet, error) {
-	ls := make(chat.LayerMessageSet)
-
-	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))
-	if err != nil {
-		return nil, err
-	}
-
-	ls[chat.DictionaryLayer] = chat.Content(b)
-
-	b, err = os.ReadFile(filepath.Join(p, "grammar.md"))
-	if err != nil {
-		return nil, err
-	}
-
-	ls[chat.GrammarLayer] = chat.Content(b)
-
-	b, err = os.ReadFile(filepath.Join(p, "logography.md"))
-	if err != nil {
-		return nil, err
-	}
-
-	ls[chat.LogographyLayer] = chat.Content(b)
-
-	b, err = os.ReadFile(filepath.Join(p, "phonetics.md"))
-	if err != nil {
-		return nil, err
-	}
-
-	ls[chat.PhoneticsLayer] = chat.Content(b)
-
-	return ls, nil
+func (s *ConlangServer) Run(errs chan error) {
+	s.Router(errs)
+	s.WebEvents(errs)
+	s.StartProcedures(errs)
 }

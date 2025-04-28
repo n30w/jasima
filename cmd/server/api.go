@@ -20,7 +20,7 @@ import (
 type channels struct {
 	// messagePool contains messages that need to be sent to the clients
 	// connected to the server.
-	messagePool chan chat.Message
+	messagePool chan *chat.Message
 
 	// systemLayerMessagePool contains messages that are destined for the server.
 	systemLayerMessagePool memory.MessageChannel
@@ -51,25 +51,20 @@ type Server struct {
 	listening bool
 }
 
-func (s *Server) ListenAndServeRouter(errs chan<- error) {
-	protocol := "tcp"
-	port := ":50051"
+func (s *Server) ListenAndServeRPC(protocol, port string, errs chan<- error) {
+	p := makePortString(port)
 
-	lis, err := net.Listen(protocol, port)
+	lis, err := net.Listen(protocol, p)
 	if err != nil {
 		errs <- err
 		return
 	}
 
-	s.logger.Debugf("listener using %s%s", protocol, port)
-
 	grpcServer := grpc.NewServer()
-
-	s.logger.Debug("gRPC server created")
 
 	chat.RegisterChatServiceServer(grpcServer, s)
 
-	s.logger.Debug("registered server with gRPC service")
+	s.logger.Debugf("gRPC servicing @ %s%s", protocol, p)
 
 	err = grpcServer.Serve(lis)
 	if err != nil {
@@ -137,7 +132,7 @@ func (s *Server) listen(
 		}
 
 		select {
-		case s.channels.messagePool <- *msg:
+		case s.channels.messagePool <- msg:
 		default:
 		}
 	}

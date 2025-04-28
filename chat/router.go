@@ -4,11 +4,12 @@ import (
 	"context"
 )
 
-// BuildRouter is a builder function that iterates over a channel of type `T`.
-// The closure returned can be used as an asynchronous process to consume
-// `T` from the channel and apply functions to that type.
+// BuildRouter is a builder function that creates a function that iterates
+// over a channel of type `T`. The closure returned can be used as an
+// asynchronous process to consume `T` from the channel and apply a list of
+// functions, or “routes” to that specified type.
 func BuildRouter[T any](
-	ch chan T, routes ...func(
+	ch chan *T, routes ...func(
 		context.Context,
 		*T,
 	) error,
@@ -17,7 +18,7 @@ func BuildRouter[T any](
 		for msg := range ch {
 			ctx := context.Background()
 			for _, f := range routes {
-				err := f(ctx, &msg)
+				err := f(ctx, msg)
 				if err != nil {
 					errs <- err
 				}

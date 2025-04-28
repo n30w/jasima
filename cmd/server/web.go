@@ -9,17 +9,21 @@ import (
 	"codeberg.org/n30w/jasima/memory"
 )
 
-func (s *ConlangServer) ListenAndServeWebEvents(errs chan<- error) {
-	port := ":7070"
+func (s *ConlangServer) ListenAndServeWebEvents(
+	port string,
+	errs chan<- error,
+) {
+	p := makePortString(port)
+
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/time", s.sseTime)
 	handler.HandleFunc("/events", s.sseChat)
 	handler.HandleFunc("/test/chat", s.sseChat)
 
-	s.logger.Infof("Starting web events server on %s", port)
+	s.logger.Infof("Starting web events server on %s", p)
 
-	err := http.ListenAndServe(port, handler)
+	err := http.ListenAndServe(p, handler)
 	if err != nil {
 		errs <- err
 		return
