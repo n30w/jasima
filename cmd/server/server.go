@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
@@ -60,7 +62,7 @@ func NewConlangServer(
 	e int,
 ) *ConlangServer {
 	c := channels{
-		messagePool:            make(memory.MessageChannel),
+		messagePool:            make(chan chat.Message),
 		systemLayerMessagePool: make(memory.MessageChannel),
 		eventsMessagePool:      make(memory.MessageChannel),
 		exchanged:              make(chan bool),
@@ -90,17 +92,17 @@ func NewConlangServer(
 func (s *ConlangServer) newCommand(
 	c *client,
 	command agent.Command, content ...chat.Content,
-) *memory.Message {
-	msg := &memory.Message{
-		Sender:   s.name,
-		Receiver: c.name,
-		Command:  command,
-		Layer:    c.layer,
-		Text:     "",
+) *chat.Message {
+	msg := &chat.Message{
+		Sender:   s.name.String(),
+		Receiver: c.name.String(),
+		Command:  command.Int32(),
+		Layer:    c.layer.Int32(),
+		Content:  "",
 	}
 
 	if len(content) > 0 {
-		msg.Text = content[0]
+		msg.Content = string(content[0])
 	}
 
 	return msg
@@ -111,7 +113,6 @@ func (s *ConlangServer) sendCommands(
 	commands ...agent.Command,
 ) error {
 	var err error
-
 	for _, v := range clients {
 		for _, cmd := range commands {
 			err = s.sendCommand(cmd, v)
@@ -128,9 +129,94 @@ func (s *ConlangServer) sendCommands(
 	return nil
 }
 
+func (s *ConlangServer) Router(errs chan<- error) {
+	eventsRoute := func(ctx context.Context, pbMsg *chat.Message) error {
+		msg := *memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
+
+		select {
+		case s.channels.eventsMessagePool <- msg:
+			s.logger.Debug("Emitted event message")
+		default:
+		}
+
+		return nil
+	}
+
+	messageRoute := func(ctx context.Context, pbMsg *chat.Message) error {
+		errMsg := "failed to route message"
+
+		// Convert pbMsg into domain type
+
+		msg := *memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
+
+		if msg.Sender == s.name {
+			s.logger.Debugf(
+				"Issued command %s to %s", msg.Command,
+				msg.Receiver,
+			)
+		}
+
+		s.messages = append(s.messages, msg)
+
+		err := saveMessageTo(ctx, s.memory, msg)
+		if err != nil {
+			return errors.Wrap(err, errMsg)
+		}
+
+		if msg.Text != "" {
+			s.logger.Printf("%s: %s", msg.Sender, msg.Text)
+		}
+
+		// Route messages for the server that come from the system layer
+		// agents.
+
+		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
+			Receiver == s.name {
+			s.channels.systemLayerMessagePool <- msg
+			return nil
+		}
+
+		// If the message is not from the server itself, save it to memory
+		// and notify that an exchange has occurred.
+
+		if msg.Sender != s.name {
+			err = saveMessageTo(ctx, s.memory, msg)
+			if err != nil {
+				return errors.Wrap(err, errMsg)
+			}
+
+			select {
+			case s.channels.exchanged <- true:
+			default:
+			}
+		}
+
+		err = s.broadcast(&msg)
+		if err != nil {
+			return errors.Wrap(err, errMsg)
+		}
+
+		return nil
+	}
+
+	routeMessages := chat.BuildRouter[chat.Message](
+		s.channels.messagePool,
+		eventsRoute,
+		messageRoute,
+	)
+
+	go routeMessages(errs)
+}
+
 func (s *ConlangServer) Run(errs chan error, debug bool) {
+	s.Router(errs)
 	go s.ListenAndServeRouter(errs)
-	go s.router()
 	go s.Evolve(errs)
 	go s.ListenAndServeWebEvents(errs)
 
@@ -156,7 +242,7 @@ func (s *ConlangServer) Run(errs chan error, debug bool) {
 			}
 
 			// Output test data to channel.
-			s.outputTestData(msgs)
+			go s.outputTestData(msgs)
 		}(errs)
 	}
 }

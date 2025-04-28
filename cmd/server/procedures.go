@@ -146,12 +146,10 @@ func (s *ConlangServer) iterate(
 	sb.WriteString(s.memory.String())
 	sb.WriteString("\n=== END CHAT LOG ===")
 
-	msg := &memory.Message{
-		Sender:   s.name,
-		Receiver: "",
-		Layer:    chat.SystemLayer,
-		Text:     chat.Content(sb.String()),
-	}
+	msg := chat.NewPbMessage(
+		s.name, "SYSTEM",
+		chat.Content(sb.String()), chat.SystemLayer,
+	)
 
 	s.channels.messagePool <- *msg
 

@@ -20,7 +20,7 @@ import (
 type channels struct {
 	// messagePool contains messages that need to be sent to the clients
 	// connected to the server.
-	messagePool memory.MessageChannel
+	messagePool chan chat.Message
 
 	// systemLayerMessagePool contains messages that are destined for the server.
 	systemLayerMessagePool memory.MessageChannel
@@ -81,10 +81,6 @@ func (s *Server) ListenAndServeRouter(errs chan<- error) {
 // Chat is called by the `client`. The lifetime of this function is for as
 // long as the client using this function is connected.
 func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-
 	firstMsg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -96,11 +92,16 @@ func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 	}
 
 	// Enter an infinite listening session when the client is connected.
-	// Each client receives their own context.
+	// Each client receives their own context. `listen` is a blocking call.
 
-	err = s.listen(ctx, stream, c)
-	if err != nil {
-		return err
+	err = s.listen(stream)
+
+	s.removeClient(c)
+
+	if err == io.EOF {
+		s.logger.Info("Client disconnected", "client", c.name)
+	} else if err != nil {
+		return errors.Wrap(err, "unexpected client disconnection")
 	}
 
 	return nil
@@ -111,63 +112,33 @@ func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 // from the server. It also calls `routeMessage` when a message is received
 // from the connected client.
 func (s *Server) listen(
-	ctx context.Context,
 	stream chat.ChatService_ChatServer,
-	client *client,
 ) error {
-	var err error
-	var pbMsg *chat.Message
-
-	disconnected := false
+	var (
+		err          error
+		msg          *chat.Message
+		disconnected bool
+	)
 
 	for !disconnected {
 
 		// Wait for a message to come in from the client. This is a blocking call.
 
-		pbMsg, err = stream.Recv()
-
-		// Translate the pbMsg into our custom type.
-
-		if err == io.EOF {
-
-			s.removeClient(client)
-
-			s.logger.Info("client disconnected", "client", client.name)
-
+		msg, err = stream.Recv()
+		if err != nil {
 			disconnected = true
+			continue
+		}
 
-		} else if err != nil {
+		// Discard if the server is not listening.
 
-			s.removeClient(client)
+		if !s.listening {
+			continue
+		}
 
-			disconnected = true
-
-			s.logger.Info(
-				"client disconnected",
-				"client",
-				client.name,
-				"reason",
-				err,
-			)
-
-		} else {
-
-			// Discard if the server is not listening.
-
-			if !s.listening {
-				continue
-			}
-
-			msg := memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer,
-			)
-
-			select {
-			case s.channels.messagePool <- *msg:
-				s.logger.Printf("%s: %s", msg.Sender, msg.Text)
-			default:
-			}
+		select {
+		case s.channels.messagePool <- *msg:
+		default:
 		}
 	}
 
@@ -176,56 +147,6 @@ func (s *Server) listen(
 	}
 
 	return nil
-}
-
-// router routes messages to different services based on message parameters.
-// It listens on the `messagePool` channel for messages.
-func (s *Server) router() {
-	for msg := range s.channels.messagePool {
-
-		select {
-		case s.channels.eventsMessagePool <- msg:
-		default:
-		}
-
-		var err error
-
-		s.messages = append(s.messages, msg)
-
-		err = saveMessageTo(context.Background(), s.memory, msg)
-		if err != nil {
-			s.logger.Errorf("failed to save message: %s", err)
-		}
-
-		// Route messages for the server that come from the system layer
-		// agents.
-
-		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
-			Receiver == "SERVER" {
-			s.channels.systemLayerMessagePool <- msg
-			continue
-		}
-
-		// If the message is not from the server itself, save it to memory
-		// and notify that an exchange has occurred.
-
-		if msg.Sender != "SERVER" {
-			err = saveMessageTo(context.Background(), s.memory, msg)
-			if err != nil {
-				s.logger.Errorf("error saving to transcript: %v", err)
-			}
-
-			select {
-			case s.channels.exchanged <- true:
-			default:
-			}
-		}
-
-		err = s.broadcast(&msg)
-		if err != nil {
-			s.logger.Errorf("%v", err)
-		}
-	}
 }
 
 // forward forwards a message `msg` to a client. The client should exist in
