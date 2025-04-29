@@ -1,0 +1,518 @@
+[
+  {
+    "word": "a",
+    "definition": "emphasis, emotion, confirmation"
+  },
+  {
+    "word": "akesi",
+    "definition": "reptile, amphibian"
+  },
+  {
+    "word": "ala",
+    "definition": "no, not, zero"
+  },
+  {
+    "word": "alasa",
+    "definition": "to hunt, forage"
+  },
+  {
+    "word": "ale (ali)",
+    "definition": "all, everything, 100"
+  },
+  {
+    "word": "anpa",
+    "definition": "downward, humble, lowly"
+  },
+  {
+    "word": "ante",
+    "definition": "different, other, changed"
+  },
+  {
+    "word": "anu",
+    "definition": "or (connects phrases)"
+  },
+  {
+    "word": "awen",
+    "definition": "enduring, kept, protected; continue"
+  },
+  {
+    "word": "e",
+    "definition": "direct object marker"
+  },
+  {
+    "word": "en",
+    "definition": "multiple subject marker"
+  },
+  {
+    "word": "esun",
+    "definition": "market, shop, fair"
+  },
+  {
+    "word": "ijo",
+    "definition": "thing, object, phenomenon"
+  },
+  {
+    "word": "ike",
+    "definition": "bad, negative, irrelevant"
+  },
+  {
+    "word": "ilo",
+    "definition": "tool, machine, device"
+  },
+  {
+    "word": "insa",
+    "definition": "inside, content, organ"
+  },
+  {
+    "word": "jaki",
+    "definition": "disgusting, unclean"
+  },
+  {
+    "word": "jan",
+    "definition": "person, somebody"
+  },
+  {
+    "word": "jelo",
+    "definition": "yellow"
+  },
+  {
+    "word": "jo",
+    "definition": "to have, contain, hold"
+  },
+  {
+    "word": "kala",
+    "definition": "sea creature"
+  },
+  {
+    "word": "kalama",
+    "definition": "sound, to make sound"
+  },
+  {
+    "word": "kama",
+    "definition": "arriving, future, to become"
+  },
+  {
+    "word": "kasi",
+    "definition": "plant, grass, leaf"
+  },
+  {
+    "word": "ken",
+    "definition": "can, able, possible"
+  },
+  {
+    "word": "kepeken",
+    "definition": "to use, with"
+  },
+  {
+    "word": "kijetesantakalu",
+    "definition": "(joke word) musteloid, raccoon"
+  },
+  {
+    "word": "kili",
+    "definition": "fruit, vegetable"
+  },
+  {
+    "word": "kin",
+    "definition": "also, too"
+  },
+  {
+    "word": "kipisi",
+    "definition": "to cut, divide"
+  },
+  {
+    "word": "kiwen",
+    "definition": "hard object, metal, stone"
+  },
+  {
+    "word": "ko",
+    "definition": "clay, paste, powder"
+  },
+  {
+    "word": "kon",
+    "definition": "air, spirit, essence"
+  },
+  {
+    "word": "ku",
+    "definition": "to interact with Toki Pona Dictionary"
+  },
+  {
+    "word": "kule",
+    "definition": "color, colorful"
+  },
+  {
+    "word": "kulupu",
+    "definition": "group, community"
+  },
+  {
+    "word": "kute",
+    "definition": "ear, to hear"
+  },
+  {
+    "word": "la",
+    "definition": "context marker"
+  },
+  {
+    "word": "lape",
+    "definition": "sleeping, resting"
+  },
+  {
+    "word": "laso",
+    "definition": "blue, green"
+  },
+  {
+    "word": "lawa",
+    "definition": "head, mind, leader"
+  },
+  {
+    "word": "leko",
+    "definition": "square, block"
+  },
+  {
+    "word": "len",
+    "definition": "cloth, cover"
+  },
+  {
+    "word": "lete",
+    "definition": "cold, raw"
+  },
+  {
+    "word": "li",
+    "definition": "predicate marker"
+  },
+  {
+    "word": "lili",
+    "definition": "small, little, few"
+  },
+  {
+    "word": "linja",
+    "definition": "long flexible thing (string, hair)"
+  },
+  {
+    "word": "lipu",
+    "definition": "flat object, paper, document"
+  },
+  {
+    "word": "loje",
+    "definition": "red"
+  },
+  {
+    "word": "lon",
+    "definition": "located at, true"
+  },
+  {
+    "word": "luka",
+    "definition": "hand, arm; five"
+  },
+  {
+    "word": "lukin",
+    "definition": "to see, examine"
+  },
+  {
+    "word": "lupa",
+    "definition": "door, hole"
+  },
+  {
+    "word": "ma",
+    "definition": "land, outdoors"
+  },
+  {
+    "word": "mama",
+    "definition": "parent, caretaker"
+  },
+  {
+    "word": "mani",
+    "definition": "money, currency"
+  },
+  {
+    "word": "meli",
+    "definition": "female"
+  },
+  {
+    "word": "mi",
+    "definition": "I, me, we"
+  },
+  {
+    "word": "mije",
+    "definition": "male"
+  },
+  {
+    "word": "moku",
+    "definition": "to eat, drink; food"
+  },
+  {
+    "word": "moli",
+    "definition": "dead, dying"
+  },
+  {
+    "word": "monsi",
+    "definition": "back, behind"
+  },
+  {
+    "word": "monsuta",
+    "definition": "fear, monster"
+  },
+  {
+    "word": "mu",
+    "definition": "animal sound"
+  },
+  {
+    "word": "mun",
+    "definition": "moon, night sky object"
+  },
+  {
+    "word": "musi",
+    "definition": "fun, entertainment"
+  },
+  {
+    "word": "mute",
+    "definition": "many, a lot, very"
+  },
+  {
+    "word": "namako",
+    "definition": "spice, additional"
+  },
+  {
+    "word": "nanpa",
+    "definition": "number marker"
+  },
+  {
+    "word": "nasa",
+    "definition": "strange, foolish"
+  },
+  {
+    "word": "nasin",
+    "definition": "way, road, method"
+  },
+  {
+    "word": "nena",
+    "definition": "bump, hill, nose"
+  },
+  {
+    "word": "ni",
+    "definition": "this, that"
+  },
+  {
+    "word": "nimi",
+    "definition": "word, name"
+  },
+  {
+    "word": "noka",
+    "definition": "foot, leg"
+  },
+  {
+    "word": "o",
+    "definition": "vocative/imperative"
+  },
+  {
+    "word": "olin",
+    "definition": "love, respect"
+  },
+  {
+    "word": "ona",
+    "definition": "third-person pronoun"
+  },
+  {
+    "word": "open",
+    "definition": "to begin, opening"
+  },
+  {
+    "word": "pakala",
+    "definition": "broken, to mess up"
+  },
+  {
+    "word": "pali",
+    "definition": "to do, to work"
+  },
+  {
+    "word": "palisa",
+    "definition": "long hard object, stick"
+  },
+  {
+    "word": "pan",
+    "definition": "grain, bread, pasta"
+  },
+  {
+    "word": "pana",
+    "definition": "to give, send"
+  },
+  {
+    "word": "pi",
+    "definition": "regroups modifiers"
+  },
+  {
+    "word": "pilin",
+    "definition": "heart, feeling"
+  },
+  {
+    "word": "pimeja",
+    "definition": "black, dark"
+  },
+  {
+    "word": "pini",
+    "definition": "finished, past"
+  },
+  {
+    "word": "pipi",
+    "definition": "insect"
+  },
+  {
+    "word": "poka",
+    "definition": "side, nearby"
+  },
+  {
+    "word": "poki",
+    "definition": "container, box, cup"
+  },
+  {
+    "word": "pona",
+    "definition": "good, positive, simple"
+  },
+  {
+    "word": "pu",
+    "definition": "interacting with Toki Pona book"
+  },
+  {
+    "word": "sama",
+    "definition": "same, similar"
+  },
+  {
+    "word": "seli",
+    "definition": "fire, heat source"
+  },
+  {
+    "word": "selo",
+    "definition": "skin, outer layer"
+  },
+  {
+    "word": "seme",
+    "definition": "what, which"
+  },
+  {
+    "word": "sewi",
+    "definition": "above, divine"
+  },
+  {
+    "word": "sijelo",
+    "definition": "body, physical state"
+  },
+  {
+    "word": "sike",
+    "definition": "circle, cycle, year"
+  },
+  {
+    "word": "sin",
+    "definition": "new, fresh, another"
+  },
+  {
+    "word": "sina",
+    "definition": "you"
+  },
+  {
+    "word": "sinpin",
+    "definition": "front, face, wall"
+  },
+  {
+    "word": "sitelen",
+    "definition": "image, writing, symbol"
+  },
+  {
+    "word": "soko",
+    "definition": "mushroom"
+  },
+  {
+    "word": "sona",
+    "definition": "knowledge, to know"
+  },
+  {
+    "word": "soweli",
+    "definition": "land animal"
+  },
+  {
+    "word": "suli",
+    "definition": "big, large"
+  },
+  {
+    "word": "suno",
+    "definition": "sun, light source"
+  },
+  {
+    "word": "supa",
+    "definition": "flat surface, table"
+  },
+  {
+    "word": "suwi",
+    "definition": "sweet, cute"
+  },
+  {
+    "word": "tan",
+    "definition": "from, because"
+  },
+  {
+    "word": "taso",
+    "definition": "but, only"
+  },
+  {
+    "word": "tawa",
+    "definition": "to, moving, for"
+  },
+  {
+    "word": "telo",
+    "definition": "water, liquid"
+  },
+  {
+    "word": "tenpo",
+    "definition": "time, period"
+  },
+  {
+    "word": "toki",
+    "definition": "language, speech"
+  },
+  {
+    "word": "tomo",
+    "definition": "indoor space, house"
+  },
+  {
+    "word": "tonsi",
+    "definition": "non-binary, trans"
+  },
+  {
+    "word": "tu",
+    "definition": "two"
+  },
+  {
+    "word": "unpa",
+    "definition": "sex"
+  },
+  {
+    "word": "uta",
+    "definition": "mouth, lips"
+  },
+  {
+    "word": "utala",
+    "definition": "fight, challenge"
+  },
+  {
+    "word": "walo",
+    "definition": "white, light-colored"
+  },
+  {
+    "word": "wan",
+    "definition": "one, unique"
+  },
+  {
+    "word": "waso",
+    "definition": "bird, flying creature"
+  },
+  {
+    "word": "wawa",
+    "definition": "strong, energetic"
+  },
+  {
+    "word": "weka",
+    "definition": "absent, away"
+  },
+  {
+    "word": "wile",
+    "definition": "need, want, must"
+  }
+]
