@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/utils"
 	"github.com/charmbracelet/log"
+	"github.com/pkg/errors"
 )
 
 type WebClient[T any] struct {
@@ -19,34 +21,34 @@ type WebClient[T any] struct {
 	cancel context.CancelFunc
 }
 
-func (c *WebClient[T]) write() {
+func (c *WebClient[T]) serve() error {
+	errMsg := "failed serving client"
+
 	rc := http.NewResponseController(c.conn)
 
 	for {
 		select {
 		case msg, ok := <-c.send:
 			if !ok {
-				return
+				return nil
 			}
 
 			j, err := json.Marshal(msg)
 			if err != nil {
-				c.cancel()
-				return
+				return errors.Wrap(err, errMsg)
 			}
 
 			d := string(j)
 
 			_, err = fmt.Fprintf(c.conn, "data: %s\n\n", d)
 			if err != nil {
-				c.cancel()
-				return
+				return errors.Wrap(err, errMsg)
 			}
 
 			rc.Flush()
 
 		case <-c.done:
-			return
+			return nil
 		}
 	}
 }
@@ -77,6 +79,57 @@ func (b *Broadcaster[T]) Broadcast(msg T) {
 	}
 }
 
+func (b *Broadcaster[T]) InitialData(d *utils.FixedQueue[T]) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		addEventHeaders(w)
+
+		ctx, cancel := context.WithCancel(r.Context())
+
+		client := &WebClient[T]{
+			send:   make(chan T, 10),
+			conn:   w,
+			done:   ctx.Done(),
+			cancel: cancel,
+		}
+
+		b.mu.Lock()
+		b.webClients[client] = struct{}{}
+		b.mu.Unlock()
+
+		b.logger.Infof("Web client connected @ %s", r.RemoteAddr)
+
+		defer func() {
+			b.mu.Lock()
+			delete(b.webClients, client)
+			b.mu.Unlock()
+			client.cancel()
+			close(client.send)
+			b.logger.Infof("Web client disconnected @ %s", r.RemoteAddr)
+		}()
+
+		// Send initial data so there's something to see on the frontend, other than
+		// just blank data. Make a copy of the queue that is passed in so that we do
+		// not actually discard the stuff inside it. After all, we're using
+		// a pointer to reference its current value for each new client.
+
+		q, err := d.ToSlice()
+		if err != nil {
+			b.logger.Error(err)
+		}
+
+		for i := range len(q) {
+			client.send <- q[i]
+		}
+
+		// Then serve. This function loops until the client disconnects.
+
+		err = client.serve()
+		if err != nil {
+			client.cancel()
+		}
+	}
+}
+
 func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 	addEventHeaders(w)
 
@@ -93,7 +146,7 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 	b.webClients[client] = struct{}{}
 	b.mu.Unlock()
 
-	b.logger.Infof("Web client connected %s", r.RemoteAddr)
+	b.logger.Infof("Web client connected @ %s", r.RemoteAddr)
 
 	defer func() {
 		b.mu.Lock()
@@ -101,15 +154,15 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 		b.mu.Unlock()
 		client.cancel()
 		close(client.send)
-		b.logger.Infof("Web client disconnected %s", r.RemoteAddr)
+		b.logger.Infof("Web client disconnected @ %s", r.RemoteAddr)
 	}()
 
-	client.write()
+	client.serve()
 }
 
 type Broadcasters struct {
 	messages        *Broadcaster[memory.Message]
-	generation      *Broadcaster[generation]
+	generation      *Broadcaster[memory.Generation]
 	currentTime     *Broadcaster[string]
 	testMessageFeed *Broadcaster[memory.Message]
 }
@@ -123,9 +176,17 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/time", s.broadcasters.currentTime.HandleClient)
-	handler.HandleFunc("/chat", s.broadcasters.messages.HandleClient)
+	handler.HandleFunc(
+		"/chat", s.broadcasters.messages.InitialData(
+			s.
+				initialData.recentMessages,
+		),
+	)
 	handler.HandleFunc("/generations", s.broadcasters.generation.HandleClient)
-	handler.HandleFunc("/test/chat", s.broadcasters.testMessageFeed.HandleClient)
+	handler.HandleFunc(
+		"/test/chat",
+		s.broadcasters.testMessageFeed.InitialData(s.initialData.recentMessages),
+	)
 
 	s.logger.Infof("Starting web events service on %s", p)
 

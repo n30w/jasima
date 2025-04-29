@@ -17,22 +17,29 @@ import (
 // total number of back and forth rounds are complete. Layer control and message
 // routing are decoupled.
 func (s *ConlangServer) iterate(
-	initialGeneration generation,
+	initialGeneration memory.Generation,
 	initialLayer chat.Layer,
 	exchanges int,
-) (generation, error) {
+) (memory.Generation, error) {
+	newGeneration := memory.Generation{
+		Transcript:     make([]memory.Message, 0),
+		Logography:     initialGeneration.Logography,
+		Specifications: initialGeneration.Specifications,
+	}
 	if initialLayer == chat.SystemLayer {
-		return generation{
-			transcript:     make([]memory.Message, 0),
-			logography:     initialGeneration.logography,
-			specifications: initialGeneration.specifications,
+		s.logger.Info("initial layer is system")
+		return memory.Generation{
+			Transcript:     make([]memory.Message, 0),
+			Logography:     initialGeneration.Logography,
+			Specifications: initialGeneration.Specifications,
 		}, nil
 	}
 
 	s.logger.Infof("%d: Recursing on %s", initialLayer, initialLayer)
 
 	prevGeneration, err := s.iterate(
-		initialGeneration, initialLayer-1,
+		initialGeneration,
+		initialLayer-1,
 		exchanges,
 	)
 	if err != nil {
@@ -81,25 +88,22 @@ func (s *ConlangServer) iterate(
 				"The current specification is for: %s. "+
 					"Here is the current specification:\n%s",
 				initialLayer,
-				initialGeneration.specifications[initialLayer].String(),
+				initialGeneration.Specifications[initialLayer].String(),
 			),
 		)(sysClient)
 
 		sb strings.Builder
 	)
 
-	newGeneration := generation{
-		// transcript currently does NOT save the previous chat's transcript
-		// due to rate limit issues. Gotta fix this.
-		transcript:     make([]memory.Message, 0),
-		logography:     prevGeneration.logography,
-		specifications: prevGeneration.specifications,
-	}
+	newGeneration.Transcript = append(
+		newGeneration.Transcript,
+		prevGeneration.Transcript...,
+	)
 
 	sb.WriteString(initialInstructions)
 
 	for i := initialLayer; i > 0; i-- {
-		sb.WriteString(newGeneration.specifications[i].String())
+		sb.WriteString(newGeneration.Specifications[i].String())
 		sb.WriteString("\n")
 	}
 
@@ -129,14 +133,20 @@ func (s *ConlangServer) iterate(
 	sb.Reset()
 
 	// The system agent will ONLY summarize the chat log, and not read the
-	// other specifications for other layers (for now at least).
+	// other Specifications for other layers (for now at least).
 	s.channels.messagePool <- addSysAgentInstructions
 	s.channels.messagePool <- cmd(agent.Unlatch)(sysClient)
+
+	// Only send the previous `n` messages based on config.
+
+	currentLayerTranscript := transcript[len(transcript)-s.config.
+		procedures.
+		maxExchanges:]
 
 	msg := chat.NewPbMessage(
 		s.name,
 		sysClient.name,
-		chat.Content(transcriptToString(transcript)),
+		chat.Content(transcriptToString(currentLayerTranscript)),
 		chat.SystemLayer,
 	)
 
@@ -158,13 +168,13 @@ func (s *ConlangServer) iterate(
 	s.logger.Infof(
 		"%s took %s to complete",
 		initialLayer,
-		timer().Truncate(1*time.Millisecond),
+		timer().Truncate(time.Millisecond),
 	)
 
 	// End of side effects.
 
-	newGeneration.specifications[initialLayer] = specPrime.Text
-	newGeneration.transcript = append(newGeneration.transcript, transcript...)
+	newGeneration.Specifications[initialLayer] = specPrime.Text
+	newGeneration.Transcript = append(newGeneration.Transcript, transcript...)
 
 	return newGeneration, nil
 }
@@ -173,9 +183,9 @@ func (s *ConlangServer) iterate(
 func (s *ConlangServer) Evolve(errs chan<- error) {
 	var (
 		err         error
+		errMsg      = "failed to evolve generation %d"
 		targetTotal = 9
 		allJoined   = make(chan struct{})
-		generations = s.config.procedures.maxGenerations
 	)
 
 	go func(c chan<- struct{}) {
@@ -193,16 +203,23 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.logger.Info("All clients joined!")
 
-	for i := range generations {
+	for i := range s.config.procedures.maxGenerations {
 		elapsedTime := utils.Timer(time.Now())
+
+		genSlice, err := s.generations.ToSlice()
+		if err != nil {
+			errs <- errors.Wrapf(err, errMsg, i)
+		}
+
 		// Starts on Layer 4, recurses to 1.
+
 		newGeneration, err := s.iterate(
-			s.generations[i],
+			genSlice[i],
 			chat.LogographyLayer,
 			s.config.procedures.maxExchanges,
 		)
 		if err != nil {
-			errs <- errors.Wrapf(err, "failed to evolve generation %d", i)
+			errs <- errors.Wrapf(err, errMsg, i)
 			return
 		}
 
@@ -211,10 +228,14 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			elapsedTime().Truncate(10*time.Millisecond),
 		)
 
-		s.generations = append(s.generations, newGeneration)
+		err = s.generations.Enqueue(newGeneration)
+		if err != nil {
+			errs <- errors.Wrapf(err, errMsg, i)
+		}
 
 		// Save specs to memory
 		// send results to SYSTEM LLM
+		// If there are any new words, add them to the generation dicctionary.
 		// Save result to LLM.
 		s.broadcasters.generation.Broadcast(newGeneration)
 	}
@@ -247,7 +268,13 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		"./outputs/generations/generations_%s.json",
 		time.Now().Format("20060102150405"),
 	)
-	err = saveToJson(s.generations, fileName)
+
+	g, err := s.generations.ToSlice()
+	if err != nil {
+		errs <- errors.Wrap(err, "evolution failed to save JSON")
+	}
+
+	err = saveToJson(g, fileName)
 	if err != nil {
 		errs <- errors.Wrap(err, "evolution failed to save JSON")
 		return

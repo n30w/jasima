@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"codeberg.org/n30w/jasima/agent"
+	"codeberg.org/n30w/jasima/utils"
 
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
@@ -42,27 +43,20 @@ type MemoryService interface {
 	fmt.Stringer
 }
 
-// generation contains all generational information related to a single
-// iteration of a conlang's development.
-type generation struct {
-	transcript     []memory.Message
-	logography     logographyGeneration
-	specifications chat.LayerMessageSet
+// initialData contains frontend initializing data so that, when connected,
+// data is shown rather than having nothing.
+type initialData struct {
+	recentMessages *utils.FixedQueue[memory.Message]
 }
 
 type ConlangServer struct {
 	Server
-	config          *config
-	mostRecentEvent memory.Message
-	procedureChan   chan memory.Message
-	generations     []generation
-	broadcasters    *Broadcasters
-
-	// specification are serialized versions of the Markdown specifications.
-	specification chat.LayerMessageSet
+	config        *config
+	procedureChan chan memory.Message
+	generations   *utils.FixedQueue[memory.Generation]
+	broadcasters  *Broadcasters
+	initialData   *initialData
 }
-
-type logographyGeneration map[string]string
 
 type procedureConfig struct {
 	// maxExchanges represents the total exchanges allowed per layer
@@ -95,7 +89,8 @@ func NewConlangServer(
 	m MemoryService,
 ) (*ConlangServer, error) {
 	var (
-		c = channels{
+		errMsg = "failed to initialize new conlang server"
+		c      = channels{
 			messagePool:            make(chan *chat.Message),
 			systemLayerMessagePool: make(memory.MessageChannel),
 		}
@@ -114,8 +109,6 @@ func NewConlangServer(
 		cfg.procedures.maxGenerations = DefaultMaxGenerations
 	}
 
-	initialGen := generation{}
-
 	// Load and serialize specifications.
 
 	specifications, err := newLangSpecification(cfg.files.specifications)
@@ -123,27 +116,50 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to initialize server")
 	}
 
-	initialGen.specifications = specifications
-
 	// Load and serialize Logography SVGs.
 
 	logographyGen1, err := loadSVGsFromDirectory(cfg.files.logography)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load logography")
+		return nil, errors.Wrap(err, "failed to load Logography")
 	}
 
-	initialGen.logography = logographyGen1
+	initialGen := memory.Generation{
+		Transcript:     make([]memory.Message, 0),
+		Logography:     logographyGen1,
+		Specifications: specifications,
+	}
 
-	generations := make([]generation, 0)
-	generations = append(generations, initialGen)
+	generations, err := utils.NewFixedQueue[memory.Generation](
+		cfg.procedures.
+			maxGenerations + 1,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	err = generations.Enqueue(initialGen)
+	if err != nil {
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	// l.Debugf("Current generations: %#v", generations)
 
 	// Initialize web broadcasters
 
 	b := &Broadcasters{
 		messages:        NewBroadcaster[memory.Message](l),
-		generation:      NewBroadcaster[generation](l),
+		generation:      NewBroadcaster[memory.Generation](l),
 		currentTime:     NewBroadcaster[string](l),
 		testMessageFeed: NewBroadcaster[memory.Message](l),
+	}
+
+	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
+	if err != nil {
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	initData := &initialData{
+		recentMessages: recentMessagesQueue,
 	}
 
 	return &ConlangServer{
@@ -155,9 +171,9 @@ func NewConlangServer(
 			channels:  c,
 			listening: true,
 		},
+		initialData:   initData,
 		generations:   generations,
 		procedureChan: make(chan memory.Message),
-		specification: specifications,
 		broadcasters:  b,
 		config:        cfg,
 	}, nil
@@ -172,7 +188,10 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		s.mostRecentEvent = msg
+		err := s.initialData.recentMessages.Enqueue(msg)
+		if err != nil {
+			s.logger.Errorf("failed to save message to initialData: %v", err)
+		}
 
 		s.broadcasters.messages.Broadcast(msg)
 

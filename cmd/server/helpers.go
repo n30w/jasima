@@ -17,8 +17,11 @@ func makePortString(p string) string {
 	return ":" + p
 }
 
-func loadSVGsFromDirectory(dirPath string) (logographyGeneration, error) {
-	svgs := make(logographyGeneration)
+func loadSVGsFromDirectory(dirPath string) (
+	memory.LogographyGeneration,
+	error,
+) {
+	svgs := make(memory.LogographyGeneration)
 
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -53,8 +56,8 @@ func loadSVGsFromDirectory(dirPath string) (logographyGeneration, error) {
 	return svgs, nil
 }
 
-func newLangSpecification(p string) (chat.LayerMessageSet, error) {
-	ls := make(chat.LayerMessageSet)
+func newLangSpecification(p string) (memory.SpecificationGeneration, error) {
+	ls := make(memory.SpecificationGeneration)
 
 	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))
 	if err != nil {
