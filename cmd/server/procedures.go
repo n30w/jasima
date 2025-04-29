@@ -218,6 +218,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		// Save specs to memory
 		// send results to SYSTEM LLM
 		// Save result to LLM.
+		s.broadcasters.generation.Broadcast(newGeneration)
 	}
 
 	s.listening = false

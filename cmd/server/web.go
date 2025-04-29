@@ -124,6 +124,7 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 
 	handler.HandleFunc("/time", s.broadcasters.currentTime.HandleClient)
 	handler.HandleFunc("/chat", s.broadcasters.messages.HandleClient)
+	handler.HandleFunc("/generations", s.broadcasters.generation.HandleClient)
 	handler.HandleFunc("/test/chat", s.broadcasters.testMessageFeed.HandleClient)
 
 	s.logger.Infof("Starting web events service on %s", p)
