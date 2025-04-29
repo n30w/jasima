@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
+	"github.com/pkg/errors"
 )
 
 func makePortString(p string) string {
@@ -137,4 +139,18 @@ func transcriptToString(transcript []memory.Message) string {
 	sb.WriteString("=== END CHAT LOG ===\n")
 
 	return sb.String()
+}
+
+func saveToJson(data any, fileName string) error {
+	d, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "failed to save JSON")
+	}
+
+	err = os.WriteFile(fileName, d, 0o644)
+	if err != nil {
+		return errors.Wrap(err, "failed to write file")
+	}
+
+	return nil
 }
