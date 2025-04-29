@@ -1,5 +1,5 @@
 # Name of the agent.
-name = "SYSTEM"
+name = "SYSTEM_AGENT_A"
 
 # Receiver of name's messages.
 peers = ["SERVER"]
