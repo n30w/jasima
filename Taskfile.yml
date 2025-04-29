@@ -6,6 +6,9 @@ tasks:
   lint:
     cmds:
       - golangci-lint run
+  count:
+    cmds:
+      - tokei --exclude "*.{svg,json,yml,yaml}" .
   up-deps:
     cmds:
       - go get -u ./...
