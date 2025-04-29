@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	DefaultSpecResourcePath = "./resources/specifications"
-	DefaultSvgResourcePath  = "./resources/logography"
-	DefaultLogToFilePath    = "./outputs/logs/server_log_%s.log"
-	DefaultDebugToggle      = false
-	DefaultMaxExchanges     = 25
-	DefaultMaxGenerations   = 1
-	DefaultLogToFileToggle  = false
-	DefaultServerName       = "SERVER"
+	DefaultSpecResourcePath   = "./resources/specifications"
+	DefaultDictionaryJsonPath = "./resources/specifications/dictionary.json"
+	DefaultSvgResourcePath    = "./resources/logography"
+	DefaultLogToFilePath      = "./outputs/logs/server_log_%s.log"
+	DefaultDebugToggle        = false
+	DefaultMaxExchanges       = 25
+	DefaultMaxGenerations     = 1
+	DefaultLogToFileToggle    = false
+	DefaultServerName         = "SERVER"
 )
 
 func main() {
@@ -39,6 +40,11 @@ func main() {
 			"specPath",
 			DefaultSpecResourcePath,
 			"path to directory containing specifications",
+		)
+		flagDictionaryJsonPath = flag.String(
+			"dictPath",
+			DefaultDictionaryJsonPath,
+			"path to initial json dictionary",
 		)
 		flagExchanges = flag.Int(
 			"exchanges",
@@ -95,12 +101,11 @@ func main() {
 		files: filePathConfig{
 			specifications: *flagSpecificationPath,
 			logography:     *flagSvgPath,
+			dictionary:     *flagDictionaryJsonPath,
 		},
 		procedures: procedureConfig{
-			maxExchanges:          *flagExchanges,
-			maxGenerations:        *flagGenerations,
-			originalSpecification: nil,
-			specifications:        nil,
+			maxExchanges:   *flagExchanges,
+			maxGenerations: *flagGenerations,
 		},
 	}
 

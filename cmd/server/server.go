@@ -66,14 +66,12 @@ type procedureConfig struct {
 	// maxGenerations represents the maximum number of generations to evolve.
 	// When set to 0, the procedure evolves forever.
 	maxGenerations int
-
-	originalSpecification chat.LayerMessageSet
-	specifications        []chat.LayerMessageSet
 }
 
 type filePathConfig struct {
 	specifications string
 	logography     string
+	dictionary     string
 }
 
 type config struct {
@@ -111,22 +109,33 @@ func NewConlangServer(
 
 	// Load and serialize specifications.
 
-	specifications, err := newLangSpecification(cfg.files.specifications)
+	specificationsGen1, err := loadSpecificationsFromFile(
+		cfg.files.
+			specifications,
+	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize server")
+		return nil, errors.Wrap(err, errMsg)
 	}
 
-	// Load and serialize Logography SVGs.
+	// Load and serialize logography SVGs.
 
-	logographyGen1, err := loadSVGsFromDirectory(cfg.files.logography)
+	logographyGen1, err := loadLogographySvgsFromFile(cfg.files.logography)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load Logography")
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	// Load and serialize dictionary.
+
+	dictionaryGen1, err := loadDictionaryFromFile(cfg.files.dictionary)
+	if err != nil {
+		return nil, errors.Wrap(err, errMsg)
 	}
 
 	initialGen := memory.Generation{
 		Transcript:     make([]memory.Message, 0),
 		Logography:     logographyGen1,
-		Specifications: specifications,
+		Specifications: specificationsGen1,
+		Dictionary:     dictionaryGen1,
 	}
 
 	generations, err := utils.NewFixedQueue[memory.Generation](
@@ -141,8 +150,6 @@ func NewConlangServer(
 	if err != nil {
 		return nil, errors.Wrap(err, errMsg)
 	}
-
-	// l.Debugf("Current generations: %#v", generations)
 
 	// Initialize web broadcasters
 
