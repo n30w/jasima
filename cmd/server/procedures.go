@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -233,24 +231,29 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		return
 	}
 
-	data, err := json.MarshalIndent(allMsgs, "", "  ")
-	if err != nil {
-		errs <- err
-		return
-	}
-
-	// Write to file
-
 	fileName := fmt.Sprintf(
 		"./outputs/chats/chat_%s.json",
 		time.Now().Format("20060102150405"),
 	)
-
-	err = os.WriteFile(fileName, data, 0o644)
+	err = saveToJson(allMsgs, fileName)
 	if err != nil {
-		errs <- err
+		errs <- errors.Wrap(err, "evolution failed to save JSON")
 		return
 	}
+
+	s.logger.Infof("Saved chat to %s", fileName)
+
+	fileName = fmt.Sprintf(
+		"./outputs/generations/generations_%s.json",
+		time.Now().Format("20060102150405"),
+	)
+	err = saveToJson(s.generations, fileName)
+	if err != nil {
+		errs <- errors.Wrap(err, "evolution failed to save JSON")
+		return
+	}
+
+	s.logger.Infof("Saved generations to %s", fileName)
 }
 
 // outputTestData continuously outputs messages to the test API. This is
