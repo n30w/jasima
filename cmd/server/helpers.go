@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 	"github.com/pkg/errors"
@@ -17,7 +16,7 @@ func makePortString(p string) string {
 	return ":" + p
 }
 
-func loadSVGsFromDirectory(dirPath string) (
+func loadLogographySvgsFromFile(dirPath string) (
 	memory.LogographyGeneration,
 	error,
 ) {
@@ -56,7 +55,10 @@ func loadSVGsFromDirectory(dirPath string) (
 	return svgs, nil
 }
 
-func newLangSpecification(p string) (memory.SpecificationGeneration, error) {
+func loadSpecificationsFromFile(p string) (
+	memory.SpecificationGeneration,
+	error,
+) {
 	ls := make(memory.SpecificationGeneration)
 
 	b, err := os.ReadFile(filepath.Join(p, "dictionary.md"))
@@ -90,44 +92,29 @@ func newLangSpecification(p string) (memory.SpecificationGeneration, error) {
 	return ls, nil
 }
 
-type (
-	command       func(agent.Command, ...string) commandTarget
-	commandTarget func(*client) *chat.Message
-)
+func loadDictionaryFromFile(p string) (memory.DictionaryGeneration, error) {
+	dict := make(memory.DictionaryGeneration)
 
-func buildCommand(sender string) command {
-	return func(
-		command agent.Command,
-		content ...string,
-	) commandTarget {
-		return func(c *client) *chat.Message {
-			msg := &chat.Message{
-				Sender:   sender,
-				Receiver: c.name.String(),
-				Command:  command.Int32(),
-				Layer:    c.layer.Int32(),
-				Content:  "",
-			}
-
-			if len(content) > 0 {
-				msg.Content = content[0]
-			}
-
-			return msg
-		}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to load dictionary file %s", p)
 	}
-}
 
-func sendCommandBuilder(
-	pool chan<- *chat.Message,
-) func([]*client, ...commandTarget) {
-	return func(clients []*client, commands ...commandTarget) {
-		for _, c := range clients {
-			for _, cmd := range commands {
-				pool <- cmd(c)
-			}
-		}
+	var entries []struct {
+		Word       string
+		Definition string
 	}
+
+	err = json.Unmarshal(data, &entries)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to load dictionary file %s", p)
+	}
+
+	for _, entry := range entries {
+		dict[entry.Word] = entry.Definition
+	}
+
+	return dict, nil
 }
 
 func transcriptToString(transcript []memory.Message) string {
