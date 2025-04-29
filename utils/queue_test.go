@@ -4,26 +4,11 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 )
 
-// Generation contains all generational information related to a single
-// iteration of a conlang's development.
-type Generation struct {
-	Transcript     []memory.Message
-	Logography     LogographyGeneration
-	Specifications chat.LayerMessageSet
-}
-
-type ts interface {
-	Generation | string
-}
-
-type LogographyGeneration map[string]string
-
 func TestFixedQueue_ToSlice(t *testing.T) {
-	type testCase[T ts] struct {
+	type testCase[T any] struct {
 		name    string
 		q       *FixedQueue[T]
 		want    []T
@@ -34,19 +19,22 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 		{Text: "Hello World"},
 	}
 
-	q, _ := NewFixedQueue[Generation](1)
+	q, _ := NewFixedQueue[memory.Generation](1)
 	q.Enqueue(
-		Generation{Transcript: correctTranscript, Logography: LogographyGeneration{}},
+		memory.Generation{
+			Transcript: correctTranscript,
+			Logography: memory.LogographyGeneration{},
+		},
 	)
 
-	tests := []testCase[Generation]{
+	tests := []testCase[memory.Generation]{
 		{
-			name: "string",
+			name: "slices are equal",
 			q:    q,
-			want: []Generation{
+			want: []memory.Generation{
 				{
 					Transcript: correctTranscript,
-					Logography: LogographyGeneration{},
+					Logography: memory.LogographyGeneration{},
 				},
 			},
 			wantErr: false,
