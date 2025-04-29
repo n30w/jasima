@@ -21,13 +21,13 @@ tasks:
       - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="toki" -peers="pona" -model=5
   run-agent-pona:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=1.57 -layer=1 -name="pona" -peers="toki" -model=2
+      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="pona" -peers="toki" -model=1
   run-agent-penny:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.75 -layer=2 -name="penny" -peers="tails" -model=5
   run-agent-tails:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.72 -layer=2 -name="tails" -peers="penny" -model=2
+      - go run ./cmd/agent -debug=true -temperature=0.72 -layer=2 -name="tails" -peers="penny" -model=1
   run-agent-nickel:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.78 -layer=3 -name="nickel" -peers="dime" -model=1
@@ -40,9 +40,12 @@ tasks:
   run-agent-ono:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=1.52 -layer=4 -name="ono" -peers="tako" -model=0
-  run-agent-system:
+  run-agent-system-a:
     cmds:
       - go run ./cmd/agent -configFile="./cmd/configs/sys_agent.toml" -debug=true -model=5
+  run-agent-system-b:
+    cmds:
+      - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_b.toml" -debug=true -model=1 -temperature=0.75
   run-server:
     cmds:
-      - go run ./cmd/server -debug=true -logToFile=false -exchanges=16
+      - go run ./cmd/server -debug=true -logToFile=false -exchanges=10

@@ -16,4 +16,6 @@ procs:
   ono:
     shell: "task run-agent-ono"
   system-a:
-    shell: "task run-agent-system"
+    shell: "task run-agent-system-a"
+  system-b:
+    shell: "task run-agent-system-b"
