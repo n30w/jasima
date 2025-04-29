@@ -16,6 +16,16 @@ func makePortString(p string) string {
 	return ":" + p
 }
 
+func newTranscriptGeneration() memory.TranscriptGeneration {
+	t := make(memory.TranscriptGeneration)
+
+	for i := range chat.LogographyLayer + 1 {
+		t[i] = make([]memory.Message, 0)
+	}
+
+	return t
+}
+
 func loadLogographySvgsFromFile(dirPath string) (
 	memory.LogographyGeneration,
 	error,
@@ -89,6 +99,8 @@ func loadSpecificationsFromFile(p string) (
 
 	ls[chat.PhoneticsLayer] = chat.Content(b)
 
+	ls[chat.SystemLayer] = chat.Content("")
+
 	return ls, nil
 }
 
@@ -100,10 +112,7 @@ func loadDictionaryFromFile(p string) (memory.DictionaryGeneration, error) {
 		return nil, errors.Wrapf(err, "failed to load dictionary file %s", p)
 	}
 
-	var entries []struct {
-		Word       string
-		Definition string
-	}
+	var entries []memory.DictionaryEntry
 
 	err = json.Unmarshal(data, &entries)
 	if err != nil {
@@ -111,7 +120,7 @@ func loadDictionaryFromFile(p string) (memory.DictionaryGeneration, error) {
 	}
 
 	for _, entry := range entries {
-		dict[entry.Word] = entry.Definition
+		dict[entry.Word] = entry
 	}
 
 	return dict, nil

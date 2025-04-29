@@ -107,6 +107,8 @@ func NewConlangServer(
 		cfg.procedures.maxGenerations = DefaultMaxGenerations
 	}
 
+	transcriptGen1 := newTranscriptGeneration()
+
 	// Load and serialize specifications.
 
 	specificationsGen1, err := loadSpecificationsFromFile(
@@ -132,7 +134,7 @@ func NewConlangServer(
 	}
 
 	initialGen := memory.Generation{
-		Transcript:     make([]memory.Message, 0),
+		Transcript:     transcriptGen1,
 		Logography:     logographyGen1,
 		Specifications: specificationsGen1,
 		Dictionary:     dictionaryGen1,

@@ -179,6 +179,18 @@ func (s *Server) broadcast(msg *memory.Message) error {
 	return nil
 }
 
+func (s *Server) messageToSystemAgent(
+	name chat.Name,
+	msg string,
+) *chat.Message {
+	return chat.NewPbMessage(
+		s.name,
+		name,
+		chat.Content(msg),
+		chat.SystemLayer,
+	)
+}
+
 func saveMessageTo(
 	ctx context.Context,
 	mem MemoryService,

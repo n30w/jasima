@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -21,18 +22,19 @@ func (s *ConlangServer) iterate(
 	initialLayer chat.Layer,
 	exchanges int,
 ) (memory.Generation, error) {
+	// The maps and slices need to be copied, since in Go, maps and slices are
+	// pass by reference always.
+
 	newGeneration := memory.Generation{
-		Transcript:     make([]memory.Message, 0),
-		Logography:     initialGeneration.Logography,
-		Specifications: initialGeneration.Specifications,
+		Transcript:     newTranscriptGeneration(),
+		Logography:     initialGeneration.Logography.Copy(),
+		Specifications: initialGeneration.Specifications.Copy(),
+		Dictionary:     initialGeneration.Dictionary.Copy(),
 	}
+
 	if initialLayer == chat.SystemLayer {
 		s.logger.Info("initial layer is system")
-		return memory.Generation{
-			Transcript:     make([]memory.Message, 0),
-			Logography:     initialGeneration.Logography,
-			Specifications: initialGeneration.Specifications,
-		}, nil
+		return newGeneration, nil
 	}
 
 	s.logger.Infof("%d: Recursing on %s", initialLayer, initialLayer)
@@ -56,7 +58,6 @@ func (s *ConlangServer) iterate(
 		sysClient    = s.getClientsByLayer(chat.SystemLayer)[0]
 		cmd          = buildCommand(s.config.name)
 		sendCommands = sendCommandBuilder(s.channels.messagePool)
-		transcript   = make([]memory.Message, 0)
 
 		// kickoff is the command that is sent to kick off the layer's
 		// iteration exchanges. It consists of the initializer client, which
@@ -95,10 +96,8 @@ func (s *ConlangServer) iterate(
 		sb strings.Builder
 	)
 
-	newGeneration.Transcript = append(
-		newGeneration.Transcript,
-		prevGeneration.Transcript...,
-	)
+	newGeneration.Transcript = prevGeneration.Transcript.Copy()
+	newGeneration.Specifications = prevGeneration.Specifications.Copy()
 
 	sb.WriteString(initialInstructions)
 
@@ -107,19 +106,19 @@ func (s *ConlangServer) iterate(
 		sb.WriteString("\n")
 	}
 
-	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
-
 	sendCommands(
 		clients,
 		cmd(agent.AppendInstructions, sb.String()),
 		cmd(agent.Unlatch),
 	)
 
+	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
+
 	s.channels.messagePool <- kickoff
 
 	for i := range exchanges {
 		m := <-s.procedureChan
-		transcript = append(transcript, m)
+		newGeneration.Transcript[initialLayer] = append(newGeneration.Transcript[initialLayer], m)
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
@@ -137,17 +136,9 @@ func (s *ConlangServer) iterate(
 	s.channels.messagePool <- addSysAgentInstructions
 	s.channels.messagePool <- cmd(agent.Unlatch)(sysClient)
 
-	// Only send the previous `n` messages based on config.
-
-	currentLayerTranscript := transcript[len(transcript)-s.config.
-		procedures.
-		maxExchanges:]
-
-	msg := chat.NewPbMessage(
-		s.name,
+	msg := s.messageToSystemAgent(
 		sysClient.name,
-		chat.Content(transcriptToString(currentLayerTranscript)),
-		chat.SystemLayer,
+		transcriptToString(newGeneration.Transcript[initialLayer]),
 	)
 
 	s.channels.messagePool <- msg
@@ -174,7 +165,6 @@ func (s *ConlangServer) iterate(
 	// End of side effects.
 
 	newGeneration.Specifications[initialLayer] = specPrime.Text
-	newGeneration.Transcript = append(newGeneration.Transcript, transcript...)
 
 	return newGeneration, nil
 }
@@ -183,10 +173,18 @@ func (s *ConlangServer) iterate(
 func (s *ConlangServer) Evolve(errs chan<- error) {
 	var (
 		err         error
+		genSlice    []memory.Generation
 		errMsg      = "failed to evolve generation %d"
-		targetTotal = 9
+		targetTotal = 10
 		allJoined   = make(chan struct{})
+		cmd         = buildCommand(s.config.name)
 	)
+
+	genSlice, err = s.generations.ToSlice()
+	if err != nil {
+		errs <- errors.Wrap(err, errMsg)
+		return
+	}
 
 	go func(c chan<- struct{}) {
 		joined := false
@@ -203,13 +201,24 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.logger.Info("All clients joined!")
 
+	// Prepare the dictionary system agent.
+
+	dictSysAgent := s.getClientsByLayer(chat.SystemLayer)[1]
+
+	firstGen := genSlice[0]
+
+	s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
+
+	s.channels.messagePool <- cmd(
+		agent.AppendInstructions,
+		fmt.Sprintf(
+			"This is the current dictionary\n%s",
+			firstGen.Dictionary.String(),
+		),
+	)(dictSysAgent)
+
 	for i := range s.config.procedures.maxGenerations {
 		elapsedTime := utils.Timer(time.Now())
-
-		genSlice, err := s.generations.ToSlice()
-		if err != nil {
-			errs <- errors.Wrapf(err, errMsg, i)
-		}
 
 		// Starts on Layer 4, recurses to 1.
 
@@ -228,14 +237,59 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			elapsedTime().Truncate(10*time.Millisecond),
 		)
 
+		// send results to SYSTEM LLM
+
+		s.channels.messagePool <- cmd(agent.Unlatch)(dictSysAgent)
+
+		msg := s.messageToSystemAgent(
+			dictSysAgent.name,
+			transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
+		)
+
+		s.channels.messagePool <- msg
+
+		dictUpdates := <-s.channels.systemLayerMessagePool
+
+		// Unmarshal from JSON.
+
+		var updates []memory.DictionaryEntry
+
+		err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
+		if err != nil {
+			errs <- errors.Wrapf(err, errMsg, i)
+			return
+		}
+
+		// Update the generation's dictionary based on updates.
+
+		for _, update := range updates {
+			if update.Remove {
+				_, ok := newGeneration.Dictionary[update.Word]
+				if !ok {
+					s.logger.Warnf(
+						"%s not in dictionary, skipping",
+						update.Word,
+					)
+					continue
+				}
+
+				delete(newGeneration.Dictionary, update.Word)
+				continue
+			}
+
+			newGeneration.Dictionary[update.Word] = update
+		}
+
+		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
+		s.channels.messagePool <- cmd(agent.ClearMemory)(dictSysAgent)
+		s.channels.messagePool <- cmd(agent.ResetInstructions)(dictSysAgent)
+
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
 			errs <- errors.Wrapf(err, errMsg, i)
 		}
 
 		// Save specs to memory
-		// send results to SYSTEM LLM
-		// If there are any new words, add them to the generation dicctionary.
 		// Save result to LLM.
 		s.broadcasters.generation.Broadcast(newGeneration)
 	}
