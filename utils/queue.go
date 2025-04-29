@@ -116,7 +116,7 @@ func (q *FixedQueue[T]) ToSlice() ([]T, error) {
 
 		// Add to the front of the array first.
 
-		arr[s-i-1] = v
+		arr[i] = v
 	}
 
 	return arr, nil
