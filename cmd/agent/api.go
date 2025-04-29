@@ -145,6 +145,7 @@ func newClient(
 			apiKey,
 			cfg.ModelConfig,
 		)
+		sleepDuration = 16
 	default:
 		err = errors.New("invalid LLM provider")
 	}
