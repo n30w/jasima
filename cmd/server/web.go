@@ -151,7 +151,3 @@ func addEventHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 }
-
-func makeDataString(s string) string {
-	return fmt.Sprintf("data: %s\n\n", s)
-}
