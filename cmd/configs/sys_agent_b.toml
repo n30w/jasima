@@ -12,7 +12,7 @@ layer = 0
 provider = 0
 
 # Initial system instructions.
-instructions = "Given this toki pona dictionary, reply with and only with a JSON array of objects that include only the updates to dictionary entries. In other words, send back an array of JSON objects with entries that are changed or added. If a word should be removed, set the `remove` attribute to true. Otherwise, set it to false. The user will begin the chat with a chat log between interlocutors that you must read to make decisions related to addition, removal, or updating."
+instructions = "Given this toki pona dictionary, reply with and only with a JSON array of objects that include only the updates to dictionary entries. In other words, send back an array of JSON objects with entries that are changed or added. If a word should be removed, set the `remove` attribute to true. Otherwise, set it to false. The user will begin the chat with a chat log between interlocutors that you must read to make decisions related to addition, removal, or updating. Please, do NOT format your JSON in a pretty way. Instead, the response should be a compact, long string of JSON with no new lines, machine readable first and foremost."
 
 initialize = ""
 
