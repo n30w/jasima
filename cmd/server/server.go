@@ -235,7 +235,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		if msg.Layer == chat.SystemLayer && msg.Sender == chat.SystemName && msg.
+		if msg.Layer == chat.SystemLayer && msg.
 			Receiver == s.name {
 			s.channels.systemLayerMessagePool <- msg
 			return nil
