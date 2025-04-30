@@ -91,6 +91,8 @@ func main() {
 		*flagSpecificationPath,
 		"exchanges",
 		*flagExchanges,
+		"generations",
+		*flagGenerations,
 		"name",
 		*flagServerName,
 	)
