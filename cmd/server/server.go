@@ -264,6 +264,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			default:
 			}
 		}
+
 		return nil
 	}
 

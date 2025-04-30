@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -88,8 +89,9 @@ func (s *ConlangServer) iterate(
 		// initialInstructions are the initial instructions each agent on the
 		// layer is given for its system prompt.
 		initialInstructions = fmt.Sprintf(
-			"You and your interlocutors are responsible for developing %s."+
-				"\nHere is the current specification.\n",
+			"You and your interlocutors are responsible for developing %s. Reason and discuss using the current specification."+
+				"\nHere is the current specification for %s.\n",
+			initialLayer,
 			initialLayer,
 		)
 
@@ -185,20 +187,14 @@ func (s *ConlangServer) iterate(
 func (s *ConlangServer) Evolve(errs chan<- error) {
 	var (
 		err         error
-		genSlice    []memory.Generation
 		errMsg      = "failed to evolve generation %d"
 		targetTotal = 10
-		allJoined   = make(chan struct{})
 		cmd         = buildCommand(s.config.name)
 	)
 
-	genSlice, err = s.generations.ToSlice()
-	if err != nil {
-		errs <- errors.Wrap(err, errMsg)
-		return
-	}
+	joinCtx, joinCtxCancel := context.WithCancel(context.Background())
 
-	go func(c chan<- struct{}) {
+	go func() {
 		joined := false
 		for !joined {
 			time.Sleep(1 * time.Second)
@@ -206,16 +202,14 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 				joined = true
 			}
 		}
-		close(c)
-	}(allJoined)
+		joinCtxCancel()
+	}()
 
-	<-allJoined
+	<-joinCtx.Done()
 
 	s.logger.Info("All clients joined!")
 
 	// Prepare the dictionary system agent.
-
-	firstGen := genSlice[0]
 
 	dictSysAgent, err := s.getClientByName(chat.Name("SYSTEM_AGENT_B"))
 	if err != nil {
@@ -223,17 +217,23 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		return
 	}
 
-	s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
-	s.channels.messagePool <- cmd(
-		agent.AppendInstructions,
-		fmt.Sprintf(
-			"This is the current dictionary\n%s",
-			firstGen.Dictionary.String(),
-		),
-	)(dictSysAgent)
-
 	for i := range s.config.procedures.maxGenerations {
 		elapsedTime := utils.Timer(time.Now())
+
+		genSlice, err := s.generations.ToSlice()
+		if err != nil {
+			errs <- errors.Wrap(err, errMsg)
+			return
+		}
+
+		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
+		s.channels.messagePool <- cmd(
+			agent.AppendInstructions,
+			fmt.Sprintf(
+				"This is the current dictionary\n%s",
+				genSlice[i].Dictionary.String(),
+			),
+		)(dictSysAgent)
 
 		// Starts on Layer 4, recurses to 1.
 
@@ -271,7 +271,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
 		if err != nil {
-			errs <- errors.Wrapf(err, errMsg, i)
+			errs <- errors.Wrapf(err, "failed to unmarshal dictionary update generation %d", i)
 			return
 		}
 
@@ -301,7 +301,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
-			errs <- errors.Wrapf(err, errMsg, i)
+			errs <- errors.Wrapf(err, "failed to enqueue new generation %d", i)
 		}
 
 		// Save specs to memory
