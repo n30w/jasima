@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 
 	"codeberg.org/n30w/jasima/agent"
 
@@ -86,10 +87,12 @@ func (s *Server) getClientByName(name chat.Name) (*client, error) {
 
 // client represents a client connected to the server.
 type client struct {
-	stream chat.ChatService_ChatServer
-	name   chat.Name
-	model  string
-	layer  chat.Layer
+	stream   chat.ChatService_ChatServer
+	name     chat.Name
+	model    string
+	layer    chat.Layer
+	channels map[chan *chat.Message]struct{}
+	mu       sync.Mutex
 }
 
 func newClient(
@@ -102,13 +105,34 @@ func newClient(
 	}
 
 	c := &client{
-		stream: stream,
-		name:   chat.Name(name),
-		model:  model,
-		layer:  chat.Layer(l),
+		stream:   stream,
+		name:     chat.Name(name),
+		model:    model,
+		layer:    chat.Layer(l),
+		mu:       sync.Mutex{},
+		channels: make(map[chan *chat.Message]struct{}),
 	}
 
 	return c, nil
+}
+
+func (c *client) SendWithChannel(
+	msg *memory.Message,
+	command ...agent.Command,
+) (chan *chat.Message, error) {
+	pbMsg := chat.NewPbMessage(
+		msg.Sender, msg.Receiver, msg.Text, msg.Layer,
+		command...,
+	)
+
+	ch := make(chan *chat.Message, 10)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.channels[ch] = struct{}{}
+
+	return ch, c.send(pbMsg)
 }
 
 func (c *client) Send(msg *memory.Message, command ...agent.Command) error {

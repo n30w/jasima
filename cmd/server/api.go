@@ -76,7 +76,7 @@ func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 	// Enter an infinite listening session when the client is connected.
 	// Each client receives their own context. `listen` is a blocking call.
 
-	err = s.listen(stream)
+	err = s.listen(c)
 
 	s.removeClient(c)
 
@@ -94,7 +94,7 @@ func (s *Server) Chat(stream chat.ChatService_ChatServer) error {
 // from the server. It also calls `routeMessage` when a message is received
 // from the connected client.
 func (s *Server) listen(
-	stream chat.ChatService_ChatServer,
+	c *client,
 ) error {
 	var (
 		err          error
@@ -106,7 +106,7 @@ func (s *Server) listen(
 
 		// Wait for a message to come in from the client. This is a blocking call.
 
-		msg, err = stream.Recv()
+		msg, err = c.stream.Recv()
 		if err != nil {
 			disconnected = true
 			continue
@@ -116,6 +116,18 @@ func (s *Server) listen(
 		case s.channels.messagePool <- msg:
 		default:
 		}
+
+		c.mu.Lock()
+
+		for ch := range c.channels {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+
+		c.mu.Unlock()
+
 	}
 
 	if err != nil {
