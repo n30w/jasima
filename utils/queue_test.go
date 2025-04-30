@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 )
 
@@ -15,8 +16,9 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 		wantErr bool
 	}
 
-	correctTranscript := []memory.Message{
-		{Text: "Hello World"},
+	correctTranscript := memory.TranscriptGeneration{
+		chat.SystemLayer:    []memory.Message{},
+		chat.PhoneticsLayer: []memory.Message{{Text: "Hello there!"}},
 	}
 
 	q, _ := NewFixedQueue[memory.Generation](1)
@@ -44,7 +46,6 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				// fmt.Printf("%#v\n", q)
 				got, err := tt.q.ToSlice()
 
 				if (err != nil) != tt.wantErr {
