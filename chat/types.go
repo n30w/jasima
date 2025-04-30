@@ -1,6 +1,10 @@
 package chat
 
-import "codeberg.org/n30w/jasima/agent"
+import (
+	"encoding/json"
+
+	"codeberg.org/n30w/jasima/agent"
+)
 
 type Name string
 
@@ -49,6 +53,10 @@ func (l Layer) String() string {
 	default:
 		return "Unknown Layer"
 	}
+}
+
+func (l Layer) MarshalJSON() ([]byte, error) {
+	return json.Marshal(l.String())
 }
 
 func SetLayer(l int32) Layer {

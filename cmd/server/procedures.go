@@ -52,10 +52,22 @@ func (s *ConlangServer) iterate(
 		)
 	}
 
+	sysClient, err := s.getClientByName(chat.Name("SYSTEM_AGENT_A"))
+	if err != nil {
+		return newGeneration, errors.Wrap(err, "failed to retrieve client by name")
+	}
+
+	// layerSpecificInstructions := map[chat.Layer]string{
+	// 	chat.SystemLayer:     "",
+	// 	chat.PhoneticsLayer:  "",
+	// 	chat.GrammarLayer:    "",
+	// 	chat.DictionaryLayer: "Consider words based on this text:",
+	// 	chat.LogographyLayer: "",
+	// }
+
 	var (
 		timer        = utils.Timer(time.Now())
 		clients      = s.getClientsByLayer(initialLayer)
-		sysClient    = s.getClientsByLayer(chat.SystemLayer)[0]
 		cmd          = buildCommand(s.config.name)
 		sendCommands = sendCommandBuilder(s.channels.messagePool)
 
@@ -203,12 +215,15 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	// Prepare the dictionary system agent.
 
-	dictSysAgent := s.getClientsByLayer(chat.SystemLayer)[1]
-
 	firstGen := genSlice[0]
 
-	s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
+	dictSysAgent, err := s.getClientByName(chat.Name("SYSTEM_AGENT_B"))
+	if err != nil {
+		errs <- err
+		return
+	}
 
+	s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
 	s.channels.messagePool <- cmd(
 		agent.AppendInstructions,
 		fmt.Sprintf(
@@ -237,7 +252,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			elapsedTime().Truncate(10*time.Millisecond),
 		)
 
-		// send results to SYSTEM LLM
+		// send results to dictionary LLM
 
 		s.channels.messagePool <- cmd(agent.Unlatch)(dictSysAgent)
 
