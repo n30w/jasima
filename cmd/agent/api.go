@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -319,75 +320,76 @@ func (c *client) sendMessage(msg memory.Message) error {
 func (c *client) DispatchToLLM(
 	ctx context.Context,
 	errs chan<- error,
+	msg *memory.Message,
 ) {
-	for input := range c.channels.llm {
-		if c.latch {
-			log.Debug("Discarding response...", "latch", c.latch)
-			continue
-		}
-
-		content := input.Text
-		receiver := c.Peers[0]
-
-		// First save the incoming message.
-
-		c.logger.Debug("Saving message to memory...")
-
-		err := c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		c.logger.Debug("Messaged saved to memory successfully")
-
-		time.Sleep(time.Second * c.sleepDuration)
-
-		llmResponse, err := c.request(ctx, content)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		if c.latch {
-			log.Debug("Discarding response...", "latch", c.latch)
-			continue
-		}
-
-		// Save the LLM's response to memory.
-
-		newMsg := c.NewMessageTo(c.Name, llmResponse)
-
-		err = c.memory.Save(ctx, newMsg)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		time.Sleep(time.Second * c.sleepDuration)
-
-		// When data is received back from the query, fill the channel
-
-		c.logger.Debug("Piping message to response channel...")
-
-		c.channels.responses <- newMsg
+	if c.latch {
+		log.Debug("Discarding response...", "latch", c.latch)
+		return
 	}
+
+	content := msg.Text
+	receiver := c.Peers[0]
+
+	// First save the incoming message.
+
+	c.logger.Debug("Saving message to memory...")
+
+	err := c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
+	if err != nil {
+		errs <- err
+		return
+	}
+
+	c.logger.Debug("Messaged saved to memory successfully")
+
+	time.Sleep(time.Second * c.sleepDuration)
+
+	llmResponse, err := c.request(ctx, content)
+	if err != nil {
+		errs <- err
+		return
+	}
+
+	if c.latch {
+		log.Debug("Discarding response...", "latch", c.latch)
+		return
+	}
+
+	// Save the LLM's response to memory.
+
+	newMsg := c.NewMessageTo(c.Name, llmResponse)
+
+	err = c.memory.Save(ctx, newMsg)
+	if err != nil {
+		errs <- err
+		return
+	}
+
+	time.Sleep(time.Second * c.sleepDuration)
+
+	// When data is received back from the query, fill the channel
+
+	c.logger.Debug("Piping message to response channel...")
+
+	c.channels.responses <- newMsg
 }
 
 // ReceiveMessages receives messages from the server.
 func (c *client) ReceiveMessages(
-	ctx context.Context,
 	online bool,
 	errs chan<- error,
 ) {
 	for online {
 		pbMsg, err := c.conn.Recv()
+		ctx, cancel := context.WithCancelCause(context.Background())
+		defer cancel(errors.New("client disconnected"))
 		if err == io.EOF {
 			online = false
 			errs <- errors.New("received EOF")
+			cancel(errors.New("server disconnected"))
 		} else if err != nil {
 			errs <- err
-			return
+			cancel(errors.New("server disconnected"))
 		} else {
 
 			msg := memory.NewChatMessage(
@@ -399,14 +401,19 @@ func (c *client) ReceiveMessages(
 
 			// Intercept commands from the server.
 
+			statusMsg := fmt.Sprintf("received %s", msg.Command)
+
 			c.logger.Debugf("Received %s", msg.Command)
 
 			switch msg.Command {
 			case agent.AppendInstructions:
 				c.llm.AppendInstructions(msg.Text.String())
+				cancel(errors.New(statusMsg))
 			case agent.SetInstructions:
 				c.llm.SetInstructions(msg.Text.String())
+				cancel(errors.New(statusMsg))
 			case agent.ClearMemory:
+				cancel(errors.New(statusMsg))
 				err = c.memory.Clear()
 				if err != nil {
 					errs <- err
@@ -414,6 +421,7 @@ func (c *client) ReceiveMessages(
 				}
 			case agent.ResetInstructions:
 				c.llm.SetInstructions(c.ModelConfig.Instructions)
+				cancel(errors.New(statusMsg))
 			case agent.Latch:
 				if c.latch {
 					c.logger.Debug("already latched, doing nothing...")
@@ -422,8 +430,11 @@ func (c *client) ReceiveMessages(
 
 				c.latch = true
 				c.logger.Debug("LATCH command received", "latch", c.latch)
+				cancel(errors.New(statusMsg))
 
 			case agent.SendInitialMessage:
+
+				cancel(errors.New(statusMsg))
 
 				if c.latch {
 					c.logger.Debug("please UNLATCH before sending initial message")
@@ -471,14 +482,24 @@ func (c *client) ReceiveMessages(
 							),
 						)
 						if err != nil {
+							cancel(errors.New("failed to save to memory"))
 							errs <- err
 							return
 						}
 					} else {
 						c.logger.Debug("Piping message to LLM service...")
-						c.channels.llm <- *msg
+
+						go c.DispatchToLLM(ctx, errs, msg)
+
+						// c.channels.llm <- *msg
+
 					}
 				}
+			}
+
+			err = context.Cause(ctx)
+			if err != nil {
+				c.logger.Warnf("context cancelled: %s", err)
 			}
 		}
 	}
@@ -489,10 +510,10 @@ func (c *client) Run(ctx context.Context, errs chan error) {
 	go c.SendMessages(errs)
 
 	// Wait for messages to come in and process them accordingly.
-	go c.ReceiveMessages(ctx, true, errs)
+	go c.ReceiveMessages(true, errs)
 
 	// Watch for possible LLM dispatches.
-	go c.DispatchToLLM(ctx, errs)
+	// go c.DispatchToLLM(ctx, errs)
 
 	err := c.initConnection()
 	if err != nil {
