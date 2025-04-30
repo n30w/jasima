@@ -94,7 +94,7 @@
             format = {
               enable = true;
               name = "Format files";
-              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt --no-cache --walk git";
+              entry = "${treefmtEval.${pkgs.system}.config.build.wrapper}/bin/treefmt --no-cache";
               stages = [ "pre-commit" ];
             };
             golangci-lint = {
