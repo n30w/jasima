@@ -90,8 +90,8 @@ func (q *FixedQueue[T]) Capacity() int {
 	return q.capacity
 }
 
-// ToSlice generates a slice from a queue. The queue is not emptied. The values
-// are only copied.
+// ToSlice generates a slice representation from the queue. The queue is not
+// emptied. The values are only deep copied.
 func (q *FixedQueue[T]) ToSlice() ([]T, error) {
 	arr := make([]T, q.size)
 	if q.IsEmpty() {
