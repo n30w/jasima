@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 
+	"codeberg.org/n30w/jasima/utils"
+
 	"codeberg.org/n30w/jasima/chat"
 	"codeberg.org/n30w/jasima/memory"
 )
@@ -20,6 +22,7 @@ type LLMService interface {
 	Request(
 		ctx context.Context,
 		messages []memory.Message,
+		prompt string,
 	) (string, error)
 
 	// SetInstructions sets the initial instructions for the model.
@@ -50,3 +53,5 @@ type MemoryService interface {
 	// Clear clears all the memory in the storage.
 	Clear() error
 }
+
+var DictionaryResponseSchema = utils.GenerateSchema[memory.DictionaryEntry]()

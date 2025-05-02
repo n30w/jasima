@@ -55,8 +55,66 @@ func (l Layer) String() string {
 	}
 }
 
+func (l *Layer) UnmarshalJSON(b []byte) error {
+	var s string
+
+	err := json.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+
+	// switch s {
+	// case 0:
+	// 	*l = SystemLayer
+	// case 1:
+	// 	*l = PhoneticsLayer
+	// case 2:
+	// 	*l = GrammarLayer
+	// case 3:
+	// 	*l = DictionaryLayer
+	// case 4:
+	// 	*l = LogographyLayer
+	// }
+
+	switch s {
+	default:
+		*l = 100
+	case "system":
+		*l = SystemLayer
+	case "phonetics":
+		*l = PhoneticsLayer
+	case "grammar":
+		*l = GrammarLayer
+	case "dictionary":
+		*l = DictionaryLayer
+	case "logography":
+		*l = LogographyLayer
+	case "chatting":
+		*l = ChattingLayer
+	}
+
+	return nil
+}
+
 func (l Layer) MarshalJSON() ([]byte, error) {
-	return json.Marshal(l.String())
+	var s string
+
+	switch l {
+	case SystemLayer:
+		s = "system"
+	case PhoneticsLayer:
+		s = "phonetics"
+	case GrammarLayer:
+		s = "grammar"
+	case DictionaryLayer:
+		s = "dictionary"
+	case ChattingLayer:
+		s = "chatting"
+	default:
+		s = "unknown"
+	}
+
+	return json.Marshal(s)
 }
 
 func SetLayer(l int32) Layer {

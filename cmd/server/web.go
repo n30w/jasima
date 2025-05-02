@@ -161,10 +161,11 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 }
 
 type Broadcasters struct {
-	messages        *Broadcaster[memory.Message]
-	generation      *Broadcaster[memory.Generation]
-	currentTime     *Broadcaster[string]
-	testMessageFeed *Broadcaster[memory.Message]
+	messages            *Broadcaster[memory.Message]
+	generation          *Broadcaster[memory.Generation]
+	currentTime         *Broadcaster[string]
+	testMessageFeed     *Broadcaster[memory.Message]
+	testGenerationsFeed *Broadcaster[memory.Generation]
 }
 
 func (s *ConlangServer) ListenAndServeWebEvents(
@@ -182,10 +183,14 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 				initialData.recentMessages,
 		),
 	)
-	handler.HandleFunc("/generations", s.broadcasters.generation.HandleClient)
+	handler.HandleFunc("/generations", s.broadcasters.generation.InitialData(s.generations))
 	handler.HandleFunc(
 		"/test/chat",
 		s.broadcasters.testMessageFeed.InitialData(s.initialData.recentMessages),
+	)
+	handler.HandleFunc(
+		"/test/generations",
+		s.broadcasters.testGenerationsFeed.InitialData(s.initialData.recentGenerations),
 	)
 
 	s.logger.Infof("Starting web events service on %s", p)

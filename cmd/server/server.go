@@ -46,7 +46,8 @@ type MemoryService interface {
 // initialData contains frontend initializing data so that, when connected,
 // data is shown rather than having nothing.
 type initialData struct {
-	recentMessages *utils.FixedQueue[memory.Message]
+	recentMessages    *utils.FixedQueue[memory.Message]
+	recentGenerations *utils.FixedQueue[memory.Generation]
 }
 
 type ConlangServer struct {
@@ -156,10 +157,11 @@ func NewConlangServer(
 	// Initialize web broadcasters
 
 	b := &Broadcasters{
-		messages:        NewBroadcaster[memory.Message](l),
-		generation:      NewBroadcaster[memory.Generation](l),
-		currentTime:     NewBroadcaster[string](l),
-		testMessageFeed: NewBroadcaster[memory.Message](l),
+		messages:            NewBroadcaster[memory.Message](l),
+		generation:          NewBroadcaster[memory.Generation](l),
+		currentTime:         NewBroadcaster[string](l),
+		testMessageFeed:     NewBroadcaster[memory.Message](l),
+		testGenerationsFeed: NewBroadcaster[memory.Generation](l),
 	}
 
 	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
@@ -167,8 +169,14 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, errMsg)
 	}
 
+	rg, err := utils.NewFixedQueue[memory.Generation](100)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to make new generation initial data")
+	}
+
 	initData := &initialData{
-		recentMessages: recentMessagesQueue,
+		recentMessages:    recentMessagesQueue,
+		recentGenerations: rg,
 	}
 
 	return &ConlangServer{
@@ -282,7 +290,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 		return nil
 	}
 
-	routeMessages := chat.BuildRouter[chat.Message](
+	routeMessages := chat.BuildRouter(
 		s.channels.messagePool,
 		printConsoleData,
 		saveMessage,
@@ -305,29 +313,56 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 
 	if s.config.debugEnabled {
 		go func(errs chan<- error) {
-			// Load test data from file JSON.
-			jsonFile, err := os.Open("./outputs/chats/chat_4.json")
+			msgs, err := loadJsonFile[memory.Message]("./outputs/chats/chat_5.json")
 			if err != nil {
-				errs <- err
+				errs <- errors.Wrap(err, "failed to load test chats json file")
 				return
 			}
 
-			defer jsonFile.Close()
-
-			b, _ := io.ReadAll(jsonFile)
-
-			var msgs []memory.Message
-
-			err = json.Unmarshal(b, &msgs)
+			// gens, err := loadJsonFile[memory.Generation]("./outputs/generations/generations_20250430160258.json")
+			gens, err := loadJsonFile[memory.Generation](
+				"./outputs/generations/generations_20250502205519.json",
+			)
 			if err != nil {
-				errs <- err
+				errs <- errors.Wrap(err, "failed to load test generation json file")
 				return
 			}
+
+			for _, v := range gens {
+				if err := s.initialData.recentGenerations.Enqueue(v); err != nil {
+					errs <- errors.Wrap(err, "failed to enqueue recent generations")
+					return
+				}
+			}
+
+			// gens := []memory.Generation{}
+
+			// s.logger.Debug(gens)
 
 			// Output test data to channel.
-			go s.outputTestData(msgs)
+			go s.outputTestData(msgs, gens)
 		}(errs)
 	}
+}
+
+func loadJsonFile[T any](p string) ([]T, error) {
+	var a []T
+
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	b, _ := io.ReadAll(f)
+
+	err = json.Unmarshal(b, &a)
+	if err != nil {
+		return nil, err
+	}
+
+	return a, nil
 }
 
 func (s *ConlangServer) Run(errs chan error) {
