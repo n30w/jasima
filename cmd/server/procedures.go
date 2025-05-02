@@ -115,6 +115,7 @@ func (s *ConlangServer) iterate(
 
 	newGeneration.Transcript = prevGeneration.Transcript.Copy()
 	newGeneration.Specifications = prevGeneration.Specifications.Copy()
+	newGeneration.Dictionary = prevGeneration.Dictionary.Copy()
 
 	sb.WriteString(initialInstructions)
 
@@ -251,7 +252,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			s.config.procedures.maxExchanges,
 		)
 		if err != nil {
-			errs <- errors.Wrapf(err, errMsg, i)
+			errs <- errors.Wrapf(err, "failed to iterate on generation %d", i)
 			return
 		}
 
@@ -295,9 +296,13 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		// Update the generation's dictionary based on updates.
 
+		currentDict := newGeneration.Dictionary.Copy()
+
 		for _, update := range updates {
+			currentDict[update.Word] = update
+
 			if update.Remove {
-				_, ok := newGeneration.Dictionary[update.Word]
+				_, ok := currentDict[update.Word]
 				if !ok {
 					s.logger.Warnf(
 						"%s not in dictionary, skipping",
@@ -306,12 +311,11 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 					continue
 				}
 
-				delete(newGeneration.Dictionary, update.Word)
-				continue
+				delete(currentDict, update.Word)
 			}
-
-			newGeneration.Dictionary[update.Word] = update
 		}
+
+		newGeneration.Dictionary = currentDict.Copy()
 
 		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
 		s.channels.messagePool <- cmd(agent.ClearMemory)(dictSysAgent)
@@ -332,7 +336,6 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	t := timer().Truncate(10 * time.Millisecond)
 
 	s.logger.Info("EVOLUTION COMPLETE")
-
 	s.logger.Infof("Evolution took %s", t)
 
 	// Marshal to JSON
@@ -377,18 +380,29 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 // outputTestData continuously outputs messages to the test API. This is
 // useful for frontend testing without having to run agent queries
 // over and over again.
-func (s *ConlangServer) outputTestData(data []memory.Message) {
+func (s *ConlangServer) outputTestData(messages []memory.Message, generations []memory.Generation) {
 	var (
-		i = 0
-		l = len(data)
-		t = time.NewTicker(time.Second)
+		i1 = 0
+		i2 = 0
+		l1 = len(messages)
+		l2 = len(generations)
+		t1 = time.NewTicker(time.Second)
+		t2 = time.NewTicker(3 * time.Second)
 	)
 
 	s.logger.Info("Emitting test output data...")
 
+	go func() {
+		for {
+			<-t1.C
+			s.broadcasters.testMessageFeed.Broadcast(messages[i1%l1])
+			i1++
+		}
+	}()
+
 	for {
-		<-t.C
-		s.broadcasters.testMessageFeed.Broadcast(data[i%l])
-		i++
+		<-t2.C
+		s.broadcasters.testGenerationsFeed.Broadcast(generations[i2%l2])
+		i2++
 	}
 }
