@@ -8,13 +8,24 @@ type llm struct {
 	// model is the name of the model.
 	model LLMProvider
 
-	// instruction is a system instruction.
+	// instructions is a system instruction.
 	instructions string
+
+	// responseFormat selects the type of response that is expected from the
+	// LLM, like structured JSON output.
+	responseFormat ResponseFormat
 }
 
 func (l *llm) SetInstructions(s string) {
 	l.instructions = s
 }
+
+type ResponseFormat int
+
+const (
+	ResponseFormatText ResponseFormat = iota
+	ResponseFormatJson
+)
 
 type LLMProvider int
 
