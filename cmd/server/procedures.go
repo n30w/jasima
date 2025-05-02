@@ -55,7 +55,10 @@ func (s *ConlangServer) iterate(
 
 	sysClient, err := s.getClientByName(chat.Name("SYSTEM_AGENT_A"))
 	if err != nil {
-		return newGeneration, errors.Wrap(err, "failed to retrieve client by name")
+		return newGeneration, errors.Wrap(
+			err,
+			"failed to retrieve client by name",
+		)
 	}
 
 	// layerSpecificInstructions := map[chat.Layer]string{
@@ -132,7 +135,10 @@ func (s *ConlangServer) iterate(
 
 	for i := range exchanges {
 		m := <-s.procedureChan
-		newGeneration.Transcript[initialLayer] = append(newGeneration.Transcript[initialLayer], m)
+		newGeneration.Transcript[initialLayer] = append(
+			newGeneration.Transcript[initialLayer],
+			m,
+		)
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
@@ -209,6 +215,8 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.logger.Info("All clients joined!")
 
+	timer := utils.Timer(time.Now())
+
 	// Prepare the dictionary system agent.
 
 	dictSysAgent, err := s.getClientByName(chat.Name("SYSTEM_AGENT_B"))
@@ -271,7 +279,11 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
 		if err != nil {
-			errs <- errors.Wrapf(err, "failed to unmarshal dictionary update generation %d", i)
+			errs <- errors.Wrapf(
+				err,
+				"failed to unmarshal dictionary update generation %d",
+				i,
+			)
 			return
 		}
 
@@ -311,7 +323,11 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	s.listening = false
 
+	t := timer().Truncate(10 * time.Millisecond)
+
 	s.logger.Info("EVOLUTION COMPLETE")
+
+	s.logger.Infof("Evolution took %s", t)
 
 	// Marshal to JSON
 
