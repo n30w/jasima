@@ -76,6 +76,7 @@ func NewGoogleGemini(
 func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
+	prompt string,
 ) (string, error) {
 	switch c.responseFormat {
 	case ResponseFormatJson:
@@ -94,6 +95,7 @@ func (c GoogleGemini) Request(
 	}
 
 	contents := c.prepare(messages)
+	contents = append(contents, genai.NewContentFromText(prompt, genai.RoleUser))
 
 	result, err := c.genaiClient.Models.GenerateContent(
 		ctx,

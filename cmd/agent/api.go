@@ -260,7 +260,7 @@ func (c *client) NewMessageTo(
 	return m
 }
 
-func (c *client) request(ctx context.Context) (
+func (c *client) request(ctx context.Context, prompt chat.Content) (
 	chat.Content,
 	error,
 ) {
@@ -273,7 +273,7 @@ func (c *client) request(ctx context.Context) (
 
 	t := utils.Timer(time.Now())
 
-	result, err := c.llm.Request(ctx, a)
+	result, err := c.llm.Request(ctx, a, prompt.String())
 	if err != nil {
 		return "", err
 	}
@@ -339,7 +339,7 @@ func (c *client) DispatchToLLM(
 
 	time.Sleep(time.Second * c.sleepDuration)
 
-	llmResponse, err := c.request(ctx)
+	llmResponse, err := c.request(ctx, msg.Text)
 	if err != nil {
 		errs <- err
 		return

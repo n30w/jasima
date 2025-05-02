@@ -67,6 +67,7 @@ func newOpenAIClient(
 func (c openAIClient) Request(
 	ctx context.Context,
 	messages []memory.Message,
+	_ string,
 ) (string, error) {
 	switch c.responseFormat {
 	case ResponseFormatJson:
