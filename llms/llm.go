@@ -47,7 +47,7 @@ func (l LLMProvider) String() string {
 	case ProviderGoogleGemini_2_5_Flash:
 		s = "gemini-2.5-flash-preview-04-17"
 	case ProviderChatGPT:
-		s = "gpt-4.1-mini"
+		s = "gpt-4.1-mini-2025-04-14"
 	case ProviderDeepseek:
 		s = "deepseek-chat"
 	case ProviderOllama:
