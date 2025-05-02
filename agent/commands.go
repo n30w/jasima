@@ -28,6 +28,15 @@ const (
 	// peers.
 	SendInitialMessage Command = 4
 
+	// SetResponseTypeToJson sets the agent LLM's response type to structured
+	// output.
+	SetResponseTypeToJson Command = 20
+
+	// SetResponseTypeToText sets the agent LLM's response type to text.
+	// The LLM can be prompted to output JSON, however results may vary in
+	// the correctness of the JSON validity.
+	SetResponseTypeToText Command = 21
+
 	// Latch requires a client go into `latch` mode.
 	Latch Command = 10
 
@@ -50,6 +59,10 @@ func (c Command) String() string {
 		return "RESET_INSTRUCTIONS"
 	case SendInitialMessage:
 		return "SEND_INITIAL_MESSAGE"
+	case SetResponseTypeToJson:
+		return "SET_RESPONSE_TYPE_TO_JSON"
+	case SetResponseTypeToText:
+		return "SET_RESPONSE_TYPE_TO_TEXT"
 	case Latch:
 		return "LATCH"
 	case Unlatch:
