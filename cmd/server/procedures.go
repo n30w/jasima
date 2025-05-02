@@ -271,20 +271,26 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		s.channels.messagePool <- msg
 
-		dictUpdates := <-s.channels.systemLayerMessagePool
-
 		// Unmarshal from JSON.
 
 		var updates []memory.DictionaryEntry
 
-		err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
-		if err != nil {
-			errs <- errors.Wrapf(
-				err,
-				"failed to unmarshal dictionary update generation %d",
-				i,
-			)
-			return
+		noErrorJson := false
+
+		for !noErrorJson {
+			dictUpdates := <-s.channels.systemLayerMessagePool
+			err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
+			if err != nil {
+				s.logger.Errorf("failed to unmarshal dictionary update generation %d", i)
+				s.logger.Debug("Resending dictionary request to system agent...")
+				msg := s.messageToSystemAgent(
+					dictSysAgent.name,
+					"Your JSON is imporperly formatted. Please send a corrected version.",
+				)
+				s.channels.messagePool <- msg
+				continue
+			}
+			noErrorJson = true
 		}
 
 		// Update the generation's dictionary based on updates.
