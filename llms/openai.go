@@ -3,9 +3,8 @@ package llms
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	"codeberg.org/n30w/jasima/memory"
+	"github.com/pkg/errors"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -46,8 +45,9 @@ func newOpenAIClient(
 		messages = append(messages, openai.SystemMessage(mc.Instructions))
 		return &openAIClient{
 			llm: &llm{
-				model:        mc.Provider,
-				instructions: mc.Instructions,
+				model:          mc.Provider,
+				instructions:   mc.Instructions,
+				responseFormat: ResponseFormatText,
 			},
 			client: &c,
 			completionParams: &openai.ChatCompletionNewParams{
@@ -67,11 +67,21 @@ func newOpenAIClient(
 func (c openAIClient) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	_ string,
 ) (string, error) {
-	contents := c.prepare(messages)
+	switch c.responseFormat {
+	case ResponseFormatJson:
+		schema := openai.ResponseFormatJSONSchemaJSONSchemaParam{
+			Name:        "",
+			Strict:      openai.Bool(true),
+			Description: openai.String(""),
+			Schema:      "",
+		}
+		c.completionParams.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{JSONSchema: schema},
+		}
+	}
 
-	c.completionParams.Messages = contents
+	c.completionParams.Messages = c.prepare(messages)
 
 	result, err := c.client.Chat.Completions.New(
 		ctx,

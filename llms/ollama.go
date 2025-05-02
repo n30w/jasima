@@ -85,7 +85,6 @@ func NewOllama(url *url.URL, mc ModelConfig) (
 func (c Ollama) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	prompt string,
 ) (string, error) {
 	contents := c.prepare(messages)
 

@@ -3,6 +3,7 @@ package llms
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/pkg/errors"
 
@@ -42,7 +43,8 @@ func NewGoogleGemini(
 
 	c := &GoogleGemini{
 		llm: &llm{
-			model: mc.Provider,
+			model:          mc.Provider,
+			responseFormat: ResponseFormatText,
 		},
 		genaiClient: g,
 		genaiConfig: &genai.GenerateContentConfig{
@@ -74,13 +76,24 @@ func NewGoogleGemini(
 func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	prompt string,
 ) (string, error) {
+	switch c.responseFormat {
+	case ResponseFormatJson:
+		p, err := makeGoogleGeminiSchemaProperties("")
+		if err != nil {
+			return "", err
+		}
+		c.genaiConfig.ResponseMIMEType = "application/json"
+		c.genaiConfig.ResponseSchema = &genai.Schema{
+			Type: genai.TypeArray,
+			Items: &genai.Schema{
+				Type:       genai.TypeObject,
+				Properties: p,
+			},
+		}
+	}
+
 	contents := c.prepare(messages)
-	contents = append(
-		contents,
-		genai.NewContentFromText(prompt, genai.RoleUser),
-	)
 
 	result, err := c.genaiClient.Models.GenerateContent(
 		ctx,
@@ -91,13 +104,6 @@ func (c GoogleGemini) Request(
 	if err != nil {
 		return "", errors.Wrap(err, "gemini client failed to make request")
 	}
-
-	// res, err := json.MarshalIndent(*result, "", "  ")
-	// if err != nil {
-	// 	return "", err
-	// }
-
-	// return string(res), nil
 
 	return result.Text(), nil
 }
@@ -113,9 +119,10 @@ func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 	if l != 0 {
 		for i, v := range messages {
 
-			var content *genai.Content
-
-			content = genai.NewContentFromText(v.Text.String(), genai.RoleUser)
+			content := genai.NewContentFromText(
+				v.Text.String(),
+				genai.RoleUser,
+			)
 
 			if v.Role.String() == "model" {
 				content = genai.NewContentFromText(
@@ -133,4 +140,31 @@ func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
 
 func (c GoogleGemini) String() string {
 	return fmt.Sprintf("Google Gemini %s", c.model)
+}
+
+func makeGoogleGeminiSchemaProperties(d any) (
+	map[string]*genai.Schema,
+	error,
+) {
+	m := make(map[string]*genai.Schema)
+
+	v := reflect.ValueOf(d)
+	t := reflect.TypeOf(d)
+
+	if t.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("%v is not a struct", d)
+	}
+
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		value := v.Field(i)
+		switch value.Kind() {
+		case reflect.String:
+			m[field.Name] = &genai.Schema{
+				Type: genai.TypeString,
+			}
+		}
+	}
+
+	return m, nil
 }
