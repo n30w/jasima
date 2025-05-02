@@ -20,7 +20,6 @@ type LLMService interface {
 	Request(
 		ctx context.Context,
 		messages []memory.Message,
-		prompt string,
 	) (string, error)
 
 	// SetInstructions sets the initial instructions for the model.

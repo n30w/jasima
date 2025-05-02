@@ -146,7 +146,6 @@ func newClient(
 			apiKey,
 			cfg.ModelConfig,
 		)
-		sleepDuration = 16
 	default:
 		err = errors.New("invalid LLM provider")
 	}
@@ -261,7 +260,7 @@ func (c *client) NewMessageTo(
 	return m
 }
 
-func (c *client) request(ctx context.Context, prompt chat.Content) (
+func (c *client) request(ctx context.Context) (
 	chat.Content,
 	error,
 ) {
@@ -274,16 +273,14 @@ func (c *client) request(ctx context.Context, prompt chat.Content) (
 
 	t := utils.Timer(time.Now())
 
-	result, err := c.llm.Request(ctx, a, prompt.String())
+	result, err := c.llm.Request(ctx, a)
 	if err != nil {
 		return "", err
 	}
 
-	v := t()
-
 	c.logger.Debugf(
 		"Response received from LLM, roundtrip %s",
-		v.Truncate(1*time.Millisecond),
+		t().Truncate(1*time.Millisecond),
 	)
 
 	return chat.Content(result), nil
@@ -328,11 +325,9 @@ func (c *client) DispatchToLLM(
 	}
 
 	content := msg.Text
-	receiver := c.Peers[0]
+	receiver := msg.Sender
 
 	// First save the incoming message.
-
-	c.logger.Debug("Saving message to memory...")
 
 	err := c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
 	if err != nil {
@@ -344,7 +339,7 @@ func (c *client) DispatchToLLM(
 
 	time.Sleep(time.Second * c.sleepDuration)
 
-	llmResponse, err := c.request(ctx, content)
+	llmResponse, err := c.request(ctx)
 	if err != nil {
 		errs <- err
 		return
@@ -422,6 +417,11 @@ func (c *client) ReceiveMessages(
 			case agent.ResetInstructions:
 				c.llm.SetInstructions(c.ModelConfig.Instructions)
 				cancel(errors.New(statusMsg))
+			case agent.SetResponseTypeToJson:
+				// Change the response to structured JSON output.
+			case agent.SetResponseTypeToText:
+				// Change the response to text only. LLM will not use structured
+				// JSON for output.
 			case agent.Latch:
 				if c.latch {
 					c.logger.Debug("already latched, doing nothing...")
