@@ -3,24 +3,30 @@
 	import { fly } from 'svelte/transition';
 	import type { PageProps } from './$types';
 	const { data }: PageProps = $props();
-	const src = data.generationsSrc;
 
-	let generations: Generation[] = $state.raw([]);
+	const src = data.host + '/specifications';
+
 	let currentPhoneticsSpec: string = $state.raw('');
 	let currentGrammarSpec: string = $state.raw('');
 	let currentLogographySpec: string = $state.raw('');
 	let currentDictionarySpec: string = $state.raw('');
 
+	let specs: Map<string, string> = $state.raw(new Map<string, string>());
+
 	$effect(() => {
 		const es = new EventSource(src);
 		es.onmessage = (event) => {
 			try {
-				const json: Generation = JSON.parse(event.data);
-				generations = [...generations, json];
-				currentPhoneticsSpec = json.specifications['1'];
-				currentDictionarySpec = json.specifications['3'];
-				currentGrammarSpec = json.specifications['2'];
-				currentLogographySpec = json.specifications['4'];
+				const json: Specifications = JSON.parse(event.data);
+				for (const [key, value] of Object.entries(json)) {
+					specs.set(key, value);
+				}
+				specs = new Map<string, string>(specs);
+				currentPhoneticsSpec = specs.get('1')!;
+				currentGrammarSpec = specs.get('2')!;
+				currentLogographySpec = specs.get('3')!;
+				currentDictionarySpec = specs.get('4')!;
+				console.log(json);
 			} catch (err) {
 				console.log('Failed to parse JSON from /generations', err);
 			}
@@ -38,7 +44,7 @@
 <div class="flex grow-0">
 	<section>
 		{#key currentPhoneticsSpec}
-			<div in:fly={{ duration: 500, y: -200 }}>
+			<div in:fly={{ duration: 500, y: 200 }}>
 				<Markdown source={currentPhoneticsSpec} />
 			</div>
 		{/key}
@@ -52,7 +58,7 @@
 	</section>
 	<section>
 		{#key currentDictionarySpec}
-			<div in:fly={{ duration: 500, y: -200 }}>
+			<div in:fly={{ duration: 500, y: 200 }}>
 				<Markdown source={currentDictionarySpec} />
 			</div>
 		{/key}

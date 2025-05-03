@@ -13,7 +13,7 @@ type DictionaryEntry = {
 
 type Dictionary = Map<string, DictionaryEntry>;
 
-type Specifications = Map<number, string>;
+type Specifications = Map<string, string>;
 
 type Generation = {
 	transcript: Map<string, string>;

@@ -5,6 +5,7 @@ export const load: LayoutLoad = () => {
 	const generationsSrc = host + '/generations';
 	const chatSrc = host + '/chat';
 	return {
+		host,
 		generationsSrc,
 		chatSrc
 	};
