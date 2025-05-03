@@ -135,6 +135,12 @@ func (s *ConlangServer) iterate(
 	)
 	sb.WriteString(newGeneration.Dictionary.String())
 	sb.WriteString(layerSpecificInstructions[initialLayer])
+	sb.WriteString("\n")
+
+	// Add all grammar in the language.
+
+	sb.WriteString("Here is the complete grammar of the language:\n")
+	sb.WriteString(string(newGeneration.Specifications[chat.GrammarLayer]))
 
 	sendCommands(
 		clients,
