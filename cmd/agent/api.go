@@ -341,7 +341,8 @@ func (c *client) DispatchToLLM(
 
 	llmResponse, err := c.request(ctx, msg.Text)
 	if err != nil {
-		errs <- err
+		c.logger.Errorf("Error requesting LLM: %v", err)
+		c.logger.Warn("Exiting dispatch procedure")
 		return
 	}
 
