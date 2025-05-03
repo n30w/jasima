@@ -124,6 +124,14 @@ func (s *ConlangServer) iterate(
 		sb.WriteString("\n")
 	}
 
+	// Add all words in the language.
+
+	sb.WriteString(
+		"Here is the complete dictionary of all the words in the" +
+			" language:\n",
+	)
+	sb.WriteString(newGeneration.Dictionary.String())
+
 	sendCommands(
 		clients,
 		cmd(agent.AppendInstructions, sb.String()),
@@ -235,12 +243,18 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			return
 		}
 
+		genDict, err := json.Marshal(genSlice[i].Dictionary)
+		if err != nil {
+			errs <- errors.Wrap(err, "failed to Marshal dictionary")
+			return
+		}
+
 		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
 		s.channels.messagePool <- cmd(
 			agent.AppendInstructions,
 			fmt.Sprintf(
 				"This is the current dictionary\n%s",
-				genSlice[i].Dictionary.String(),
+				string(genDict),
 			),
 		)(dictSysAgent)
 
@@ -282,11 +296,14 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			dictUpdates := <-s.channels.systemLayerMessagePool
 			err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
 			if err != nil {
-				s.logger.Errorf("failed to unmarshal dictionary update generation %d", i)
+				s.logger.Errorf(
+					"failed to unmarshal dictionary update generation %d",
+					i,
+				)
 				s.logger.Debug("Resending dictionary request to system agent...")
 				msg := s.messageToSystemAgent(
 					dictSysAgent.name,
-					"Your JSON is imporperly formatted. Please send a corrected version.",
+					"Your JSON is improperly formatted. Please send a corrected version.",
 				)
 				s.channels.messagePool <- msg
 				continue
@@ -380,7 +397,10 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 // outputTestData continuously outputs messages to the test API. This is
 // useful for frontend testing without having to run agent queries
 // over and over again.
-func (s *ConlangServer) outputTestData(messages []memory.Message, generations []memory.Generation) {
+func (s *ConlangServer) outputTestData(
+	messages []memory.Message,
+	generations []memory.Generation,
+) {
 	var (
 		i1 = 0
 		i2 = 0

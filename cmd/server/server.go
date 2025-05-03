@@ -171,7 +171,10 @@ func NewConlangServer(
 
 	rg, err := utils.NewFixedQueue[memory.Generation](100)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to make new generation initial data")
+		return nil, errors.Wrap(
+			err,
+			"failed to make new generation initial data",
+		)
 	}
 
 	initData := &initialData{
@@ -324,13 +327,19 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 				"./outputs/generations/generations_20250502205519.json",
 			)
 			if err != nil {
-				errs <- errors.Wrap(err, "failed to load test generation json file")
+				errs <- errors.Wrap(
+					err,
+					"failed to load test generation json file",
+				)
 				return
 			}
 
 			for _, v := range gens {
 				if err := s.initialData.recentGenerations.Enqueue(v); err != nil {
-					errs <- errors.Wrap(err, "failed to enqueue recent generations")
+					errs <- errors.Wrap(
+						err,
+						"failed to enqueue recent generations",
+					)
 					return
 				}
 			}
