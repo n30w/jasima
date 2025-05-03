@@ -39,11 +39,13 @@
 <div class="flex flex-wrap gap-1">
 	{#each currDict as [key, value] (key)}
 		<div class="h-fit max-w-1/3 border-1 p-2 hover:bg-neutral-100">
-			<div class="h-10 w-10">
-				{#key key}
-					{@html currLog.get(value.word)}
-				{/key}
-			</div>
+			{#if currLog.has(value.word)}
+				<div class="h-10 w-10">
+					{#key key}
+						{@html currLog.get(value.word)}
+					{/key}
+				</div>
+			{/if}
 			<h1 class="text-base font-bold">
 				{#key value.word}
 					<span in:fade>{value.word}</span>
