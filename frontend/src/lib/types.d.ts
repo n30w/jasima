@@ -1,23 +1,23 @@
-type message = {
+type Message = {
 	text?: string;
 	timestamp: string;
 	sender: string;
 	command: number;
 };
 
-type dictionaryEntry = {
+type DictionaryEntry = {
 	word: string;
 	definition: string;
 	remove: boolean;
 };
 
-type dictionary = Map<string, dictionaryEntry>;
+type Dictionary = Map<string, DictionaryEntry>;
 
-type specifications = Map<number, string>;
+type Specifications = Map<number, string>;
 
-type generation = {
+type Generation = {
 	transcript: Map<string, string>;
 	logography: Map<string, string>;
 	specifications: Map<number, string>;
-	dictionary: dictionary;
+	dictionary: Dictionary;
 };
