@@ -61,14 +61,6 @@ func (s *ConlangServer) iterate(
 		)
 	}
 
-	// layerSpecificInstructions := map[chat.Layer]string{
-	// 	chat.SystemLayer:     "",
-	// 	chat.PhoneticsLayer:  "",
-	// 	chat.GrammarLayer:    "",
-	// 	chat.DictionaryLayer: "Consider words based on this text:",
-	// 	chat.LogographyLayer: "",
-	// }
-
 	var (
 		timer        = utils.Timer(time.Now())
 		clients      = s.getClientsByLayer(initialLayer)
@@ -110,6 +102,17 @@ func (s *ConlangServer) iterate(
 			),
 		)(sysClient)
 
+		layerSpecificInstructions = map[chat.Layer]string{
+			chat.SystemLayer:    "",
+			chat.PhoneticsLayer: "",
+			chat.GrammarLayer:   "",
+			chat.DictionaryLayer: "Do not discuss the structure of the" +
+				" dictionary. Rather, " +
+				"discuss the words and enhancements that may need to be made to" +
+				" them.",
+			chat.LogographyLayer: "",
+		}
+
 		sb strings.Builder
 	)
 
@@ -127,10 +130,11 @@ func (s *ConlangServer) iterate(
 	// Add all words in the language.
 
 	sb.WriteString(
-		"Here is the complete dictionary of all the words in the" +
+		"Here is the complete dictionary of all words in the" +
 			" language:\n",
 	)
 	sb.WriteString(newGeneration.Dictionary.String())
+	sb.WriteString(layerSpecificInstructions[initialLayer])
 
 	sendCommands(
 		clients,
@@ -194,6 +198,13 @@ func (s *ConlangServer) iterate(
 	// End of side effects.
 
 	newGeneration.Specifications[initialLayer] = specPrime.Text
+
+	// JK one more.
+
+	s.broadcasters.specification.Broadcast(
+		newGeneration.
+			Specifications,
+	)
 
 	return newGeneration, nil
 }

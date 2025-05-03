@@ -163,9 +163,21 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 type Broadcasters struct {
 	messages            *Broadcaster[memory.Message]
 	generation          *Broadcaster[memory.Generation]
+	specification       *Broadcaster[memory.SpecificationGeneration]
 	currentTime         *Broadcaster[string]
 	testMessageFeed     *Broadcaster[memory.Message]
 	testGenerationsFeed *Broadcaster[memory.Generation]
+}
+
+func NewBroadcasters(l *log.Logger) *Broadcasters {
+	return &Broadcasters{
+		messages:            NewBroadcaster[memory.Message](l),
+		generation:          NewBroadcaster[memory.Generation](l),
+		specification:       NewBroadcaster[memory.SpecificationGeneration](l),
+		currentTime:         NewBroadcaster[string](l),
+		testMessageFeed:     NewBroadcaster[memory.Message](l),
+		testGenerationsFeed: NewBroadcaster[memory.Generation](l),
+	}
 }
 
 func (s *ConlangServer) ListenAndServeWebEvents(
@@ -178,12 +190,19 @@ func (s *ConlangServer) ListenAndServeWebEvents(
 
 	handler.HandleFunc("/time", s.broadcasters.currentTime.HandleClient)
 	handler.HandleFunc(
+		"/specifications",
+		s.broadcasters.specification.InitialData(s.initialData.recentSpecifications),
+	)
+	handler.HandleFunc(
 		"/chat", s.broadcasters.messages.InitialData(
 			s.
 				initialData.recentMessages,
 		),
 	)
-	handler.HandleFunc("/generations", s.broadcasters.generation.InitialData(s.generations))
+	handler.HandleFunc(
+		"/generations",
+		s.broadcasters.generation.InitialData(s.generations),
+	)
 	handler.HandleFunc(
 		"/test/chat",
 		s.broadcasters.testMessageFeed.InitialData(s.initialData.recentMessages),

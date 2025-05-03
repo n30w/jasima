@@ -46,8 +46,39 @@ type MemoryService interface {
 // initialData contains frontend initializing data so that, when connected,
 // data is shown rather than having nothing.
 type initialData struct {
-	recentMessages    *utils.FixedQueue[memory.Message]
-	recentGenerations *utils.FixedQueue[memory.Generation]
+	recentMessages       *utils.FixedQueue[memory.Message]
+	recentGenerations    *utils.FixedQueue[memory.Generation]
+	recentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
+}
+
+func NewInitialData() (*initialData, error) {
+	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate recent messages queue")
+	}
+
+	rg, err := utils.NewFixedQueue[memory.Generation](100)
+	if err != nil {
+		return nil, errors.Wrap(
+			err,
+			"failed to make recent generations queue",
+		)
+	}
+
+	specs, err := utils.NewFixedQueue[memory.SpecificationGeneration](10)
+	if err != nil {
+		return nil, errors.Wrap(
+			err,
+			"failed to make recent specifications queue",
+		)
+	}
+
+	initData := &initialData{
+		recentMessages:       recentMessagesQueue,
+		recentGenerations:    rg,
+		recentSpecifications: specs,
+	}
+	return initData, nil
 }
 
 type ConlangServer struct {
@@ -88,8 +119,7 @@ func NewConlangServer(
 	m MemoryService,
 ) (*ConlangServer, error) {
 	var (
-		errMsg = "failed to initialize new conlang server"
-		c      = channels{
+		c = channels{
 			messagePool:            make(chan *chat.Message),
 			systemLayerMessagePool: make(memory.MessageChannel),
 		}
@@ -117,21 +147,21 @@ func NewConlangServer(
 			specifications,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed loading specifications from file")
 	}
 
 	// Load and serialize logography SVGs.
 
 	logographyGen1, err := loadLogographySvgsFromFile(cfg.files.logography)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed loading logography from files")
 	}
 
 	// Load and serialize dictionary.
 
 	dictionaryGen1, err := loadDictionaryFromFile(cfg.files.dictionary)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed loading dictionary from file")
 	}
 
 	initialGen := memory.Generation{
@@ -146,41 +176,24 @@ func NewConlangServer(
 			maxGenerations + 1,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed to create generation queue")
 	}
 
 	err = generations.Enqueue(initialGen)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed to enqueue initial generation")
 	}
 
 	// Initialize web broadcasters
 
-	b := &Broadcasters{
-		messages:            NewBroadcaster[memory.Message](l),
-		generation:          NewBroadcaster[memory.Generation](l),
-		currentTime:         NewBroadcaster[string](l),
-		testMessageFeed:     NewBroadcaster[memory.Message](l),
-		testGenerationsFeed: NewBroadcaster[memory.Generation](l),
-	}
+	b := NewBroadcasters(l)
 
-	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
+	initData, err := NewInitialData()
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrap(err, "failed to make initial data")
 	}
 
-	rg, err := utils.NewFixedQueue[memory.Generation](100)
-	if err != nil {
-		return nil, errors.Wrap(
-			err,
-			"failed to make new generation initial data",
-		)
-	}
-
-	initData := &initialData{
-		recentMessages:    recentMessagesQueue,
-		recentGenerations: rg,
-	}
+	err = initData.recentSpecifications.Enqueue(specificationsGen1)
 
 	return &ConlangServer{
 		Server: Server{
