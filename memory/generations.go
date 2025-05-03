@@ -2,7 +2,9 @@ package memory
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
+	"strings"
 
 	"codeberg.org/n30w/jasima/chat"
 )
@@ -46,16 +48,24 @@ func (d DictionaryGeneration) Copy() DictionaryGeneration {
 }
 
 func (d DictionaryGeneration) String() string {
-	// There is probably a better way to do this.
-	dictArr := make([]DictionaryEntry, len(d))
-
+	var sb strings.Builder
 	for _, entry := range d {
-		dictArr = append(dictArr, entry)
+		w := fmt.Sprintf("%s:%s\n", entry.Word, entry.Definition)
+		sb.WriteString(w)
 	}
 
-	s, _ := json.Marshal(dictArr)
+	return sb.String()
+}
 
-	return string(s)
+func (d DictionaryGeneration) MarshalJSON() ([]byte, error) {
+	dictArr := make([]DictionaryEntry, 0)
+	for _, entry := range d {
+		if entry.Word != "" {
+			dictArr = append(dictArr, entry)
+		}
+	}
+	s, _ := json.Marshal(dictArr)
+	return s, nil
 }
 
 type DictionaryEntry struct {
