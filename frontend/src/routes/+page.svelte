@@ -1,18 +1,15 @@
 <script lang="ts">
 	/** eslint-disable svelte/no-at-html-tags */
 	import { EventSource } from 'eventsource';
-	import { tick } from 'svelte';
 	import { animate, stagger, utils } from 'animejs';
 	import Markdown from '$lib/Markdown.svelte';
 	import { typewriter } from '$lib/typewriter';
 	import type { PageProps } from './$types';
-	import ChatScroll from '$lib/ChatScroll.svelte';
 
 	const { data }: PageProps = $props();
 
 	// const src = 'http://127.0.0.1:7070/chat';
-	const src = data.generationsSrc;
-	const src1 = 'http://127.0.0.1:7070/test/chat';
+	const src = data.chatSrc;
 
 	let val: Message = $state.raw({
 		text: '',
@@ -21,7 +18,7 @@
 		command: 0
 	});
 	$effect(() => {
-		const es = new EventSource(src1);
+		const es = new EventSource(src);
 
 		es.onmessage = (event) => {
 			try {
@@ -68,9 +65,10 @@
 	// });
 </script>
 
-<div>
+<div class="mx-auto w-1/2">
 	{#key val}
 		<!-- <Markdown source={val.text} /> -->
+		<h1 in:typewriter={{ speed: 10 }} class="font-bold">{val.sender}</h1>
 		<p in:typewriter={{ speed: 100 }}>{val.text}</p>
 	{/key}
 </div>

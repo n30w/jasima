@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { draw, fade } from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 	import type { PageProps } from './$types';
-	import { quintInOut, quintOut } from 'svelte/easing';
+	import { quintOut } from 'svelte/easing';
 	const { data }: PageProps = $props();
 	const src = data.generationsSrc;
 
