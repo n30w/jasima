@@ -1,5 +1,5 @@
 <script lang="ts">
-	import SvelteMarkdown from '@humanspeak/svelte-markdown';
+	import SvelteMarkdown, { type Token } from '@humanspeak/svelte-markdown';
 	import CustomUnorderedList from '$lib/CustomUnorderedList.svelte';
 	import CustomListItem from '$lib/CustomListItem.svelte';
 	import CustomOrderedList from '$lib/CustomOrderedList.svelte';
@@ -10,13 +10,20 @@
 	}
 
 	const { source }: Props = $props();
+
+	const handleParsed = (tokens: Token[] | DOMTokenList) => {
+		// console.log('Parsed tokens:', tokens);
+	};
 </script>
 
-<SvelteMarkdown
-	source={source ? source : ``}
-	renderers={{
-		list: CustomUnorderedList,
-		listitem: CustomListItem,
-		paragraph: CustomParagraph
-	}}
-/>
+{#key source}
+	<SvelteMarkdown
+		source={source ? source : ``}
+		renderers={{
+			list: CustomUnorderedList,
+			listitem: CustomListItem,
+			paragraph: CustomParagraph
+		}}
+		parsed={handleParsed}
+	/>
+{/key}

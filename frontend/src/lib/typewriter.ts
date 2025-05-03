@@ -10,7 +10,7 @@ export function typewriter(node: HTMLElement, { speed = 1 }: { speed?: number })
 
 	return {
 		duration,
-		tick: (t) => {
+		tick: (t: number) => {
 			const i = ~~(text.length * t);
 			node.textContent = text.slice(0, i);
 		}

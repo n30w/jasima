@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { typewriter } from '$lib/typewriter';
 	import { fade } from 'svelte/transition';
+	import type { PageProps } from './$types';
+	const { data }: PageProps = $props();
 
-	const src = 'http://127.0.0.1:7070/test/generations';
+	const src = data.generationsSrc;
 
 	let currDict: Map<string, DictionaryEntry> = $state(new Map<string, DictionaryEntry>());
 

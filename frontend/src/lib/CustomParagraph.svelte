@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { typewriter } from './typewriter';
 
 	interface Props {
 		children?: Snippet;
@@ -8,6 +9,6 @@
 	const { children }: Props = $props();
 </script>
 
-<p class="m-1 p-1">
+<p in:typewriter={{ speed: 10 }} class="m-1 p-1">
 	{@render children?.()}
 </p>
