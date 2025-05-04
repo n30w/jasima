@@ -247,7 +247,7 @@ func (s *GRPCServer) RemoveClient(c *GRPCClient) {
 	s.removeClient(c)
 }
 
-func (s *GRPCServer) GetClientsByLayer(layer chat.Layer) Clients {
+func (s *GRPCServer) GetClientsByLayer(layer chat.Layer) []*GRPCClient {
 	return s.getClientsByLayer(layer)
 }
 
@@ -281,8 +281,8 @@ func (s *GRPCServer) removeClient(client *GRPCClient) {
 
 // getClientsByLayer retrieves all the clients of a Layer and returns them
 // in an array of pointers to those clients.
-func (s *GRPCServer) getClientsByLayer(layer chat.Layer) Clients {
-	var c Clients
+func (s *GRPCServer) getClientsByLayer(layer chat.Layer) []*GRPCClient {
+	var c []*GRPCClient
 
 	s.mu.Lock()
 	c = s.clients.byLayer(layer)
@@ -380,12 +380,9 @@ func (c *GRPCClient) String() string {
 	return fmt.Sprintf("%s<%s>", c.Name, c.model)
 }
 
-type Names map[chat.Name]struct{}
-
-type Clients []*GRPCClient
-
 type (
-	layerToNamesMap  map[chat.Layer]Names
+	namesMap         map[chat.Name]struct{}
+	layerToNamesMap  map[chat.Layer]namesMap
 	nameToClientsMap map[chat.Name]*GRPCClient
 )
 
@@ -407,7 +404,7 @@ func (ct *clientele) removeByName(c *GRPCClient) {
 func (ct *clientele) addByLayer(c *GRPCClient) {
 	_, ok := ct.byLayerMap[c.layer]
 	if !ok {
-		ct.byLayerMap[c.layer] = make(Names)
+		ct.byLayerMap[c.layer] = make(namesMap)
 	}
 
 	ct.byLayerMap[c.layer][c.Name] = struct{}{}
@@ -424,7 +421,7 @@ func (ct *clientele) byName(n chat.Name) (*GRPCClient, bool) {
 
 // byLayer receives a Layer parameter to retrieve an `n` list of clients with
 // that specified Layer.
-func (ct *clientele) byLayer(layer chat.Layer) Clients {
+func (ct *clientele) byLayer(layer chat.Layer) []*GRPCClient {
 	clients := make([]*GRPCClient, 0)
 	l := ct.byLayerMap[layer]
 
