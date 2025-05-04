@@ -1,4 +1,4 @@
-package main
+package network
 
 import (
 	"codeberg.org/n30w/jasima/agent"
@@ -6,19 +6,19 @@ import (
 )
 
 type (
-	command       func(agent.Command, ...string) commandTarget
-	commandTarget func(*client) *chat.Message
+	CommandForAgent func(agent.Command, ...string) MessageFor
+	MessageFor      func(client *GRPCClient) *chat.Message
 )
 
-func buildCommand(sender string) command {
+func BuildCommand(sender string) CommandForAgent {
 	return func(
 		command agent.Command,
 		content ...string,
-	) commandTarget {
-		return func(c *client) *chat.Message {
+	) MessageFor {
+		return func(c *GRPCClient) *chat.Message {
 			msg := &chat.Message{
 				Sender:   sender,
-				Receiver: c.name.String(),
+				Receiver: c.Name.String(),
 				Command:  command.Int32(),
 				Layer:    c.layer.Int32(),
 				Content:  "",
@@ -33,10 +33,10 @@ func buildCommand(sender string) command {
 	}
 }
 
-func sendCommandBuilder(
+func SendCommandBuilder(
 	pool chan<- *chat.Message,
-) func([]*client, ...commandTarget) {
-	return func(clients []*client, commands ...commandTarget) {
+) func([]*GRPCClient, ...MessageFor) {
+	return func(clients []*GRPCClient, commands ...MessageFor) {
 		for _, c := range clients {
 			for _, cmd := range commands {
 				pool <- cmd(c)

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/n30w/jasima/network"
+
 	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/agent"
@@ -53,7 +55,7 @@ func (s *ConlangServer) iterate(
 		)
 	}
 
-	sysClient, err := s.getClientByName(chat.Name("SYSTEM_AGENT_A"))
+	sysClient, err := s.gs.GetClientByName("SYSTEM_AGENT_A")
 	if err != nil {
 		return newGeneration, errors.Wrap(
 			err,
@@ -63,9 +65,9 @@ func (s *ConlangServer) iterate(
 
 	var (
 		timer        = utils.Timer(time.Now())
-		clients      = s.getClientsByLayer(initialLayer)
-		cmd          = buildCommand(s.config.name)
-		sendCommands = sendCommandBuilder(s.channels.messagePool)
+		clients      = s.gs.GetClientsByLayer(initialLayer)
+		cmd          = network.BuildCommand(s.config.name)
+		sendCommands = network.SendCommandBuilder(s.gs.Channel.ToClients)
 
 		// kickoff is the command that is sent to kick off the layer's
 		// iteration exchanges. It consists of the initializer client, which
@@ -79,7 +81,7 @@ func (s *ConlangServer) iterate(
 					"let's begin developing Toki Pona %s. You go first.",
 				initialLayer,
 			),
-		)(s.getClientsByLayer(initialLayer)[0])
+		)(s.gs.GetClientsByLayer(initialLayer)[0])
 
 		// initialInstructions are the initial instructions each agent on the
 		// layer is given for its system prompt.
@@ -150,7 +152,7 @@ func (s *ConlangServer) iterate(
 
 	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
 
-	s.channels.messagePool <- kickoff
+	s.gs.Channel.ToClients <- kickoff
 
 	for i := range exchanges {
 		m := <-s.procedureChan
@@ -172,19 +174,19 @@ func (s *ConlangServer) iterate(
 
 	// The system agent will ONLY summarize the chat log, and not read the
 	// other Specifications for other layers (for now at least).
-	s.channels.messagePool <- addSysAgentInstructions
-	s.channels.messagePool <- cmd(agent.Unlatch)(sysClient)
+	s.gs.Channel.ToClients <- addSysAgentInstructions
+	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(sysClient)
 
 	msg := s.messageToSystemAgent(
-		sysClient.name,
+		sysClient.Name,
 		transcriptToString(newGeneration.Transcript[initialLayer]),
 	)
 
-	s.channels.messagePool <- msg
+	s.gs.Channel.ToClients <- msg
 
 	s.logger.Infof("Waiting for system agent response...")
 
-	specPrime := <-s.channels.systemLayerMessagePool
+	specPrime := <-s.gs.Channel.ToServer
 
 	sb.Reset()
 
@@ -207,7 +209,7 @@ func (s *ConlangServer) iterate(
 
 	// JK one more.
 
-	s.broadcasters.specification.Broadcast(
+	s.ws.Broadcasters.Specification.Broadcast(
 		newGeneration.
 			Specifications,
 	)
@@ -221,7 +223,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		err         error
 		errMsg      = "failed to evolve generation %d"
 		targetTotal = 10
-		cmd         = buildCommand(s.config.name)
+		cmd         = network.BuildCommand(s.config.name)
 	)
 
 	joinCtx, joinCtxCancel := context.WithCancel(context.Background())
@@ -230,7 +232,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		joined := false
 		for !joined {
 			time.Sleep(1 * time.Second)
-			if s.clients.total >= targetTotal {
+			if s.gs.TotalClients() >= targetTotal {
 				joined = true
 			}
 		}
@@ -245,7 +247,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	// Prepare the dictionary system agent.
 
-	dictSysAgent, err := s.getClientByName(chat.Name("SYSTEM_AGENT_B"))
+	dictSysAgent, err := s.gs.GetClientByName("SYSTEM_AGENT_B")
 	if err != nil {
 		errs <- err
 		return
@@ -266,8 +268,8 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			return
 		}
 
-		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
-		s.channels.messagePool <- cmd(
+		s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
+		s.gs.Channel.ToClients <- cmd(
 			agent.AppendInstructions,
 			fmt.Sprintf(
 				"This is the current dictionary\n%s",
@@ -294,14 +296,14 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		// send results to dictionary LLM
 
-		s.channels.messagePool <- cmd(agent.Unlatch)(dictSysAgent)
+		s.gs.Channel.ToClients <- cmd(agent.Unlatch)(dictSysAgent)
 
 		msg := s.messageToSystemAgent(
-			dictSysAgent.name,
+			dictSysAgent.Name,
 			transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
 		)
 
-		s.channels.messagePool <- msg
+		s.gs.Channel.ToClients <- msg
 
 		// Unmarshal from JSON.
 
@@ -310,7 +312,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		noErrorJson := false
 
 		for !noErrorJson {
-			dictUpdates := <-s.channels.systemLayerMessagePool
+			dictUpdates := <-s.gs.Channel.ToServer
 			err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
 			if err != nil {
 				s.logger.Errorf(
@@ -319,10 +321,10 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 				)
 				s.logger.Debug("Resending dictionary request to system agent...")
 				msg := s.messageToSystemAgent(
-					dictSysAgent.name,
+					dictSysAgent.Name,
 					"Your JSON is improperly formatted. Please send a corrected version.",
 				)
-				s.channels.messagePool <- msg
+				s.gs.Channel.ToClients <- msg
 				continue
 			}
 			noErrorJson = true
@@ -351,9 +353,9 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		newGeneration.Dictionary = currentDict.Copy()
 
-		s.channels.messagePool <- cmd(agent.Latch)(dictSysAgent)
-		s.channels.messagePool <- cmd(agent.ClearMemory)(dictSysAgent)
-		s.channels.messagePool <- cmd(agent.ResetInstructions)(dictSysAgent)
+		s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
+		s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
+		s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
 
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
@@ -362,10 +364,10 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		// Save specs to memory
 		// Save result to LLM.
-		s.broadcasters.generation.Broadcast(newGeneration)
+		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
 	}
 
-	s.listening = false
+	s.gs.Listening = false
 
 	t := timer().Truncate(10 * time.Millisecond)
 
@@ -432,14 +434,14 @@ func (s *ConlangServer) outputTestData(
 	go func() {
 		for {
 			<-t1.C
-			s.broadcasters.testMessageFeed.Broadcast(messages[i1%l1])
+			s.ws.Broadcasters.TestMessageFeed.Broadcast(messages[i1%l1])
 			i1++
 		}
 	}()
 
 	for {
 		<-t2.C
-		s.broadcasters.testGenerationsFeed.Broadcast(generations[i2%l2])
+		s.ws.Broadcasters.TestGenerationsFeed.Broadcast(generations[i2%l2])
 		i2++
 	}
 }

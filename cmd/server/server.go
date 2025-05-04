@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	"codeberg.org/n30w/jasima/network"
+
 	"codeberg.org/n30w/jasima/agent"
 	"codeberg.org/n30w/jasima/utils"
 
@@ -43,74 +45,14 @@ type MemoryService interface {
 	fmt.Stringer
 }
 
-// initialData contains frontend initializing data so that, when connected,
-// data is shown rather than having nothing.
-type initialData struct {
-	recentMessages       *utils.FixedQueue[memory.Message]
-	recentGenerations    *utils.FixedQueue[memory.Generation]
-	recentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
-}
-
-func NewInitialData() (*initialData, error) {
-	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate recent messages queue")
-	}
-
-	rg, err := utils.NewFixedQueue[memory.Generation](100)
-	if err != nil {
-		return nil, errors.Wrap(
-			err,
-			"failed to make recent generations queue",
-		)
-	}
-
-	specs, err := utils.NewFixedQueue[memory.SpecificationGeneration](10)
-	if err != nil {
-		return nil, errors.Wrap(
-			err,
-			"failed to make recent specifications queue",
-		)
-	}
-
-	initData := &initialData{
-		recentMessages:       recentMessagesQueue,
-		recentGenerations:    rg,
-		recentSpecifications: specs,
-	}
-	return initData, nil
-}
-
 type ConlangServer struct {
-	Server
+	logger        *log.Logger
+	memory        MemoryService
+	gs            *network.GRPCServer
 	config        *config
 	procedureChan chan memory.Message
 	generations   *utils.FixedQueue[memory.Generation]
-	broadcasters  *Broadcasters
-	initialData   *initialData
-}
-
-type procedureConfig struct {
-	// maxExchanges represents the total exchanges allowed per layer
-	// of evolution.
-	maxExchanges int
-
-	// maxGenerations represents the maximum number of generations to evolve.
-	// When set to 0, the procedure evolves forever.
-	maxGenerations int
-}
-
-type filePathConfig struct {
-	specifications string
-	logography     string
-	dictionary     string
-}
-
-type config struct {
-	name         string
-	debugEnabled bool
-	files        filePathConfig
-	procedures   procedureConfig
+	ws            *network.WebServer
 }
 
 func NewConlangServer(
@@ -118,18 +60,6 @@ func NewConlangServer(
 	l *log.Logger,
 	m MemoryService,
 ) (*ConlangServer, error) {
-	var (
-		c = channels{
-			messagePool:            make(chan *chat.Message),
-			systemLayerMessagePool: make(memory.MessageChannel),
-		}
-		ct = &clientele{
-			byNameMap:  make(nameToClientsMap),
-			byLayerMap: make(layerToNamesMap),
-			logger:     l,
-		}
-	)
-
 	if cfg.procedures.maxGenerations == 0 {
 		l.Infof(
 			"Max generations not specified, setting to default %d",
@@ -184,49 +114,42 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to enqueue initial generation")
 	}
 
-	// Initialize web broadcasters
-
-	b := NewBroadcasters(l)
-
-	initData, err := NewInitialData()
+	webServer, err := network.NewWebServer(l)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to make initial data")
+		return nil, errors.Wrap(err, "failed to create web server")
 	}
 
-	err = initData.recentSpecifications.Enqueue(specificationsGen1)
+	grpcServer := network.NewGRPCServer(l, cfg.name)
+
+	err = webServer.InitialData.RecentSpecifications.Enqueue(specificationsGen1)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to enqueue specifications")
+	}
 
 	return &ConlangServer{
-		Server: Server{
-			clients:   ct,
-			name:      chat.Name(cfg.name),
-			logger:    l,
-			memory:    m,
-			channels:  c,
-			listening: true,
-		},
-		initialData:   initData,
+		memory:        m,
+		gs:            grpcServer,
+		ws:            webServer,
 		generations:   generations,
 		procedureChan: make(chan memory.Message),
-		broadcasters:  b,
 		config:        cfg,
+		logger:        l,
 	}, nil
 }
 
 func (s *ConlangServer) Router(errs chan<- error) {
-	errMsg := "failed to route message"
-
 	eventsRoute := func(ctx context.Context, pbMsg *chat.Message) error {
 		msg := *memory.NewChatMessage(
 			pbMsg.Sender, pbMsg.Receiver,
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		err := s.initialData.recentMessages.Enqueue(msg)
+		err := s.ws.InitialData.RecentMessages.Enqueue(msg)
 		if err != nil {
-			s.logger.Errorf("failed to save message to initialData: %v", err)
+			s.logger.Errorf("failed to save message to InitialData: %v", err)
 		}
 
-		s.broadcasters.messages.Broadcast(msg)
+		s.ws.Broadcasters.Messages.Broadcast(msg)
 
 		return nil
 	}
@@ -260,14 +183,14 @@ func (s *ConlangServer) Router(errs chan<- error) {
 		)
 
 		if msg.Layer == chat.SystemLayer && msg.
-			Receiver == s.name {
-			s.channels.systemLayerMessagePool <- msg
+			Receiver == s.gs.Name {
+			s.gs.Channel.ToServer <- msg
 			return nil
 		}
 
-		err := s.broadcast(&msg)
+		err := s.gs.Broadcast(&msg)
 		if err != nil {
-			return errors.Wrap(err, errMsg)
+			return errors.Wrap(err, "failed to broadcast message to clients")
 		}
 
 		return nil
@@ -279,7 +202,7 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 		)
 
-		if msg.Sender != s.name {
+		if msg.Sender != s.gs.Name {
 			// This is necessary so the procedure channel does NOT block
 			// the main router loop.
 			select {
@@ -300,14 +223,14 @@ func (s *ConlangServer) Router(errs chan<- error) {
 
 		err := saveMessageTo(ctx, s.memory, msg)
 		if err != nil {
-			return errors.Wrap(err, errMsg)
+			return errors.Wrap(err, "failed to save message to memory")
 		}
 
 		return nil
 	}
 
 	routeMessages := chat.BuildRouter(
-		s.channels.messagePool,
+		s.gs.Channel.ToClients,
 		printConsoleData,
 		saveMessage,
 		messageRoute,
@@ -316,12 +239,12 @@ func (s *ConlangServer) Router(errs chan<- error) {
 	)
 
 	go routeMessages(errs)
-	go s.ListenAndServeRPC("tcp", "50051", errs)
+	go s.gs.ListenAndServe("tcp", "50051", errs)
 }
 
 func (s *ConlangServer) WebEvents(errs chan<- error) {
-	go broadcastTime(s.broadcasters.currentTime)
-	go s.ListenAndServeWebEvents("7070", errs)
+	go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
+	go s.ws.ListenAndServe("7070", errs)
 }
 
 func (s *ConlangServer) StartProcedures(errs chan<- error) {
@@ -335,7 +258,6 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 				return
 			}
 
-			// gens, err := loadJsonFile[memory.Generation]("./outputs/generations/generations_20250430160258.json")
 			gens, err := loadJsonFile[memory.Generation](
 				"./outputs/generations/generations_20250502205519.json",
 			)
@@ -348,7 +270,8 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 			}
 
 			for _, v := range gens {
-				if err := s.initialData.recentGenerations.Enqueue(v); err != nil {
+				err = s.ws.InitialData.RecentGenerations.Enqueue(v)
+				if err != nil {
 					errs <- errors.Wrap(
 						err,
 						"failed to enqueue recent generations",
@@ -356,8 +279,6 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 					return
 				}
 			}
-
-			// gens := []memory.Generation{}
 
 			// s.logger.Debug(gens)
 

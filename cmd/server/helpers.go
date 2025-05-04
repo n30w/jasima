@@ -12,10 +12,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func makePortString(p string) string {
-	return ":" + p
-}
-
 func newTranscriptGeneration() memory.TranscriptGeneration {
 	t := make(memory.TranscriptGeneration)
 
