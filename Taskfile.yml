@@ -18,10 +18,10 @@ tasks:
       - protoc --go_out=./chat/ --go-grpc_out=./chat/ ./chat/chat.proto
   run-agent-toki:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="toki" -peers="pona" -model=5
+      - go run ./cmd/agent -debug=true -temperature=1.75 -layer=1 -name="toki" -peers="pona" -model=5
   run-agent-pona:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="pona" -peers="toki" -model=1
+      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="pona" -peers="toki" -model=4
   run-agent-penny:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.75 -layer=2 -name="penny" -peers="tails" -model=5
@@ -48,4 +48,4 @@ tasks:
       - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_b.toml" -debug=true -model=1 -temperature=0.75
   run-server:
     cmds:
-      - go run ./cmd/server -debug=true -logToFile=false -exchanges=10 -generations=3
+      - go run ./cmd/server -debug=true -logToFile=false -exchanges=10 -generations=5
