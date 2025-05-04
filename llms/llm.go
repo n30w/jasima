@@ -1,7 +1,11 @@
 package llms
 
 import (
+	"encoding/json"
 	"strings"
+
+	"github.com/charmbracelet/log"
+	"github.com/pkg/errors"
 )
 
 type llm struct {
@@ -11,9 +15,30 @@ type llm struct {
 	// instructions is a system instruction.
 	instructions string
 
+	defaultConfig *RequestConfig
+
 	// responseFormat selects the type of response that is expected from the
 	// LLM, like structured JSON output.
 	responseFormat ResponseFormat
+
+	logger *log.Logger
+}
+
+func newLLM(mc ModelConfig, l *log.Logger) (*llm, error) {
+	err := mc.validate()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid model config")
+	}
+
+	l.Debugf("Creating new LLM instance with these options: %+v", mc)
+
+	return &llm{
+		model:          mc.Provider,
+		instructions:   mc.Instructions,
+		defaultConfig:  &mc.RequestConfig,
+		responseFormat: ResponseFormatText,
+		logger:         l,
+	}, nil
 }
 
 func (l *llm) SetInstructions(s string) {
@@ -36,6 +61,7 @@ const (
 	ProviderOllama
 	ProviderClaude
 	ProviderGoogleGemini_2_5_Flash
+	InvalidProvider
 )
 
 func (l LLMProvider) String() string {
@@ -55,7 +81,6 @@ func (l LLMProvider) String() string {
 	case ProviderClaude:
 		s = "claude-3-5-haiku-20241022"
 	default:
-		s = "unknown provider"
 	}
 
 	return s
@@ -64,8 +89,58 @@ func (l LLMProvider) String() string {
 type ModelConfig struct {
 	Provider     LLMProvider
 	Instructions string
-	Temperature  float64
 	Initialize   string
+	Temperature  float64
+	RequestConfig
+}
+
+func (cfg *ModelConfig) validate() error {
+	if cfg.Provider >= InvalidProvider {
+		return errors.New("invalid LLM provider")
+	}
+
+	if cfg.Instructions == "" {
+		return errors.New("missing instructions")
+	}
+
+	err := cfg.RequestConfig.validate()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type RequestConfig struct {
+	Temperature      float64
+	Seed             int64
+	TopP             float64
+	TopK             float64
+	MaxTokens        int64
+	FrequencyPenalty float64
+	PresencePenalty  float64
+}
+
+func (cfg RequestConfig) validate() error {
+	if cfg.Temperature < 0.0 || cfg.Temperature > 2.0 {
+		return errors.New("temperature must be between 0.0 and 2.0")
+	}
+	if cfg.TopP < 0.0 || cfg.TopP > 1.0 {
+		return errors.New("top_p must be between 0.0 and 1.0")
+	}
+	if cfg.TopK < 0 {
+		return errors.New("top_k must be non-negative")
+	}
+	if cfg.MaxTokens < 1 {
+		return errors.New("max_tokens must be greater than 0")
+	}
+	if cfg.PresencePenalty < -2.0 || cfg.PresencePenalty > 2.0 {
+		return errors.New("presence_penalty must be between -2.0 and 2.0")
+	}
+	if cfg.FrequencyPenalty < -2.0 || cfg.FrequencyPenalty > 2.0 {
+		return errors.New("frequency_penalty must be between -2.0 and 2.0")
+	}
+	return nil
 }
 
 func buildString(strs ...string) string {
@@ -77,4 +152,30 @@ func buildString(strs ...string) string {
 	}
 
 	return sb.String()
+}
+
+const (
+	agentResponseName        = "response"
+	agentResponseDescription = "Your response to the given conversation and" +
+		" information"
+)
+
+type defaultAgentResponse struct {
+	Response string `json:"response" jsonschema_description:"Your response"`
+}
+
+func unmarshal[T any](s string) (
+	T,
+	error,
+) {
+	var d T
+	err := json.Unmarshal(
+		[]byte(s),
+		&d,
+	)
+	if err != nil {
+		return d, err
+	}
+
+	return d, nil
 }

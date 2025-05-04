@@ -3,8 +3,8 @@ package llms
 import (
 	"context"
 	"fmt"
-	"reflect"
 
+	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/memory"
@@ -14,25 +14,17 @@ import (
 
 type GoogleGemini struct {
 	*llm
-	genaiClient *genai.Client
-	genaiConfig *genai.GenerateContentConfig
-}
-
-func (c GoogleGemini) SetInstructions(s string) {
-	c.instructions = s
-}
-
-func (c GoogleGemini) AppendInstructions(s string) {
-	c.instructions = buildString(c.instructions, s)
+	client *genai.Client
 }
 
 func NewGoogleGemini(
-	ctx context.Context,
 	apiKey string,
 	mc ModelConfig,
+	logger *log.Logger,
 ) (*GoogleGemini, error) {
-	g, err := genai.NewClient(
-		ctx, &genai.ClientConfig{
+	c, err := genai.NewClient(
+		context.Background(),
+		&genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
 		},
@@ -41,99 +33,114 @@ func NewGoogleGemini(
 		return nil, err
 	}
 
-	c := &GoogleGemini{
-		llm: &llm{
-			model:          mc.Provider,
-			responseFormat: ResponseFormatText,
-		},
-		genaiClient: g,
-		genaiConfig: &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(float32(mc.Temperature)),
-			MaxOutputTokens: 8192,
-		},
+	newConf := mc
+	g := defaultGeminiConfig
+	g.Temperature = mc.Temperature
+	newConf.RequestConfig = *g
+
+	l, err := newLLM(newConf, logger)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create Gemini client")
 	}
 
-	if mc.Instructions != "" {
-		c.genaiConfig.SystemInstruction = genai.NewContentFromText(
-			mc.Instructions, genai.RoleModel,
-		)
+	return &GoogleGemini{
+		llm:    l,
+		client: c,
+	}, nil
+}
+
+func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateContentConfig {
+	params := &genai.GenerateContentConfig{
+		Temperature:     genai.Ptr(float32(c.defaultConfig.Temperature)),
+		MaxOutputTokens: int32(c.defaultConfig.MaxTokens),
+		Seed:            genai.Ptr(int32(c.defaultConfig.Seed)),
+		// PresencePenalty:  genai.Ptr(float32(c.defaultConfig.PresencePenalty)),
+		FrequencyPenalty: genai.Ptr(float32(c.defaultConfig.FrequencyPenalty)),
 	}
 
-	if mc.Provider == ProviderGoogleGemini_2_5_Flash {
+	if rc != nil {
+		params = &genai.GenerateContentConfig{
+			Temperature:     genai.Ptr(float32(rc.Temperature)),
+			MaxOutputTokens: int32(rc.MaxTokens),
+			Seed:            genai.Ptr(int32(rc.Seed)),
+			// PresencePenalty:  genai.Ptr(float32(rc.PresencePenalty)),
+			FrequencyPenalty: genai.Ptr(float32(rc.FrequencyPenalty)),
+		}
+	}
+
+	if c.model == ProviderGoogleGemini_2_5_Flash {
 		// Gemini 2.5 lets you toggle whether thinking is on or off, via
 		// the `ThinkingBudget` parameter. Setting it to 0 makes it not
 		// think. Gemini 2.0 does not provide this capability.
-		c.genaiConfig.ThinkingConfig = &genai.ThinkingConfig{
+		params.ThinkingConfig = &genai.ThinkingConfig{
 			ThinkingBudget: genai.Ptr(int32(0)),
 		}
 		// Jack it up because we can.
-		c.genaiConfig.MaxOutputTokens = 32767
+		params.MaxOutputTokens = 32767
 	}
 
-	return c, nil
+	if c.responseFormat == ResponseFormatJson {
+		params.ResponseMIMEType = "application/json"
+		params.ResponseSchema = defaultGeminiResponse
+	}
+
+	return params
 }
 
 func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	prompt string,
+	_ string,
 ) (string, error) {
-	switch c.responseFormat {
-	case ResponseFormatJson:
-		p, err := makeGoogleGeminiSchemaProperties("")
-		if err != nil {
-			return "", err
-		}
-		c.genaiConfig.ResponseMIMEType = "application/json"
-		c.genaiConfig.ResponseSchema = &genai.Schema{
-			Type: genai.TypeArray,
-			Items: &genai.Schema{
-				Type:       genai.TypeObject,
-				Properties: p,
-			},
-		}
-	}
-
 	contents := c.prepare(messages)
-	contents = append(contents, genai.NewContentFromText(prompt, genai.RoleUser))
 
-	result, err := c.genaiClient.Models.GenerateContent(
+	params := c.buildRequestParams(nil)
+
+	result, err := c.client.Models.GenerateContent(
 		ctx,
 		c.model.String(),
 		contents,
-		c.genaiConfig,
+		params,
 	)
 	if err != nil {
 		return "", errors.Wrap(err, "gemini client failed to make request")
 	}
 
-	return result.Text(), nil
+	d, err := unmarshal[defaultAgentResponse](result.Text())
+	if err != nil {
+		return "", errors.Wrap(
+			err,
+			"failed to unmarshal agent response",
+		)
+	}
+
+	return d.Response, nil
 }
 
 // prepare adheres memories to the `genai` library `content` type.
 func (c GoogleGemini) prepare(messages []memory.Message) []*genai.Content {
-	l := len(messages)
+	contents := make([]*genai.Content, 0)
 
-	contents := make([]*genai.Content, l)
+	instructions := genai.NewContentFromText(c.instructions, genai.RoleModel)
 
-	// If the memory isn't empty, append the memory to the content
-	// for the request.
-	if l != 0 {
-		for i, v := range messages {
+	contents = append(contents, instructions)
+
+	if len(messages) != 0 {
+		for _, v := range messages {
 
 			content := genai.NewContentFromText(
 				v.Text.String(),
 				genai.RoleUser,
 			)
 
-			if v.Role.String() == "model" {
+			if v.Role == memory.ModelRole {
 				content = genai.NewContentFromText(
 					v.Text.String(),
 					genai.RoleModel,
 				)
 			}
 
-			contents[i] = content
+			contents = append(contents, content)
 		}
 	}
 
@@ -144,29 +151,21 @@ func (c GoogleGemini) String() string {
 	return fmt.Sprintf("Google Gemini %s", c.model)
 }
 
-func makeGoogleGeminiSchemaProperties(d any) (
-	map[string]*genai.Schema,
-	error,
-) {
-	m := make(map[string]*genai.Schema)
+func (c GoogleGemini) SetInstructions(s string) {
+	c.instructions = s
+}
 
-	v := reflect.ValueOf(d)
-	t := reflect.TypeOf(d)
+func (c GoogleGemini) AppendInstructions(s string) {
+	c.instructions = buildString(c.instructions, s)
+}
 
-	if t.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("%v is not a struct", d)
-	}
-
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		value := v.Field(i)
-		switch value.Kind() {
-		case reflect.String:
-			m[field.Name] = &genai.Schema{
-				Type: genai.TypeString,
-			}
-		}
-	}
-
-	return m, nil
+var defaultGeminiResponse = &genai.Schema{
+	Type:        genai.TypeObject,
+	Description: agentResponseDescription,
+	Properties: map[string]*genai.Schema{
+		"response": {
+			Type:        genai.TypeString,
+			Description: "Your response",
+		},
+	},
 }

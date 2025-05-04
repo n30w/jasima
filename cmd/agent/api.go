@@ -111,9 +111,9 @@ func newClient(
 	case llms.ProviderGoogleGemini_2_5_Flash:
 		apiKey = os.Getenv("GEMINI_API_KEY")
 		llm, err = llms.NewGoogleGemini(
-			ctx,
 			apiKey,
 			cfg.ModelConfig,
+			logger,
 		)
 	case llms.ProviderChatGPT:
 		if cfg.ModelConfig.Temperature > 1.0 {
@@ -127,12 +127,14 @@ func newClient(
 		llm, err = llms.NewOpenAIChatGPT(
 			apiKey,
 			cfg.ModelConfig,
+			logger,
 		)
 	case llms.ProviderDeepseek:
 		apiKey = os.Getenv("DEEPSEEK_API_KEY")
 		llm, err = llms.NewDeepseek(
 			apiKey,
 			cfg.ModelConfig,
+			logger,
 		)
 	case llms.ProviderOllama:
 		llm, err = llms.NewOllama(
@@ -145,6 +147,7 @@ func newClient(
 		llm, err = llms.NewClaude(
 			apiKey,
 			cfg.ModelConfig,
+			logger,
 		)
 	default:
 		err = errors.New("invalid LLM provider")

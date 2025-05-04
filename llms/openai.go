@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"codeberg.org/n30w/jasima/memory"
-	"github.com/pkg/errors"
 
+	"github.com/charmbracelet/log"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/pkg/errors"
 )
 
 // ChatGPTBaseURL is blank because the OpenAI client library assumes GPT on a
@@ -18,8 +19,7 @@ const ChatGPTBaseURL = ""
 // API compatible LLM services.
 type openAIClient struct {
 	*llm
-	client           *openai.Client
-	completionParams *openai.ChatCompletionNewParams
+	client *openai.Client
 }
 
 // newOpenAIClient makes a new OpenAI API compatible client. It returns
@@ -28,7 +28,8 @@ type openAIClient struct {
 func newOpenAIClient(
 	apiKey string,
 	baseUrl string,
-) func(mc ModelConfig) *openAIClient {
+	logger *log.Logger,
+) func(mc ModelConfig) (*openAIClient, error) {
 	var c openai.Client
 
 	if baseUrl == ChatGPTBaseURL {
@@ -40,53 +41,65 @@ func newOpenAIClient(
 		)
 	}
 
-	return func(mc ModelConfig) *openAIClient {
-		messages := make([]openai.ChatCompletionMessageParamUnion, 0)
-		messages = append(messages, openai.SystemMessage(mc.Instructions))
-		return &openAIClient{
-			llm: &llm{
-				model:          mc.Provider,
-				instructions:   mc.Instructions,
-				responseFormat: ResponseFormatText,
-			},
-			client: &c,
-			completionParams: &openai.ChatCompletionNewParams{
-				Seed:                openai.Int(1),
-				MaxCompletionTokens: openai.Int(3000),
-				Temperature:         openai.Float(mc.Temperature),
-				TopP:                openai.Float(1.0),
-				Messages:            messages,
-				FrequencyPenalty:    openai.Float(1.1),
-				PresencePenalty:     openai.Float(1.2),
-				Model:               mc.Provider.String(),
-			},
+	return func(mc ModelConfig) (*openAIClient, error) {
+		m := make([]openai.ChatCompletionMessageParamUnion, 0)
+		m = append(m, openai.SystemMessage(mc.Instructions))
+
+		l, err := newLLM(mc, logger)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create new openAI client")
 		}
+
+		return &openAIClient{
+			llm:    l,
+			client: &c,
+		}, nil
 	}
 }
 
-func (c openAIClient) Request(
-	ctx context.Context,
-	messages []memory.Message,
-	_ string,
-) (string, error) {
-	switch c.responseFormat {
-	case ResponseFormatJson:
-		schema := openai.ResponseFormatJSONSchemaJSONSchemaParam{
-			Name:        "",
-			Strict:      openai.Bool(true),
-			Description: openai.String(""),
-			Schema:      "",
-		}
-		c.completionParams.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{JSONSchema: schema},
+func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
+	ChatCompletionNewParams {
+	params := &openai.ChatCompletionNewParams{
+		Seed:                openai.Int(c.defaultConfig.Seed),
+		MaxCompletionTokens: openai.Int(c.defaultConfig.MaxTokens),
+		Temperature:         openai.Float(c.defaultConfig.Temperature),
+		PresencePenalty:     openai.Float(c.defaultConfig.PresencePenalty),
+		FrequencyPenalty:    openai.Float(c.defaultConfig.FrequencyPenalty),
+		Model:               c.model.String(),
+	}
+
+	// If a config is provided, use it.
+
+	if rc != nil {
+		params = &openai.ChatCompletionNewParams{
+			Seed:                openai.Int(rc.Seed),
+			MaxCompletionTokens: openai.Int(rc.MaxTokens),
+			Temperature:         openai.Float(rc.Temperature),
+			PresencePenalty:     openai.Float(rc.PresencePenalty),
+			FrequencyPenalty:    openai.Float(rc.FrequencyPenalty),
+			Model:               c.model.String(),
 		}
 	}
 
-	c.completionParams.Messages = c.prepare(messages)
+	return params
+}
+
+func (c openAIClient) request(
+	ctx context.Context,
+	messages []memory.Message,
+	opts ...func(cfg *openai.ChatCompletionNewParams),
+) (string, error) {
+	p := c.buildRequestParams(nil)
+
+	p.Messages = c.prepare(messages)
+
+	for _, opt := range opts {
+		opt(p)
+	}
 
 	result, err := c.client.Chat.Completions.New(
 		ctx,
-		*c.completionParams,
+		*p,
 	)
 	if err != nil {
 		return "", errors.Wrap(
@@ -107,9 +120,7 @@ func (c openAIClient) prepare(
 
 	contents = append(contents, instructions)
 
-	l := len(messages)
-
-	if l != 0 {
+	if len(messages) != 0 {
 		for _, v := range messages {
 
 			text := v.Text.String()
@@ -118,7 +129,7 @@ func (c openAIClient) prepare(
 
 			content = openai.UserMessage(text)
 
-			if v.Role.String() == "model" {
+			if v.Role == memory.ModelRole {
 				content = openai.AssistantMessage(text)
 			}
 
@@ -139,4 +150,14 @@ func (c openAIClient) AppendInstructions(s string) {
 
 func (c openAIClient) String() string {
 	return c.model.String()
+}
+
+func newOpenAIResponseSchema(schema any) openai.
+	ResponseFormatJSONSchemaJSONSchemaParam {
+	return openai.ResponseFormatJSONSchemaJSONSchemaParam{
+		Name:        agentResponseName,
+		Strict:      openai.Bool(true),
+		Description: openai.String(agentResponseDescription),
+		Schema:      schema,
+	}
 }
