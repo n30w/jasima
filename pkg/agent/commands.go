@@ -37,6 +37,8 @@ const (
 	// the correctness of the JSON validity.
 	SetResponseTypeToText Command = 21
 
+	SetJsonResponseToDictionaryUpdate Command = 22
+
 	// Latch requires a client go into `latch` mode.
 	Latch Command = 10
 

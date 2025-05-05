@@ -3,7 +3,7 @@ package chat
 import (
 	"encoding/json"
 
-	"codeberg.org/n30w/jasima/agent"
+	"codeberg.org/n30w/jasima/pkg/agent"
 )
 
 type Name string
@@ -11,8 +11,6 @@ type Name string
 func (n Name) String() string {
 	return string(n)
 }
-
-const SystemName Name = "SYSTEM"
 
 type Content string
 
@@ -173,4 +171,8 @@ func NewPbMessage(
 	}
 
 	return m
+}
+
+type AgentResponseText struct {
+	Response string `json:"response" jsonschema_description:"Your response"`
 }

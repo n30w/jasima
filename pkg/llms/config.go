@@ -1,14 +1,5 @@
 package llms
 
-var defaultOpenAIConfig = &RequestConfig{
-	Temperature:      0.75,
-	Seed:             1,
-	TopP:             1,
-	MaxTokens:        4096,
-	FrequencyPenalty: 1.2,
-	PresencePenalty:  1.2,
-}
-
 var defaultDeepseekConfig = &RequestConfig{
 	Temperature:      1.72,
 	Seed:             1,

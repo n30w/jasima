@@ -3,7 +3,7 @@ package llms
 import (
 	"context"
 
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"github.com/charmbracelet/log"
 	"github.com/openai/openai-go"
@@ -20,6 +20,7 @@ const ChatGPTBaseURL = ""
 type openAIClient struct {
 	*llm
 	client *openai.Client
+	cfg    *openai.ChatCompletionNewParams
 }
 
 // newOpenAIClient makes a new OpenAI API compatible client. It returns
@@ -42,9 +43,6 @@ func newOpenAIClient(
 	}
 
 	return func(mc ModelConfig) (*openAIClient, error) {
-		m := make([]openai.ChatCompletionMessageParamUnion, 0)
-		m = append(m, openai.SystemMessage(mc.Instructions))
-
 		l, err := newLLM(mc, logger)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create new openAI client")
@@ -84,25 +82,19 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 	return params
 }
 
-type openAIConfigOpts = func(cfg *openai.ChatCompletionNewParams)
-
 func (c openAIClient) request(
 	ctx context.Context,
 	messages []memory.Message,
-	cfg *RequestConfig,
-	opts ...openAIConfigOpts,
 ) (string, error) {
-	p := c.buildRequestParams(cfg)
-
-	p.Messages = c.prepare(messages)
-
-	for _, opt := range opts {
-		opt(p)
+	if c.cfg == nil {
+		return "", errors.New("no configuration provided")
 	}
+
+	c.cfg.Messages = c.prepare(messages)
 
 	result, err := c.client.Chat.Completions.New(
 		ctx,
-		*p,
+		*c.cfg,
 	)
 	if err != nil {
 		return "", errors.Wrap(
@@ -158,9 +150,8 @@ func (c openAIClient) String() string {
 func newOpenAIResponseSchema(schema any) openai.
 	ResponseFormatJSONSchemaJSONSchemaParam {
 	return openai.ResponseFormatJSONSchemaJSONSchemaParam{
-		Name:        agentResponseName,
-		Strict:      openai.Bool(true),
-		Description: openai.String(agentResponseDescription),
-		Schema:      schema,
+		Name:   "Your response",
+		Strict: openai.Bool(true),
+		Schema: schema,
 	}
 }

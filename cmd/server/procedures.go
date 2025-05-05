@@ -7,14 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/n30w/jasima/network"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/network"
+	"codeberg.org/n30w/jasima/pkg/utils"
 
 	"github.com/pkg/errors"
-
-	"codeberg.org/n30w/jasima/agent"
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
-	"codeberg.org/n30w/jasima/utils"
 )
 
 // iterate begins the processing of a Layer. The function completes after the

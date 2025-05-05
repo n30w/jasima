@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/utils"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
 
-	"codeberg.org/n30w/jasima/memory"
 	"github.com/charmbracelet/log"
 )
 

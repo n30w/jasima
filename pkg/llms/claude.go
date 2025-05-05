@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
@@ -49,7 +49,7 @@ func (c Claude) Request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	v, err := c.request(ctx, messages, nil)
+	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", err
 	}

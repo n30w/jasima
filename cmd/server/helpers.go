@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
+
 	"github.com/pkg/errors"
 )
 

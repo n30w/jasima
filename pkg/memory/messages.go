@@ -3,9 +3,8 @@ package memory
 import (
 	"time"
 
-	"codeberg.org/n30w/jasima/agent"
-
-	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
 )
 
 type ChatRole uint8

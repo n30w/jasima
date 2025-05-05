@@ -9,7 +9,7 @@ import (
 	"text/template"
 	"time"
 
-	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/pkg/chat"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

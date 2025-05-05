@@ -6,9 +6,9 @@ import (
 	"net"
 	"sync"
 
-	"codeberg.org/n30w/jasima/agent"
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"

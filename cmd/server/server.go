@@ -7,13 +7,11 @@ import (
 	"io"
 	"os"
 
-	"codeberg.org/n30w/jasima/network"
-
-	"codeberg.org/n30w/jasima/agent"
-	"codeberg.org/n30w/jasima/utils"
-
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/network"
+	"codeberg.org/n30w/jasima/pkg/utils"
 
 	"github.com/pkg/errors"
 

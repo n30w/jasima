@@ -1,7 +1,6 @@
 package llms
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/charmbracelet/log"
@@ -154,28 +153,4 @@ func buildString(strs ...string) string {
 	return sb.String()
 }
 
-const (
-	agentResponseName        = "response"
-	agentResponseDescription = "Your response to the given conversation and" +
-		" information"
-)
-
-type defaultAgentResponse struct {
-	Response string `json:"response" jsonschema_description:"Your response"`
-}
-
-func unmarshal[T any](s string) (
-	T,
-	error,
-) {
-	var d T
-	err := json.Unmarshal(
-		[]byte(s),
-		&d,
-	)
-	if err != nil {
-		return d, err
-	}
-
-	return d, nil
-}
+type Requestable interface{}

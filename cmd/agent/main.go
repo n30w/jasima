@@ -7,9 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"codeberg.org/n30w/jasima/llms"
-
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/llms"
+	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
@@ -146,7 +145,12 @@ func main() {
 
 	logger.Debug("Initialized memory")
 
-	c, err := newClient(ctx, userConf, mem, logger)
+	var (
+		errs = make(chan error)
+		halt = make(chan os.Signal, 1)
+	)
+
+	c, err := newClient(ctx, userConf, mem, logger, errs)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -161,12 +165,9 @@ func main() {
 		c.Layer,
 	)
 
-	halt := make(chan os.Signal, 1)
-	errs := make(chan error)
-
 	signal.Notify(halt, os.Interrupt, syscall.SIGTERM)
 
-	c.Run(ctx, errs)
+	c.Run(ctx)
 
 	select {
 	case err = <-errs:

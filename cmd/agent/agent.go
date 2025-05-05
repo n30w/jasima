@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"time"
 
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"github.com/pkg/errors"
+
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/llms"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 type LLMService interface {
@@ -30,15 +35,6 @@ type LLMService interface {
 	AppendInstructions(s string)
 }
 
-type LLMRequestTyped[T any] interface {
-	LLMService
-	RequestTyped(
-		ctx context.Context,
-		messages []memory.Message,
-		schema any,
-	) (T, error)
-}
-
 // MemoryService is a memory storage. It supports saving and retrieving messages
 // from a memory storage.
 type MemoryService interface {
@@ -58,4 +54,101 @@ type MemoryService interface {
 
 	// Clear clears all the memory in the storage.
 	Clear() error
+}
+
+// typedRequest dispatches a JSON request to a remote LLM service. For now, the
+// response is serialized as a string so that it can be sent over gRPC. Ideally,
+// this should be changed so that the gRPC channel accepts type `T` from the
+// request return, however this will do for now.
+func typedRequest[T any](
+	ctx context.Context, msg *memory.Message, c *client,
+) {
+	if msg.Text == "" {
+		c.logger.Warn("Empty message text...")
+		return
+	}
+
+	err := c.memory.Save(
+		ctx,
+		c.NewMessageFrom(msg.Sender, msg.Text),
+	)
+	if err != nil {
+		c.channels.errs <- err
+		return
+	}
+
+	a, err := c.memory.Retrieve(ctx, c.Name, 0)
+	if err != nil {
+		c.channels.errs <- errors.Wrap(
+			err,
+			"error getting memory messages",
+		)
+		return
+	}
+
+	t := utils.Timer(time.Now())
+
+	result, err := selectRequestType[T](
+		ctx,
+		a,
+		c,
+	)
+	if err != nil {
+		c.channels.errs <- errors.Wrap(err, "failed response from typed LLM")
+		return
+	}
+
+	c.logger.Debugf(
+		"Response received from LLM, roundtrip %s",
+		t().Truncate(1*time.Millisecond),
+	)
+
+	newMsg := c.NewMessageTo(c.Name, chat.Content(result))
+
+	err = c.memory.Save(ctx, newMsg)
+	if err != nil {
+		c.channels.errs <- errors.Wrap(
+			err,
+			"failed saving new message to memory",
+		)
+		return
+	}
+
+	time.Sleep(time.Second * c.sleepDuration)
+
+	select {
+	case c.channels.responses <- newMsg:
+		c.logger.Debug("Message sent to response channel")
+	}
+}
+
+// selectRequestType returns the result of a particular request given type `T`.
+// `T` enforces the JSON schema of the request's body.
+func selectRequestType[T any](
+	ctx context.Context,
+	messages []memory.Message, c *client,
+) (string, error) {
+	switch c.config.ModelConfig.Provider {
+	case llms.ProviderGoogleGemini_2_0_Flash:
+		fallthrough
+	case llms.ProviderGoogleGemini_2_5_Flash:
+		return llms.RequestTypedGoogleGemini[T](
+			ctx,
+			messages,
+			c.llmServices.gemini,
+		)
+	case llms.ProviderChatGPT:
+		return llms.RequestTypedChatGPT[T](
+			ctx,
+			messages,
+			c.llmServices.chatgpt,
+		)
+	default:
+		c.logger.Warnf(
+			"JSON schema request for %s not supported, "+
+				"using default request method",
+			c.config.ModelConfig.Provider,
+		)
+		return c.llm.Request(ctx, messages)
+	}
 }

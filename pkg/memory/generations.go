@@ -6,7 +6,7 @@ import (
 	"maps"
 	"strings"
 
-	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/pkg/chat"
 )
 
 type TranscriptGeneration map[chat.Layer][]Message
@@ -69,15 +69,17 @@ func (d DictionaryGeneration) MarshalJSON() ([]byte, error) {
 }
 
 type DictionaryEntry struct {
-	Word       string `json:"word"`
-	Definition string `json:"definition"`
+	Word       string `json:"word" jsonschema_description:"Dictionary entry word"`
+	Definition string `json:"definition" jsonschema_description:"Dictionary entry definition"`
 
 	// Remove represents whether a word should be removed from the dictionary.
 	// This is used when sending data to and from an agent. If an agent is
 	// queried to remove an entry from the dictionary, this field would be
 	// set to `true`.
-	Remove bool `json:"remove"`
+	Remove bool `json:"remove" jsonschema_description:"Remove word"`
 }
+
+type DictionaryEntries []DictionaryEntry
 
 // Generation contains all generational information related to a single
 // iteration of a conlang's development.

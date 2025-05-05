@@ -6,17 +6,20 @@ import (
 	"reflect"
 	"sync"
 
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
+
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
-
-	"codeberg.org/n30w/jasima/memory"
 
 	"google.golang.org/genai"
 )
 
 type GoogleGemini struct {
 	*llm
-	client *genai.Client
+	client   *genai.Client
+	registry *geminiSchemaRegistry
+	cfg      *genai.GenerateContentConfig
 }
 
 func NewGoogleGemini(
@@ -46,8 +49,9 @@ func NewGoogleGemini(
 	}
 
 	return &GoogleGemini{
-		llm:    l,
-		client: c,
+		llm:      l,
+		client:   c,
+		registry: newGeminiSchemaRegistry(),
 	}, nil
 }
 
@@ -81,11 +85,6 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 		params.MaxOutputTokens = 32767
 	}
 
-	if c.responseFormat == ResponseFormatJson {
-		params.ResponseMIMEType = "application/json"
-		params.ResponseSchema = defaultGeminiResponse
-	}
-
 	return params
 }
 
@@ -93,7 +92,7 @@ func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	v, err := c.request(ctx, messages, nil)
+	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", errors.Wrap(err, "LLM request failed")
 	}
@@ -101,27 +100,21 @@ func (c GoogleGemini) Request(
 	return v, nil
 }
 
-type geminiConfigOpts = func(cfg *genai.GenerateContentConfig)
-
 func (c GoogleGemini) request(
 	ctx context.Context,
 	messages []memory.Message,
-	cfg *RequestConfig,
-	opts ...geminiConfigOpts,
 ) (string, error) {
-	p := c.buildRequestParams(cfg)
+	if c.cfg == nil {
+		return "", errors.New("no configuration provided")
+	}
 
 	contents := c.prepare(messages)
-
-	for _, opt := range opts {
-		opt(p)
-	}
 
 	result, err := c.client.Models.GenerateContent(
 		ctx,
 		c.model.String(),
 		contents,
-		p,
+		c.cfg,
 	)
 	if err != nil {
 		return "", errors.Wrap(err, "gemini client failed to make request")
@@ -172,34 +165,11 @@ func (c GoogleGemini) AppendInstructions(s string) {
 	c.instructions = buildString(c.instructions, s)
 }
 
-var defaultGeminiResponse = &genai.Schema{
-	Type:        genai.TypeObject,
-	Description: agentResponseDescription,
-	Properties: map[string]*genai.Schema{
-		"response": {
-			Type:        genai.TypeString,
-			Description: "Your response",
-		},
-	},
-}
-
-type GoogleGeminiTyped[T any] struct {
-	*GoogleGemini
-	gsr *geminiSchemaRegistry
-}
-
-func NewGoogleGeminiTyped[T any](g *GoogleGemini) *GoogleGeminiTyped[T] {
-	return &GoogleGeminiTyped[T]{
-		GoogleGemini: g,
-		gsr:          newGeminiSchemaRegistry(),
-	}
-}
-
-func (gt GoogleGeminiTyped[T]) RequestTyped(
+func RequestTypedGoogleGemini[T any](
 	ctx context.Context,
 	messages []memory.Message,
-	_ any,
-) (T, error) {
+	llm *GoogleGemini,
+) (string, error) {
 	var (
 		v      T
 		err    error
@@ -207,31 +177,22 @@ func (gt GoogleGeminiTyped[T]) RequestTyped(
 	)
 
 	t := reflect.TypeOf(v)
-	s, err := gt.gsr.Lookup(t)
+	s, err := llm.registry.lookup(t)
 	if err != nil {
-		return v, errors.Wrap(err, "failed to retrieve schema")
+		return "", errors.Wrap(err, "failed to retrieve schema")
 	}
 
-	setMIMEType := func(cfg *genai.GenerateContentConfig) {
-		cfg.ResponseMIMEType = "application/json"
-	}
+	llm.cfg = llm.buildRequestParams(nil)
 
-	setResponseSchema := func(cfg *genai.GenerateContentConfig) {
-		cfg.ResponseSchema = s
-	}
+	llm.cfg.ResponseMIMEType = "application/json"
+	llm.cfg.ResponseSchema = s
 
-	result, err = gt.request(ctx, messages, nil, setMIMEType, setResponseSchema)
+	result, err = llm.request(ctx, messages)
 	if err != nil {
-		return v, errors.Wrap(err, "GeminiTyped failed to make LLM request")
+		return "", errors.Wrap(err, "failed to make google gemini request")
 	}
 
-	// Marshal JSON based on T.
-	v, err = unmarshal[T](result)
-	if err != nil {
-		return v, errors.Wrap(err, "GeminiTyped failed to unmarshal JSON")
-	}
-
-	return v, nil
+	return result, nil
 }
 
 type geminiSchemaRegistry struct {
@@ -246,33 +207,58 @@ func newGeminiSchemaRegistry() *geminiSchemaRegistry {
 
 	// Register schema types.
 
-	g.Register(reflect.TypeOf(defaultAgentResponse{}), &genai.Schema{
-		Type:        genai.TypeObject,
-		Description: agentResponseDescription,
-		Properties: map[string]*genai.Schema{
-			"response": {
-				Type:        genai.TypeString,
-				Description: "Your response",
+	g.register(
+		reflect.TypeOf(chat.AgentResponseText{}), &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"response": {
+					Type:        genai.TypeString,
+					Description: "Your response",
+				},
 			},
 		},
-	})
+	)
+
+	g.register(
+		reflect.TypeOf(memory.DictionaryEntries{}), &genai.Schema{
+			Type: genai.TypeArray,
+			Items: &genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties: map[string]*genai.Schema{
+					"word": {
+						Type:        genai.TypeString,
+						Description: "Dictionary entry word",
+					},
+					"definition": {
+						Type:        genai.TypeString,
+						Description: "Dictionary entry definition",
+					},
+					"remove": {
+						Type:        genai.TypeBoolean,
+						Description: "Whether to remove the word or not",
+					},
+				},
+			},
+		},
+	)
 
 	return g
 }
 
-func (g *geminiSchemaRegistry) Register(v reflect.Type, schema *genai.Schema) {
+func (g *geminiSchemaRegistry) register(v reflect.Type, schema *genai.Schema) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.registry[v] = schema
 }
 
-func (g *geminiSchemaRegistry) Lookup(v reflect.Type) (*genai.Schema, error) {
+func (g *geminiSchemaRegistry) lookup(v reflect.Type) (*genai.Schema, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	s, ok := g.registry[v]
 	if !ok {
-		return nil, errors.New("schema not in gemini schema registry")
+		return nil, errors.New("lookup type not in gemini schema registry")
 	}
 
 	return s, nil

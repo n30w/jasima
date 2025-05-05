@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/n30w/jasima/memory"
-	"codeberg.org/n30w/jasima/utils"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
+
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
 )

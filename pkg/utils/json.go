@@ -1,6 +1,10 @@
 package utils
 
-import "github.com/invopop/jsonschema"
+import (
+	"encoding/json"
+
+	"github.com/invopop/jsonschema"
+)
 
 // GenerateSchema uses jsonschema library to make a JSON schema.
 // Retrieved from:
@@ -13,4 +17,20 @@ func GenerateSchema[T any]() any {
 	var v T
 	schema := reflector.Reflect(v)
 	return schema
+}
+
+func Unmarshal[T any](s string) (
+	T,
+	error,
+) {
+	var d T
+	err := json.Unmarshal(
+		[]byte(s),
+		&d,
+	)
+	if err != nil {
+		return d, err
+	}
+
+	return d, nil
 }

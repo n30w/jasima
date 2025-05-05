@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	memory2 "codeberg.org/n30w/jasima/pkg/memory"
 )
 
 func TestFixedQueue_ToSlice(t *testing.T) {
@@ -16,27 +16,27 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 		wantErr bool
 	}
 
-	correctTranscript := memory.TranscriptGeneration{
-		chat.SystemLayer:    []memory.Message{},
-		chat.PhoneticsLayer: []memory.Message{{Text: "Hello there!"}},
+	correctTranscript := memory2.TranscriptGeneration{
+		chat.SystemLayer:    []memory2.Message{},
+		chat.PhoneticsLayer: []memory2.Message{{Text: "Hello there!"}},
 	}
 
-	q, _ := NewFixedQueue[memory.Generation](1)
+	q, _ := NewFixedQueue[memory2.Generation](1)
 	q.Enqueue(
-		memory.Generation{
+		memory2.Generation{
 			Transcript: correctTranscript,
-			Logography: memory.LogographyGeneration{},
+			Logography: memory2.LogographyGeneration{},
 		},
 	)
 
-	tests := []testCase[memory.Generation]{
+	tests := []testCase[memory2.Generation]{
 		{
 			name: "slices are equal",
 			q:    q,
-			want: []memory.Generation{
+			want: []memory2.Generation{
 				{
 					Transcript: correctTranscript,
-					Logography: memory.LogographyGeneration{},
+					Logography: memory2.LogographyGeneration{},
 				},
 			},
 			wantErr: false,

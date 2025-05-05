@@ -1,8 +1,8 @@
 package network
 
 import (
-	"codeberg.org/n30w/jasima/agent"
-	"codeberg.org/n30w/jasima/chat"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
 )
 
 type (

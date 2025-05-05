@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 
-	"github.com/pkg/errors"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/memory"
 
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/memory"
+	"github.com/pkg/errors"
 )
 
 func (s *ConlangServer) messageToSystemAgent(

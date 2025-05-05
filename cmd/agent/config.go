@@ -1,9 +1,9 @@
 package main
 
 import (
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/llms"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/llms"
+	"codeberg.org/n30w/jasima/pkg/memory"
 )
 
 type networkConfig struct {
@@ -30,4 +30,5 @@ type config struct {
 type channels struct {
 	responses memory.MessageChannel
 	llm       memory.MessageChannel
+	errs      chan error
 }

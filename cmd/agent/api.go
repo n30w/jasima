@@ -2,25 +2,28 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"time"
 
-	"codeberg.org/n30w/jasima/agent"
-
-	"codeberg.org/n30w/jasima/utils"
-
-	"codeberg.org/n30w/jasima/chat"
-	"codeberg.org/n30w/jasima/llms"
-	"codeberg.org/n30w/jasima/memory"
+	"codeberg.org/n30w/jasima/pkg/agent"
+	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/llms"
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+type llmServices struct {
+	gemini  *llms.GoogleGemini
+	chatgpt *llms.OpenAIChatGPT
+}
 
 type client struct {
 	*config
@@ -42,7 +45,9 @@ type client struct {
 	// for this value.
 	sleepDuration time.Duration
 
-	channels *channels
+	channels    *channels
+	llmServices *llmServices
+	online      bool
 }
 
 func newClient(
@@ -50,11 +55,14 @@ func newClient(
 	userConf userConfig,
 	mem MemoryService,
 	logger *log.Logger,
+	errs chan error,
 ) (*client, error) {
-	var err error
-	var apiKey string
-	var llm LLMService
-	var sleepDuration time.Duration = 10
+	var (
+		err           error
+		apiKey        string
+		llm           LLMService
+		sleepDuration time.Duration = 10
+	)
 
 	peerNames := make([]chat.Name, 0)
 	for _, peer := range userConf.Peers {
@@ -79,16 +87,25 @@ func newClient(
 		return nil, err
 	}
 
+	ls := &llmServices{}
+
 	switch cfg.ModelConfig.Provider {
 	case llms.ProviderGoogleGemini_2_0_Flash:
 		fallthrough
 	case llms.ProviderGoogleGemini_2_5_Flash:
 		apiKey = os.Getenv("GEMINI_API_KEY")
-		llm, err = llms.NewGoogleGemini(
+		gemini, err := llms.NewGoogleGemini(
 			apiKey,
 			cfg.ModelConfig,
 			logger,
 		)
+		if err != nil {
+			return nil, err
+		}
+
+		ls.gemini = gemini
+		llm = gemini
+
 	case llms.ProviderChatGPT:
 		if cfg.ModelConfig.Temperature > 1.0 {
 			logger.Warnf(
@@ -97,12 +114,20 @@ func newClient(
 				cfg.ModelConfig.Temperature,
 			)
 		}
+
 		apiKey = os.Getenv("CHATGPT_API_KEY")
-		llm, err = llms.NewOpenAIChatGPT(
+		gpt, err := llms.NewOpenAIChatGPT(
 			apiKey,
 			cfg.ModelConfig,
 			logger,
 		)
+		if err != nil {
+			return nil, err
+		}
+
+		ls.chatgpt = gpt
+		llm = gpt
+
 	case llms.ProviderDeepseek:
 		apiKey = os.Getenv("DEEPSEEK_API_KEY")
 		llm, err = llms.NewDeepseek(
@@ -149,9 +174,10 @@ func newClient(
 		return nil, err
 	}
 
-	channels := &channels{
+	ch := &channels{
 		responses: make(chan memory.Message),
 		llm:       make(chan memory.Message),
+		errs:      errs,
 	}
 
 	c := &client{
@@ -170,7 +196,9 @@ func newClient(
 		// and receive from an LLM.
 		sleepDuration: sleepDuration,
 
-		channels: channels,
+		channels:    ch,
+		llmServices: ls,
+		online:      true,
 	}
 
 	// Initialize the connection to the server.
@@ -263,16 +291,14 @@ func (c *client) request(ctx context.Context) (
 	return chat.Content(result), nil
 }
 
-func (c *client) SendMessages(
-	errs chan<- error,
-) {
+func (c *client) SendMessages() {
 	for res := range c.channels.responses {
 
 		c.logger.Debug("Sending message 📧")
 
 		err := c.sendMessage(res)
 		if err != nil {
-			errs <- err
+			c.channels.errs <- err
 			return
 		}
 
@@ -293,22 +319,16 @@ func (c *client) sendMessage(msg memory.Message) error {
 
 func (c *client) DispatchToLLM(
 	ctx context.Context,
-	errs chan<- error,
 	msg *memory.Message,
 ) {
 	if c.latch {
-		log.Debug("Discarding response...", "latch", c.latch)
+		c.logger.Warn("Discarding response...", "latch", c.latch)
 		return
 	}
 
-	content := msg.Text
-	receiver := msg.Sender
-
-	// First save the incoming message.
-
-	err := c.memory.Save(ctx, c.NewMessageFrom(receiver, content))
+	err := c.memory.Save(ctx, c.NewMessageFrom(msg.Sender, msg.Text))
 	if err != nil {
-		errs <- err
+		c.channels.errs <- err
 		return
 	}
 
@@ -324,7 +344,7 @@ func (c *client) DispatchToLLM(
 	}
 
 	if c.latch {
-		log.Debug("Discarding response...", "latch", c.latch)
+		c.logger.Warn("Discarding response...", "latch", c.latch)
 		return
 	}
 
@@ -334,7 +354,7 @@ func (c *client) DispatchToLLM(
 
 	err = c.memory.Save(ctx, newMsg)
 	if err != nil {
-		errs <- err
+		c.channels.errs <- err
 		return
 	}
 
@@ -349,153 +369,154 @@ func (c *client) DispatchToLLM(
 
 // ReceiveMessages receives messages from the server.
 func (c *client) ReceiveMessages(
-	online bool,
-	errs chan<- error,
+	ctx context.Context,
 ) {
-	for online {
+	defer ctx.Done()
+	for c.online {
 		pbMsg, err := c.conn.Recv()
-		ctx, cancel := context.WithCancelCause(context.Background())
-		defer cancel(errors.New("client disconnected"))
-		if err == io.EOF {
-			online = false
-			errs <- errors.New("received EOF")
-			cancel(errors.New("server disconnected"))
-		} else if err != nil {
-			errs <- err
-			cancel(errors.New("server disconnected"))
-		} else {
+		ctx, cancel := context.WithCancelCause(ctx)
 
-			msg := memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
+		if err != nil {
+			var e error
 
-			c.logger.Debugf("Message received from %s", msg.Sender)
+			e = errors.Wrap(err, "Error receiving message")
 
-			// Intercept commands from the server.
-
-			statusMsg := fmt.Sprintf("received %s", msg.Command)
-
-			c.logger.Debugf("Received %s", msg.Command)
-
-			switch msg.Command {
-			case agent.AppendInstructions:
-				c.llm.AppendInstructions(msg.Text.String())
-				cancel(errors.New(statusMsg))
-			case agent.SetInstructions:
-				c.llm.SetInstructions(msg.Text.String())
-				cancel(errors.New(statusMsg))
-			case agent.ClearMemory:
-				cancel(errors.New(statusMsg))
-				err = c.memory.Clear()
-				if err != nil {
-					errs <- err
-					return
-				}
-			case agent.ResetInstructions:
-				c.llm.SetInstructions(c.ModelConfig.Instructions)
-				cancel(errors.New(statusMsg))
-			case agent.SetResponseTypeToJson:
-				// Change the response to structured JSON output.
-			case agent.SetResponseTypeToText:
-				// Change the response to text only. LLM will not use structured
-				// JSON for output.
-			case agent.Latch:
-				if c.latch {
-					c.logger.Debug("already latched, doing nothing...")
-					break
-				}
-
-				c.latch = true
-				c.logger.Debug("LATCH command received", "latch", c.latch)
-				cancel(errors.New(statusMsg))
-
-			case agent.SendInitialMessage:
-
-				cancel(errors.New(statusMsg))
-
-				if c.latch {
-					c.logger.Debug("please UNLATCH before sending initial message")
-					break
-				}
-
-				// Save the message body as the initial message.
-
-				content := msg.Text
-				recipient := c.Peers[0]
-
-				m := c.NewMessageTo(recipient, content)
-
-				err = c.memory.Save(ctx, m)
-				if err != nil {
-					errs <- err
-					return
-				}
-
-				c.channels.responses <- m
-
-				c.logger.Info("Initial message sent successfully")
-
-			case agent.Unlatch:
-				if !c.latch {
-					c.logger.Debug("already unlatched, doing nothing...")
-					break
-				}
-
-				c.latch = false
-				c.logger.Debug("UNLATCH command received", "latch", c.latch)
-
-			default:
-				// Empty message and NO_COMMAND, do nothing.
-				if msg.Text == "" {
-					break
-				} else {
-					// Send the data to the LLM.
-					if c.latch {
-						c.logger.Debug("Latch is TRUE. Only saving message...")
-						err = c.memory.Save(
-							ctx, c.NewMessageFrom(
-								msg.Receiver,
-								msg.Text,
-							),
-						)
-						if err != nil {
-							cancel(errors.New("failed to save to memory"))
-							errs <- err
-							return
-						}
-					} else {
-						c.logger.Debug("Piping message to LLM service...")
-
-						go c.DispatchToLLM(ctx, errs, msg)
-
-						// c.channels.llm <- *msg
-
-					}
-				}
+			if err == io.EOF {
+				e = errors.New("connection closed by server")
 			}
 
-			err = context.Cause(ctx)
+			cancel(e)
+			c.online = false
+			c.channels.errs <- e
+			continue
+		}
+
+		msg := memory.NewChatMessage(
+			pbMsg.Sender, pbMsg.Receiver,
+			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+		)
+
+		c.logger.Debugf("Message received from %s", msg.Sender)
+
+		// Intercept commands from the server.
+
+		statusMsg := fmt.Sprintf("Received %s", msg.Command)
+
+		c.logger.Debugf("Received %s", msg.Command)
+
+		switch msg.Command {
+		case agent.AppendInstructions:
+			cancel(errors.New(statusMsg))
+			c.llm.AppendInstructions(msg.Text.String())
+		case agent.SetInstructions:
+			cancel(errors.New(statusMsg))
+			c.llm.SetInstructions(msg.Text.String())
+		case agent.ClearMemory:
+			cancel(errors.New(statusMsg))
+			err = c.memory.Clear()
 			if err != nil {
-				c.logger.Warnf("context cancelled: %s", err)
+				c.channels.errs <- err
+				return
 			}
+		case agent.ResetInstructions:
+			cancel(errors.New(statusMsg))
+			c.llm.SetInstructions(c.ModelConfig.Instructions)
+		case agent.SetResponseTypeToJson:
+			// Change the response to structured JSON output.
+		case agent.SetResponseTypeToText:
+			// Change the response to text only. LLM will not use structured
+			// JSON for output.
+		case agent.Latch:
+			if c.latch {
+				c.logger.Debug("Already latched, doing nothing...")
+				break
+			}
+
+			c.latch = true
+
+			cancel(errors.New(statusMsg))
+
+		case agent.SetJsonResponseToDictionaryUpdate:
+
+			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
+
+		case agent.SendInitialMessage:
+
+			cancel(errors.New(statusMsg))
+
+			if c.latch {
+				c.logger.Debug("Please UNLATCH before sending initial message")
+				break
+			}
+
+			// Save the message body as the initial message.
+
+			content := msg.Text
+			recipient := c.Peers[0]
+
+			m := c.NewMessageTo(recipient, content)
+
+			err = c.memory.Save(ctx, m)
+			if err != nil {
+				c.channels.errs <- err
+				return
+			}
+
+			c.channels.responses <- m
+
+			c.logger.Info("Initial message sent successfully")
+
+		case agent.Unlatch:
+			if !c.latch {
+				c.logger.Debug("Already unlatched, doing nothing...")
+				break
+			}
+
+			c.latch = false
+
+		default:
+			// Empty message and NO_COMMAND, do nothing.
+			if msg.Text == "" {
+				break
+			} else {
+				// Send the data to the LLM.
+				if c.latch {
+					c.logger.Debug("Latch is TRUE. Only saving message...")
+					err = c.memory.Save(
+						ctx, c.NewMessageFrom(
+							msg.Receiver,
+							msg.Text,
+						),
+					)
+					if err != nil {
+						cancel(errors.New("failed to save to memory"))
+						c.channels.errs <- err
+						return
+					}
+				} else {
+					c.logger.Debug("Dispatching message to LLM service...")
+					go c.DispatchToLLM(ctx, msg)
+				}
+			}
+		}
+
+		err = context.Cause(ctx)
+		if err != nil {
+			c.logger.Warnf("Context cancelled: %s", err)
 		}
 	}
 }
 
-func (c *client) Run(ctx context.Context, errs chan error) {
+func (c *client) Run(ctx context.Context) {
 	// Send any message in the response channel.
-	go c.SendMessages(errs)
+	go c.SendMessages()
 
 	// Wait for messages to come in and process them accordingly.
-	go c.ReceiveMessages(true, errs)
-
-	// Watch for possible LLM dispatches.
-	// go c.DispatchToLLM(ctx, errs)
+	go c.ReceiveMessages(ctx)
 
 	err := c.initConnection()
 	if err != nil {
-		errs <- err
+		c.channels.errs <- err
 		return
 	}
 }
