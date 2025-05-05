@@ -48,7 +48,6 @@ type ResponseFormat int
 
 const (
 	ResponseFormatText ResponseFormat = iota
-	ResponseFormatJson
 )
 
 type LLMProvider int
