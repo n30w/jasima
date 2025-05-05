@@ -439,7 +439,7 @@ func (c *client) ReceiveMessages(
 
 			cancel(errors.New(statusMsg))
 
-		case agent.SetJsonResponseToDictionaryUpdate:
+		case agent.RequestJsonDictionaryUpdate:
 
 			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
 			ctx.Done()
