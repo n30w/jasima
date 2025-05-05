@@ -276,7 +276,7 @@ func (c *client) request(ctx context.Context, prompt chat.Content) (
 
 	t := utils.Timer(time.Now())
 
-	result, err := c.llm.Request(ctx, a, prompt.String())
+	result, err := c.llm.Request(ctx, a)
 	if err != nil {
 		return "", err
 	}

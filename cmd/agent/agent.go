@@ -20,7 +20,6 @@ type LLMService interface {
 	Request(
 		ctx context.Context,
 		messages []memory.Message,
-		prompt string,
 	) (string, error)
 
 	// SetInstructions sets the initial instructions for the model.
@@ -29,6 +28,15 @@ type LLMService interface {
 	// AppendInstructions appends instructions to the initial instructions of
 	// the model.
 	AppendInstructions(s string)
+}
+
+type LLMRequestTyped[T any] interface {
+	LLMService
+	RequestTyped(
+		ctx context.Context,
+		messages []memory.Message,
+		schema any,
+	) (T, error)
 }
 
 // MemoryService is a memory storage. It supports saving and retrieving messages
