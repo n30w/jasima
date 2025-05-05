@@ -22,32 +22,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type networkConfig struct {
-	Router   string
-	Database string
-}
-
-type userConfig struct {
-	Name    string
-	Peers   []string
-	Layer   int32
-	Model   llms.ModelConfig
-	Network networkConfig
-}
-
-type config struct {
-	Name          chat.Name
-	Peers         []chat.Name
-	Layer         chat.Layer
-	ModelConfig   llms.ModelConfig
-	NetworkConfig networkConfig
-}
-
-type channels struct {
-	responses memory.MessageChannel
-	llm       memory.MessageChannel
-}
-
 type client struct {
 	*config
 	memory MemoryService
@@ -263,7 +237,7 @@ func (c *client) NewMessageTo(
 	return m
 }
 
-func (c *client) request(ctx context.Context, prompt chat.Content) (
+func (c *client) request(ctx context.Context) (
 	chat.Content,
 	error,
 ) {
@@ -342,7 +316,7 @@ func (c *client) DispatchToLLM(
 
 	time.Sleep(time.Second * c.sleepDuration)
 
-	llmResponse, err := c.request(ctx, msg.Text)
+	llmResponse, err := c.request(ctx)
 	if err != nil {
 		c.logger.Errorf("Error requesting LLM: %v", err)
 		c.logger.Warn("Exiting dispatch procedure")
