@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type OpenAIChatGPT[T any] struct {
+type OpenAIChatGPT struct {
 	*openAIClient
 }
 
@@ -20,7 +20,7 @@ func NewOpenAIChatGPT(
 	apiKey string,
 	mc ModelConfig,
 	logger *log.Logger,
-) func() (*OpenAIChatGPT, error) {
+) (*OpenAIChatGPT, error) {
 	newConf := mc
 	g := defaultChatGPTConfig
 	g.Temperature = mc.Temperature
@@ -37,51 +37,67 @@ func NewOpenAIChatGPT(
 		return nil, errors.Wrap(err, "failed to create new ChatGPT client")
 	}
 
-	c := &OpenAIChatGPT[T]{o}
+	c := &OpenAIChatGPT{o}
 
 	c.llm.responseFormat = ResponseFormatJson
 
 	return c, nil
 }
 
-func (c OpenAIChatGPT[T]) Request(
+func (c OpenAIChatGPT) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	_ string,
 ) (string, error) {
-	checkResponseFormat := func(cfg *openai.ChatCompletionNewParams) {
-		if c.responseFormat == ResponseFormatJson {
-			s := newOpenAIResponseSchema(utils.GenerateSchema[T]())
-			cfg.ResponseFormat = openai.
-				ChatCompletionNewParamsResponseFormatUnion{
-				OfJSONSchema: &openai.
-					ResponseFormatJSONSchemaParam{
-					JSONSchema: s,
-				},
-			}
-		}
-	}
-
-	v, err := c.request(ctx, messages, checkResponseFormat)
+	v, err := c.request(ctx, messages, nil)
 	if err != nil {
 		return "", err
 	}
 
-	var r T
+	return v, nil
+}
 
-	if c.responseFormat == ResponseFormatJson {
-		r, err = unmarshal[T](v)
-		if err != nil {
-			return v, errors.Wrap(
-				err,
-				"openai client failed to unmarshal response",
-			)
+func (c OpenAIChatGPT) String() string {
+	return fmt.Sprintf("Open AI %s", c.model)
+}
+
+type ChatGPTTyped[T any] struct {
+	*OpenAIChatGPT
+}
+
+func (t ChatGPTTyped[T]) RequestTyped(
+	ctx context.Context,
+	messages []memory.Message,
+	_ any,
+) (T, error) {
+	var (
+		v      T
+		err    error
+		result string
+	)
+
+	addSchema := func(cfg *openai.ChatCompletionNewParams) {
+		s := newOpenAIResponseSchema(utils.GenerateSchema[T]())
+		cfg.ResponseFormat = openai.
+			ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.
+				ResponseFormatJSONSchemaParam{
+				JSONSchema: s,
+			},
 		}
 	}
 
-	return r, nil
-}
+	result, err = t.request(ctx, messages, nil, addSchema)
+	if err != nil {
+		return v, errors.Wrap(err, "openai client failed to make typed LLM request")
+	}
 
-func (c OpenAIChatGPT[T]) String() string {
-	return fmt.Sprintf("Open AI %s", c.model)
+	v, err = unmarshal[T](result)
+	if err != nil {
+		return v, errors.Wrap(
+			err,
+			"openai client failed to unmarshal response",
+		)
+	}
+
+	return v, nil
 }

@@ -31,7 +31,7 @@ func NewClaude(
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
-	withConfig := newOpenAIClient[string](
+	withConfig := newOpenAIClient(
 		apiKey,
 		"https://api.anthropic.com/v1/",
 		l,
@@ -48,22 +48,12 @@ func NewClaude(
 func (c Claude) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	_ string,
 ) (string, error) {
-	v, err := c.request(ctx, messages)
+	v, err := c.request(ctx, messages, nil)
 	if err != nil {
 		return "", err
 	}
 
-	if c.responseFormat == ResponseFormatJson {
-		v, err = unmarshal[T](v)
-		if err != nil {
-			return v, errors.Wrap(
-				err,
-				"openai client failed to unmarshal response",
-			)
-		}
-	}
 	return v, nil
 }
 

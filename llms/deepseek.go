@@ -23,13 +23,13 @@ func NewDeepseek(apiKey string, mc ModelConfig, l *log.Logger) (
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
-	withConfig := newOpenAIClient[string](
+	withConfig := newOpenAIClient(
 		apiKey,
 		"https://api.deepseek.com/v1",
 		l,
 	)
 
-	nc, err := withConfig(mc)
+	nc, err := withConfig(newConf)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create new Deepseek client")
 	}
@@ -40,9 +40,8 @@ func NewDeepseek(apiKey string, mc ModelConfig, l *log.Logger) (
 func (c Deepseek) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	_ string,
 ) (string, error) {
-	v, err := c.request(ctx, messages)
+	v, err := c.request(ctx, messages, nil)
 	if err != nil {
 		return "", err
 	}

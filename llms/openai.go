@@ -84,12 +84,15 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 	return params
 }
 
+type openAIConfigOpts = func(cfg *openai.ChatCompletionNewParams)
+
 func (c openAIClient) request(
 	ctx context.Context,
 	messages []memory.Message,
-	opts ...func(cfg *openai.ChatCompletionNewParams),
+	cfg *RequestConfig,
+	opts ...openAIConfigOpts,
 ) (string, error) {
-	p := c.buildRequestParams(nil)
+	p := c.buildRequestParams(cfg)
 
 	p.Messages = c.prepare(messages)
 

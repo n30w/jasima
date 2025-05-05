@@ -3,6 +3,8 @@ package llms
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sync"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
@@ -90,31 +92,42 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
-	_ string,
 ) (string, error) {
+	v, err := c.request(ctx, messages, nil)
+	if err != nil {
+		return "", errors.Wrap(err, "LLM request failed")
+	}
+
+	return v, nil
+}
+
+type geminiConfigOpts = func(cfg *genai.GenerateContentConfig)
+
+func (c GoogleGemini) request(
+	ctx context.Context,
+	messages []memory.Message,
+	cfg *RequestConfig,
+	opts ...geminiConfigOpts,
+) (string, error) {
+	p := c.buildRequestParams(cfg)
+
 	contents := c.prepare(messages)
 
-	params := c.buildRequestParams(nil)
+	for _, opt := range opts {
+		opt(p)
+	}
 
 	result, err := c.client.Models.GenerateContent(
 		ctx,
 		c.model.String(),
 		contents,
-		params,
+		p,
 	)
 	if err != nil {
 		return "", errors.Wrap(err, "gemini client failed to make request")
 	}
 
-	d, err := unmarshal[defaultAgentResponse](result.Text())
-	if err != nil {
-		return "", errors.Wrap(
-			err,
-			"failed to unmarshal agent response",
-		)
-	}
-
-	return d.Response, nil
+	return result.Text(), nil
 }
 
 // prepare adheres memories to the `genai` library `content` type.
@@ -168,4 +181,99 @@ var defaultGeminiResponse = &genai.Schema{
 			Description: "Your response",
 		},
 	},
+}
+
+type GoogleGeminiTyped[T any] struct {
+	*GoogleGemini
+	gsr *geminiSchemaRegistry
+}
+
+func NewGoogleGeminiTyped[T any](g *GoogleGemini) *GoogleGeminiTyped[T] {
+	return &GoogleGeminiTyped[T]{
+		GoogleGemini: g,
+		gsr:          newGeminiSchemaRegistry(),
+	}
+}
+
+func (gt GoogleGeminiTyped[T]) RequestTyped(
+	ctx context.Context,
+	messages []memory.Message,
+	_ any,
+) (T, error) {
+	var (
+		v      T
+		err    error
+		result string
+	)
+
+	t := reflect.TypeOf(v)
+	s, err := gt.gsr.Lookup(t)
+	if err != nil {
+		return v, errors.Wrap(err, "failed to retrieve schema")
+	}
+
+	setMIMEType := func(cfg *genai.GenerateContentConfig) {
+		cfg.ResponseMIMEType = "application/json"
+	}
+
+	setResponseSchema := func(cfg *genai.GenerateContentConfig) {
+		cfg.ResponseSchema = s
+	}
+
+	result, err = gt.request(ctx, messages, nil, setMIMEType, setResponseSchema)
+	if err != nil {
+		return v, errors.Wrap(err, "GeminiTyped failed to make LLM request")
+	}
+
+	// Marshal JSON based on T.
+	v, err = unmarshal[T](result)
+	if err != nil {
+		return v, errors.Wrap(err, "GeminiTyped failed to unmarshal JSON")
+	}
+
+	return v, nil
+}
+
+type geminiSchemaRegistry struct {
+	mu       sync.RWMutex
+	registry map[reflect.Type]*genai.Schema
+}
+
+func newGeminiSchemaRegistry() *geminiSchemaRegistry {
+	g := &geminiSchemaRegistry{
+		registry: make(map[reflect.Type]*genai.Schema),
+	}
+
+	// Register schema types.
+
+	g.Register(reflect.TypeOf(defaultAgentResponse{}), &genai.Schema{
+		Type:        genai.TypeObject,
+		Description: agentResponseDescription,
+		Properties: map[string]*genai.Schema{
+			"response": {
+				Type:        genai.TypeString,
+				Description: "Your response",
+			},
+		},
+	})
+
+	return g
+}
+
+func (g *geminiSchemaRegistry) Register(v reflect.Type, schema *genai.Schema) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.registry[v] = schema
+}
+
+func (g *geminiSchemaRegistry) Lookup(v reflect.Type) (*genai.Schema, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	s, ok := g.registry[v]
+	if !ok {
+		return nil, errors.New("schema not in gemini schema registry")
+	}
+
+	return s, nil
 }
