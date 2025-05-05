@@ -101,7 +101,7 @@
               enable = true;
               package = pkgs.golangci-lint;
               require_serial = true;
-              pass_filenames = false;
+              pass_filenames = true;
             };
           };
         };
