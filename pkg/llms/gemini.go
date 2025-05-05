@@ -61,7 +61,7 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 		MaxOutputTokens: int32(c.defaultConfig.MaxTokens),
 		Seed:            genai.Ptr(int32(c.defaultConfig.Seed)),
 		// PresencePenalty:  genai.Ptr(float32(c.defaultConfig.PresencePenalty)),
-		FrequencyPenalty: genai.Ptr(float32(c.defaultConfig.FrequencyPenalty)),
+		// FrequencyPenalty: genai.Ptr(float32(c.defaultConfig.FrequencyPenalty)),
 	}
 
 	if rc != nil {
@@ -70,7 +70,7 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 			MaxOutputTokens: int32(rc.MaxTokens),
 			Seed:            genai.Ptr(int32(rc.Seed)),
 			// PresencePenalty:  genai.Ptr(float32(rc.PresencePenalty)),
-			FrequencyPenalty: genai.Ptr(float32(rc.FrequencyPenalty)),
+			// FrequencyPenalty: genai.Ptr(float32(rc.FrequencyPenalty)),
 		}
 	}
 
@@ -92,6 +92,8 @@ func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
+	c.cfg = c.buildRequestParams(nil)
+
 	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", errors.Wrap(err, "LLM request failed")
