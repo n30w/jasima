@@ -146,12 +146,3 @@ func (c openAIClient) AppendInstructions(s string) {
 func (c openAIClient) String() string {
 	return c.model.String()
 }
-
-func newOpenAIResponseSchema(schema any) openai.
-	ResponseFormatJSONSchemaJSONSchemaParam {
-	return openai.ResponseFormatJSONSchemaJSONSchemaParam{
-		Name:   "Your response",
-		Strict: openai.Bool(true),
-		Schema: schema,
-	}
-}

@@ -206,18 +206,77 @@ func (s *ConlangServer) iterate(
 
 	newGeneration.Specifications[initialLayer] = specPrime.Text
 
-	// JK one more.
+	// JK some more.
 
 	s.ws.Broadcasters.Specification.Broadcast(
 		newGeneration.
 			Specifications,
 	)
 
+	// Concurrent dictionary evolution based.
+
+	if initialLayer == chat.DictionaryLayer {
+		go s.iterateUpdateDictionary(cmd, newGeneration)
+	}
+
 	return newGeneration, nil
 }
 
+func (s *ConlangServer) iterateUpdateDictionary(
+	cmd network.CommandForAgent,
+	newGeneration memory.Generation,
+) {
+	s.logger.Info("Initiating dictionary updates...")
+
+	dictSysAgent, err := s.gs.GetClientByName("SYSTEM_AGENT_B")
+	if err != nil {
+		s.errs <- err
+		return
+	}
+
+	genDict, err := json.Marshal(newGeneration.Dictionary)
+	if err != nil {
+		s.errs <- errors.Wrap(err, "failed to Marshal dictionary")
+		return
+	}
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
+	s.gs.Channel.ToClients <- cmd(
+		agent.AppendInstructions,
+		fmt.Sprintf(
+			"This is the current dictionary\n%s",
+			string(genDict),
+		),
+	)(dictSysAgent)
+
+	// Send results to dictionary LLM.
+
+	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(dictSysAgent)
+	s.gs.Channel.ToClients <- cmd(
+		agent.RequestJsonDictionaryUpdate,
+		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
+	)(dictSysAgent)
+
+	var updates memory.DictionaryEntries
+	dictUpdates := <-s.gs.Channel.ToServer
+	err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
+	if err != nil {
+		s.errs <- errors.Wrap(
+			err,
+			"failed to unmarshal dictionary updates",
+		)
+		return
+	}
+
+	s.dictUpdatesChan <- updates
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
+	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
+	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
+}
+
 // Evolve manages the entire evolutionary function loop.
-func (s *ConlangServer) Evolve(errs chan<- error) {
+func (s *ConlangServer) Evolve() {
 	var (
 		err         error
 		errMsg      = "failed to evolve generation %d"
@@ -248,7 +307,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	dictSysAgent, err := s.gs.GetClientByName("SYSTEM_AGENT_B")
 	if err != nil {
-		errs <- err
+		s.errs <- err
 		return
 	}
 
@@ -257,13 +316,13 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		genSlice, err := s.generations.ToSlice()
 		if err != nil {
-			errs <- errors.Wrap(err, errMsg)
+			s.errs <- errors.Wrap(err, errMsg)
 			return
 		}
 
 		genDict, err := json.Marshal(genSlice[i].Dictionary)
 		if err != nil {
-			errs <- errors.Wrap(err, "failed to Marshal dictionary")
+			s.errs <- errors.Wrap(err, "failed to Marshal dictionary")
 			return
 		}
 
@@ -284,7 +343,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			s.config.procedures.maxExchanges,
 		)
 		if err != nil {
-			errs <- errors.Wrapf(err, "failed to iterate on generation %d", i)
+			s.errs <- errors.Wrapf(err, "failed to iterate on generation %d", i)
 			return
 		}
 
@@ -293,42 +352,15 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 			elapsedTime().Truncate(10*time.Millisecond),
 		)
 
-		// send results to dictionary LLM
+		updates := <-s.dictUpdatesChan
 
-		s.gs.Channel.ToClients <- cmd(agent.Unlatch)(dictSysAgent)
-		s.gs.Channel.ToClients <- cmd(
-			agent.RequestJsonDictionaryUpdate,
-			transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
-		)(dictSysAgent)
-
-		var updates memory.DictionaryEntries
-
-		noErrorJson := false
-
-		for !noErrorJson {
-			dictUpdates := <-s.gs.Channel.ToServer
-			err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
-			if err != nil {
-				s.logger.Errorf(
-					"failed to unmarshal dictionary update generation %d",
-					i,
-				)
-				s.logger.Debug("Resending dictionary request to system agent...")
-				msg := s.messageToSystemAgent(
-					dictSysAgent.Name,
-					"Your JSON is improperly formatted. Please send a corrected version.",
-				)
-				s.gs.Channel.ToClients <- msg
-				continue
-			}
-			noErrorJson = true
-		}
+		s.logger.Info("Received dictionary update")
 
 		// Update the generation's dictionary based on updates.
 
 		currentDict := newGeneration.Dictionary.Copy()
 
-		for _, update := range updates {
+		for _, update := range updates.Entries {
 			currentDict[update.Word] = update
 
 			if update.Remove {
@@ -347,13 +379,12 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 		newGeneration.Dictionary = currentDict.Copy()
 
-		s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
-		s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
-		s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
-
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
-			errs <- errors.Wrapf(err, "failed to enqueue new generation %d", i)
+			s.errs <- errors.Wrapf(
+				err,
+				"failed to enqueue new generation %d", i,
+			)
 		}
 
 		// Save specs to memory
@@ -372,7 +403,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	allMsgs, err := s.memory.All()
 	if err != nil {
-		errs <- err
+		s.errs <- err
 		return
 	}
 
@@ -382,7 +413,7 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 	)
 	err = saveToJson(allMsgs, fileName)
 	if err != nil {
-		errs <- errors.Wrap(err, "evolution failed to save JSON")
+		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
 		return
 	}
 
@@ -395,12 +426,12 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 
 	g, err := s.generations.ToSlice()
 	if err != nil {
-		errs <- errors.Wrap(err, "evolution failed to save JSON")
+		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
 	}
 
 	err = saveToJson(g, fileName)
 	if err != nil {
-		errs <- errors.Wrap(err, "evolution failed to save JSON")
+		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
 		return
 	}
 

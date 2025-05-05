@@ -128,6 +128,7 @@ func main() {
 		cfg,
 		logger,
 		store,
+		errs,
 	)
 	if err != nil {
 		logger.Fatal(err)

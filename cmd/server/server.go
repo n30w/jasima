@@ -44,19 +44,22 @@ type MemoryService interface {
 }
 
 type ConlangServer struct {
-	logger        *log.Logger
-	memory        MemoryService
-	gs            *network.GRPCServer
-	config        *config
-	procedureChan chan memory.Message
-	generations   *utils.FixedQueue[memory.Generation]
-	ws            *network.WebServer
+	logger          *log.Logger
+	memory          MemoryService
+	gs              *network.GRPCServer
+	config          *config
+	procedureChan   chan memory.Message
+	dictUpdatesChan chan memory.DictionaryEntries
+	generations     *utils.FixedQueue[memory.Generation]
+	ws              *network.WebServer
+	errs            chan error
 }
 
 func NewConlangServer(
 	cfg *config,
 	l *log.Logger,
 	m MemoryService,
+	errs chan error,
 ) (*ConlangServer, error) {
 	if cfg.procedures.maxGenerations == 0 {
 		l.Infof(
@@ -130,8 +133,12 @@ func NewConlangServer(
 		ws:            webServer,
 		generations:   generations,
 		procedureChan: make(chan memory.Message),
-		config:        cfg,
-		logger:        l,
+		// Make channel buffered with 1 spot, since it will only be used by that
+		// many concurrent processes at a time.
+		dictUpdatesChan: make(chan memory.DictionaryEntries, 1),
+		config:          cfg,
+		logger:          l,
+		errs:            errs,
 	}, nil
 }
 
@@ -242,7 +249,7 @@ func (s *ConlangServer) WebEvents(errs chan<- error) {
 }
 
 func (s *ConlangServer) StartProcedures(errs chan<- error) {
-	go s.Evolve(errs)
+	go s.Evolve()
 
 	if s.config.debugEnabled {
 		go func(errs chan<- error) {

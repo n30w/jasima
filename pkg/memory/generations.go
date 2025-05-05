@@ -79,7 +79,9 @@ type DictionaryEntry struct {
 	Remove bool `json:"remove" jsonschema_description:"Remove word"`
 }
 
-type DictionaryEntries []DictionaryEntry
+type DictionaryEntries struct {
+	Entries []DictionaryEntry `json:"entries" jsonschema_description:"Dictionary entries"`
+}
 
 // Generation contains all generational information related to a single
 // iteration of a conlang's development.

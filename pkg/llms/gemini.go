@@ -4,22 +4,19 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
-
-	"codeberg.org/n30w/jasima/pkg/chat"
-	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
+
+	"codeberg.org/n30w/jasima/pkg/memory"
 
 	"google.golang.org/genai"
 )
 
 type GoogleGemini struct {
 	*llm
-	client   *genai.Client
-	registry *geminiSchemaRegistry
-	cfg      *genai.GenerateContentConfig
+	client *genai.Client
+	cfg    *genai.GenerateContentConfig
 }
 
 func NewGoogleGemini(
@@ -49,9 +46,8 @@ func NewGoogleGemini(
 	}
 
 	return &GoogleGemini{
-		llm:      l,
-		client:   c,
-		registry: newGeminiSchemaRegistry(),
+		llm:    l,
+		client: c,
 	}, nil
 }
 
@@ -179,15 +175,15 @@ func RequestTypedGoogleGemini[T any](
 	)
 
 	t := reflect.TypeOf(v)
-	s, err := llm.registry.lookup(t)
+	s, err := schemas.lookup(t)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to retrieve schema")
+		return "", errors.Wrap(err, "failed to retrieve schema for gemini")
 	}
 
 	llm.cfg = llm.buildRequestParams(nil)
 
 	llm.cfg.ResponseMIMEType = "application/json"
-	llm.cfg.ResponseSchema = s
+	llm.cfg.ResponseSchema = s.gemini
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {
@@ -195,73 +191,4 @@ func RequestTypedGoogleGemini[T any](
 	}
 
 	return result, nil
-}
-
-type geminiSchemaRegistry struct {
-	mu       sync.RWMutex
-	registry map[reflect.Type]*genai.Schema
-}
-
-func newGeminiSchemaRegistry() *geminiSchemaRegistry {
-	g := &geminiSchemaRegistry{
-		registry: make(map[reflect.Type]*genai.Schema),
-	}
-
-	// Register schema types.
-
-	g.register(
-		reflect.TypeOf(chat.AgentResponseText{}), &genai.Schema{
-			Type: genai.TypeObject,
-			Properties: map[string]*genai.Schema{
-				"response": {
-					Type:        genai.TypeString,
-					Description: "Your response",
-				},
-			},
-		},
-	)
-
-	g.register(
-		reflect.TypeOf(memory.DictionaryEntries{}), &genai.Schema{
-			Type: genai.TypeArray,
-			Items: &genai.Schema{
-				Type:        genai.TypeObject,
-				Description: "",
-				Properties: map[string]*genai.Schema{
-					"word": {
-						Type:        genai.TypeString,
-						Description: "Dictionary entry word",
-					},
-					"definition": {
-						Type:        genai.TypeString,
-						Description: "Dictionary entry definition",
-					},
-					"remove": {
-						Type:        genai.TypeBoolean,
-						Description: "Whether to remove the word or not",
-					},
-				},
-			},
-		},
-	)
-
-	return g
-}
-
-func (g *geminiSchemaRegistry) register(v reflect.Type, schema *genai.Schema) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.registry[v] = schema
-}
-
-func (g *geminiSchemaRegistry) lookup(v reflect.Type) (*genai.Schema, error) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	s, ok := g.registry[v]
-	if !ok {
-		return nil, errors.New("lookup type not in gemini schema registry")
-	}
-
-	return s, nil
 }

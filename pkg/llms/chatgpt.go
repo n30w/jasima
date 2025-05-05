@@ -3,13 +3,13 @@ package llms
 import (
 	"context"
 	"fmt"
-
-	"codeberg.org/n30w/jasima/pkg/memory"
-	"codeberg.org/n30w/jasima/pkg/utils"
+	"reflect"
 
 	"github.com/charmbracelet/log"
 	"github.com/openai/openai-go"
 	"github.com/pkg/errors"
+
+	"codeberg.org/n30w/jasima/pkg/memory"
 )
 
 type OpenAIChatGPT struct {
@@ -63,18 +63,28 @@ func RequestTypedChatGPT[T any](
 	messages []memory.Message,
 	llm *OpenAIChatGPT,
 ) (string, error) {
-	s := newOpenAIResponseSchema(utils.GenerateSchema[T]())
+	var (
+		v      T
+		err    error
+		result string
+	)
+
+	t := reflect.TypeOf(v)
+	s, err := schemas.lookup(t)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to retrieve schema for ChatGPT")
+	}
 
 	llm.cfg = llm.buildRequestParams(nil)
 	llm.cfg.ResponseFormat = openai.
 		ChatCompletionNewParamsResponseFormatUnion{
 		OfJSONSchema: &openai.
 			ResponseFormatJSONSchemaParam{
-			JSONSchema: s,
+			JSONSchema: *s.openai,
 		},
 	}
 
-	result, err := llm.request(ctx, messages)
+	result, err = llm.request(ctx, messages)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to request typed ChatGPT")
 	}
