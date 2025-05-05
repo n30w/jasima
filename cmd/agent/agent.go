@@ -116,10 +116,9 @@ func typedRequest[T any](
 
 	time.Sleep(time.Second * c.sleepDuration)
 
-	select {
-	case c.channels.responses <- newMsg:
-		c.logger.Debug("Message sent to response channel")
-	}
+	c.channels.responses <- newMsg
+
+	c.logger.Debug("Message sent to response channel")
 }
 
 // selectRequestType returns the result of a particular request given type `T`.
@@ -128,7 +127,7 @@ func selectRequestType[T any](
 	ctx context.Context,
 	messages []memory.Message, c *client,
 ) (string, error) {
-	switch c.config.ModelConfig.Provider {
+	switch c.ModelConfig.Provider {
 	case llms.ProviderGoogleGemini_2_0_Flash:
 		fallthrough
 	case llms.ProviderGoogleGemini_2_5_Flash:
@@ -147,7 +146,7 @@ func selectRequestType[T any](
 		c.logger.Warnf(
 			"JSON schema request for %s not supported, "+
 				"using default request method",
-			c.config.ModelConfig.Provider,
+			c.ModelConfig.Provider,
 		)
 		return c.llm.Request(ctx, messages)
 	}

@@ -338,7 +338,10 @@ func (c *client) DispatchToLLM(
 
 	llmResponse, err := c.request(ctx)
 	if err != nil {
-		c.logger.Errorf("Error requesting LLM: %v", err)
+		c.logger.Errorf(
+			"Error requesting response from %s: %v",
+			c.ModelConfig.Provider, err,
+		)
 		c.logger.Warn("Exiting dispatch procedure")
 		return
 	}
@@ -372,7 +375,7 @@ func (c *client) ReceiveMessages(
 	ctx context.Context,
 ) {
 	defer ctx.Done()
-	for c.online {
+	for {
 		pbMsg, err := c.conn.Recv()
 		ctx, cancel := context.WithCancelCause(ctx)
 
@@ -439,6 +442,7 @@ func (c *client) ReceiveMessages(
 		case agent.SetJsonResponseToDictionaryUpdate:
 
 			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
+			ctx.Done()
 
 		case agent.SendInitialMessage:
 
@@ -477,6 +481,7 @@ func (c *client) ReceiveMessages(
 		default:
 			// Empty message and NO_COMMAND, do nothing.
 			if msg.Text == "" {
+				cancel(errors.New(statusMsg))
 				break
 			} else {
 				// Send the data to the LLM.

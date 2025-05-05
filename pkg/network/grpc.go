@@ -390,7 +390,6 @@ type clientele struct {
 	byNameMap  nameToClientsMap
 	byLayerMap layerToNamesMap
 	total      int
-	logger     *log.Logger
 }
 
 func (ct *clientele) addByName(c *GRPCClient) {
