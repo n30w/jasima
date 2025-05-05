@@ -114,8 +114,6 @@ func typedRequest[T any](
 		return
 	}
 
-	time.Sleep(time.Second * c.sleepDuration)
-
 	c.channels.responses <- newMsg
 
 	c.logger.Debug("Message sent to response channel")
