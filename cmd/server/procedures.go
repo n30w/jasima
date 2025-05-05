@@ -296,17 +296,12 @@ func (s *ConlangServer) Evolve(errs chan<- error) {
 		// send results to dictionary LLM
 
 		s.gs.Channel.ToClients <- cmd(agent.Unlatch)(dictSysAgent)
-
-		msg := s.messageToSystemAgent(
-			dictSysAgent.Name,
+		s.gs.Channel.ToClients <- cmd(
+			agent.RequestJsonDictionaryUpdate,
 			transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
-		)
+		)(dictSysAgent)
 
-		s.gs.Channel.ToClients <- msg
-
-		// Unmarshal from JSON.
-
-		var updates []memory.DictionaryEntry
+		var updates memory.DictionaryEntries
 
 		noErrorJson := false
 

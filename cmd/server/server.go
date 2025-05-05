@@ -167,10 +167,6 @@ func (s *ConlangServer) Router(errs chan<- error) {
 			)
 		}
 
-		if msg.Text != "" {
-			// s.logger.Printf("%s: %s", msg.Sender, msg.Text)
-		}
-
 		return nil
 	}
 
