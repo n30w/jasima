@@ -44,6 +44,8 @@ func (c OpenAIChatGPT) Request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
+	c.cfg = c.buildRequestParams(nil)
+
 	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", err
