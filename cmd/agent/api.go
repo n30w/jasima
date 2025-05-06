@@ -139,6 +139,7 @@ func newClient(
 		llm, err = llms.NewOllama(
 			nil,
 			cfg.ModelConfig,
+			logger,
 		)
 		sleepDuration = 2
 	case llms.ProviderClaude:
