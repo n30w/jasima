@@ -106,6 +106,8 @@ func (l Layer) MarshalJSON() ([]byte, error) {
 		s = "grammar"
 	case DictionaryLayer:
 		s = "dictionary"
+	case LogographyLayer:
+		s = "logography"
 	case ChattingLayer:
 		s = "chatting"
 	default:
