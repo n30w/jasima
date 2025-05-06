@@ -23,6 +23,7 @@ import (
 type llmServices struct {
 	gemini  *llms.GoogleGemini
 	chatgpt *llms.OpenAIChatGPT
+	ollama  *llms.Ollama
 }
 
 type client struct {
@@ -94,7 +95,7 @@ func newClient(
 		fallthrough
 	case llms.ProviderGoogleGemini_2_5_Flash:
 		apiKey = os.Getenv("GEMINI_API_KEY")
-		gemini, err := llms.NewGoogleGemini(
+		ls.gemini, err = llms.NewGoogleGemini(
 			apiKey,
 			cfg.ModelConfig,
 			logger,
@@ -103,8 +104,7 @@ func newClient(
 			return nil, err
 		}
 
-		ls.gemini = gemini
-		llm = gemini
+		llm = ls.gemini
 
 	case llms.ProviderChatGPT:
 		if cfg.ModelConfig.Temperature > 1.0 {
@@ -116,7 +116,7 @@ func newClient(
 		}
 
 		apiKey = os.Getenv("CHATGPT_API_KEY")
-		gpt, err := llms.NewOpenAIChatGPT(
+		ls.chatgpt, err = llms.NewOpenAIChatGPT(
 			apiKey,
 			cfg.ModelConfig,
 			logger,
@@ -125,8 +125,7 @@ func newClient(
 			return nil, err
 		}
 
-		ls.chatgpt = gpt
-		llm = gpt
+		llm = ls.chatgpt
 
 	case llms.ProviderDeepseek:
 		apiKey = os.Getenv("DEEPSEEK_API_KEY")
@@ -136,12 +135,19 @@ func newClient(
 			logger,
 		)
 	case llms.ProviderOllama:
-		llm, err = llms.NewOllama(
+		ls.ollama, err = llms.NewOllama(
 			nil,
 			cfg.ModelConfig,
 			logger,
 		)
+		if err != nil {
+			return nil, err
+		}
+
+		llm = ls.ollama
+
 		sleepDuration = 2
+
 	case llms.ProviderClaude:
 		apiKey = os.Getenv("CLAUDE_API_KEY")
 		llm, err = llms.NewClaude(
@@ -483,7 +489,6 @@ func (c *client) ReceiveMessages(
 			// Empty message and NO_COMMAND, do nothing.
 			if msg.Text == "" {
 				cancel(errors.New(statusMsg))
-				break
 			} else {
 				// Send the data to the LLM.
 				if c.latch {

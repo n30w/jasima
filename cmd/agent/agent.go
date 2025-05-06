@@ -140,6 +140,12 @@ func selectRequestType[T any](
 			messages,
 			c.llmServices.chatgpt,
 		)
+	case llms.ProviderOllama:
+		return llms.RequestTypedOllama[T](
+			ctx,
+			messages,
+			c.llmServices.ollama,
+		)
 	default:
 		c.logger.Warnf(
 			"JSON schema request for %s not supported, "+
