@@ -35,3 +35,12 @@ var defaultGeminiConfig = &RequestConfig{
 	FrequencyPenalty: 1.2,
 	PresencePenalty:  1.2,
 }
+
+var defaultOllamaConfig = &RequestConfig{
+	Temperature:      1.75,
+	Seed:             1,
+	TopP:             1,
+	MaxTokens:        3000,
+	FrequencyPenalty: 1.2,
+	PresencePenalty:  1.2,
+}
