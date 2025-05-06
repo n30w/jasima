@@ -57,7 +57,7 @@ func newOpenAIClient(
 
 func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 	ChatCompletionNewParams {
-	params := &openai.ChatCompletionNewParams{
+	p := &openai.ChatCompletionNewParams{
 		Seed:                openai.Int(c.defaultConfig.Seed),
 		MaxCompletionTokens: openai.Int(c.defaultConfig.MaxTokens),
 		Temperature:         openai.Float(c.defaultConfig.Temperature),
@@ -69,7 +69,7 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 	// If a config is provided, use it.
 
 	if rc != nil {
-		params = &openai.ChatCompletionNewParams{
+		p = &openai.ChatCompletionNewParams{
 			Seed:                openai.Int(rc.Seed),
 			MaxCompletionTokens: openai.Int(rc.MaxTokens),
 			Temperature:         openai.Float(rc.Temperature),
@@ -79,7 +79,7 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 		}
 	}
 
-	return params
+	return p
 }
 
 func (c openAIClient) request(
