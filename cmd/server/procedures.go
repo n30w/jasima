@@ -285,7 +285,6 @@ func (s *ConlangServer) Evolve() {
 		err         error
 		errMsg      = "failed to evolve generation %d"
 		targetTotal = 10
-		cmd         = network.BuildCommand(s.config.name)
 	)
 
 	joinCtx, joinCtxCancel := context.WithCancel(context.Background())
@@ -307,14 +306,6 @@ func (s *ConlangServer) Evolve() {
 
 	timer := utils.Timer(time.Now())
 
-	// Prepare the dictionary system agent.
-
-	dictSysAgent, err := s.gs.GetClientByName("SYSTEM_AGENT_B")
-	if err != nil {
-		s.errs <- err
-		return
-	}
-
 	for i := range s.config.procedures.maxGenerations {
 		elapsedTime := utils.Timer(time.Now())
 
@@ -323,21 +314,6 @@ func (s *ConlangServer) Evolve() {
 			s.errs <- errors.Wrap(err, errMsg)
 			return
 		}
-
-		genDict, err := json.Marshal(genSlice[i].Dictionary)
-		if err != nil {
-			s.errs <- errors.Wrap(err, "failed to Marshal dictionary")
-			return
-		}
-
-		s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
-		s.gs.Channel.ToClients <- cmd(
-			agent.AppendInstructions,
-			fmt.Sprintf(
-				"This is the current dictionary\n%s",
-				string(genDict),
-			),
-		)(dictSysAgent)
 
 		// Starts on Layer 4, recurses to 1.
 
@@ -399,8 +375,6 @@ func (s *ConlangServer) Evolve() {
 			)
 		}
 
-		// Save specs to memory
-		// Save result to LLM.
 		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
 	}
 
