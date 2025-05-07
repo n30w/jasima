@@ -268,7 +268,11 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		return
 	}
 
-	s.dictUpdatesChan <- updates
+	select {
+	case s.dictUpdatesChan <- updates:
+		s.logger.Info("Updates sent to dictionary channel")
+	default:
+	}
 
 	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
 	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
