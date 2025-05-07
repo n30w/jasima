@@ -126,6 +126,10 @@ func NewConlangServer(
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to enqueue specifications")
 	}
+	err = webServer.InitialData.RecentGenerations.Enqueue(initialGen)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to enqueue initial generation to recent generations")
+	}
 
 	return &ConlangServer{
 		memory:        m,

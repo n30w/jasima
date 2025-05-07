@@ -387,6 +387,14 @@ func (s *ConlangServer) Evolve() {
 			)
 		}
 
+		err = s.ws.InitialData.RecentGenerations.Enqueue(newGeneration)
+		if err != nil {
+			s.errs <- errors.Wrapf(
+				err,
+				"failed to enqueue new generation to initial data %d", i,
+			)
+		}
+
 		// Save specs to memory
 		// Save result to LLM.
 		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
