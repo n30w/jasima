@@ -105,6 +105,10 @@ func newClient(
 		}
 
 		llm = ls.gemini
+		logger.Warnf(
+			"Frequency Penalty and Presence Penalty are not provided for %s. Their values will be ignored.",
+			cfg.ModelConfig.Provider,
+		)
 
 	case llms.ProviderChatGPT:
 		if cfg.ModelConfig.Temperature > 1.0 {
