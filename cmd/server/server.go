@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -146,7 +143,7 @@ func NewConlangServer(
 	}, nil
 }
 
-func (s *ConlangServer) Router(errs chan<- error) {
+func (s *ConlangServer) Router() {
 	eventsRoute := func(ctx context.Context, pbMsg *chat.Message) error {
 		msg := *memory.NewChatMessage(
 			pbMsg.Sender, pbMsg.Receiver,
@@ -243,23 +240,23 @@ func (s *ConlangServer) Router(errs chan<- error) {
 		eventsRoute,
 	)
 
-	go routeMessages(errs)
-	go s.gs.ListenAndServe("tcp", "50051", errs)
+	go routeMessages(s.errs)
+	go s.gs.ListenAndServe("tcp", "50051", s.errs)
 }
 
-func (s *ConlangServer) WebEvents(errs chan<- error) {
+func (s *ConlangServer) WebEvents() {
 	go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
-	go s.ws.ListenAndServe("7070", errs)
+	go s.ws.ListenAndServe("7070", s.errs)
 }
 
-func (s *ConlangServer) StartProcedures(errs chan<- error) {
+func (s *ConlangServer) StartProcedures() {
 	go s.Evolve()
 
-	if s.config.debugEnabled {
-		go func(errs chan<- error) {
+	if s.config.debugEnabled && s.config.broadcastTestData {
+		go func() {
 			msgs, err := loadJsonFile[memory.Message]("./outputs/chats/chat_5.json")
 			if err != nil {
-				errs <- errors.Wrap(err, "failed to load test chats json file")
+				s.errs <- errors.Wrap(err, "failed to load test chats json file")
 				return
 			}
 
@@ -267,7 +264,7 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 				"./outputs/generations/generations_20250502205519.json",
 			)
 			if err != nil {
-				errs <- errors.Wrap(
+				s.errs <- errors.Wrap(
 					err,
 					"failed to load test generation json file",
 				)
@@ -277,7 +274,7 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 			for _, v := range gens {
 				err = s.ws.InitialData.RecentGenerations.Enqueue(v)
 				if err != nil {
-					errs <- errors.Wrap(
+					s.errs <- errors.Wrap(
 						err,
 						"failed to enqueue recent generations",
 					)
@@ -289,32 +286,12 @@ func (s *ConlangServer) StartProcedures(errs chan<- error) {
 
 			// Output test data to channel.
 			go s.outputTestData(msgs, gens)
-		}(errs)
+		}()
 	}
-}
-
-func loadJsonFile[T any](p string) ([]T, error) {
-	var a []T
-
-	f, err := os.Open(p)
-	if err != nil {
-		return nil, err
-	}
-
-	defer f.Close()
-
-	b, _ := io.ReadAll(f)
-
-	err = json.Unmarshal(b, &a)
-	if err != nil {
-		return nil, err
-	}
-
-	return a, nil
 }
 
 func (s *ConlangServer) Run(errs chan error) {
-	s.Router(errs)
-	s.WebEvents(errs)
-	s.StartProcedures(errs)
+	s.Router()
+	s.WebEvents()
+	s.StartProcedures()
 }

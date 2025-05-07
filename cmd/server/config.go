@@ -17,8 +17,9 @@ type filePathConfig struct {
 }
 
 type config struct {
-	name         string
-	debugEnabled bool
-	files        filePathConfig
-	procedures   procedureConfig
+	name              string
+	debugEnabled      bool
+	broadcastTestData bool
+	files             filePathConfig
+	procedures        procedureConfig
 }

@@ -18,6 +18,7 @@ const (
 	DefaultSvgResourcePath    = "./resources/logography"
 	DefaultLogToFilePath      = "./outputs/logs/server_log_%s.log"
 	DefaultDebugToggle        = false
+	DefaultBroadcastTestData  = false
 	DefaultMaxExchanges       = 25
 	DefaultMaxGenerations     = 1
 	DefaultLogToFileToggle    = false
@@ -66,6 +67,11 @@ func main() {
 			DefaultServerName,
 			"server name",
 		)
+		flagBroadcastTestData = flag.Bool(
+			"broadcastTestData",
+			DefaultBroadcastTestData,
+			"broadcast test data for web events",
+		)
 	)
 
 	flag.Parse()
@@ -95,11 +101,14 @@ func main() {
 		*flagGenerations,
 		"name",
 		*flagServerName,
+		"broadcastTestData",
+		*flagBroadcastTestData,
 	)
 
 	cfg := &config{
-		name:         *flagServerName,
-		debugEnabled: *flagDebug,
+		name:              *flagServerName,
+		debugEnabled:      *flagDebug,
+		broadcastTestData: *flagBroadcastTestData,
 		files: filePathConfig{
 			specifications: *flagSpecificationPath,
 			logography:     *flagSvgPath,

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +125,26 @@ func loadDictionaryFromFile(p string) (memory.DictionaryGeneration, error) {
 	return dict, nil
 }
 
+func loadJsonFile[T any](p string) ([]T, error) {
+	var a []T
+
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	b, _ := io.ReadAll(f)
+
+	err = json.Unmarshal(b, &a)
+	if err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
+
 func transcriptToString(transcript []memory.Message) string {
 	var sb strings.Builder
 
@@ -146,6 +168,32 @@ func saveToJson(data any, fileName string) error {
 	err = os.WriteFile(fileName, d, 0o644)
 	if err != nil {
 		return errors.Wrap(err, "failed to write file")
+	}
+
+	return nil
+}
+
+func (s *ConlangServer) messageToSystemAgent(
+	name chat.Name,
+	msg string,
+) *chat.Message {
+	return chat.NewPbMessage(
+		s.gs.Name,
+		name,
+		chat.Content(msg),
+		chat.SystemLayer,
+	)
+}
+
+func saveMessageTo(
+	ctx context.Context,
+	mem MemoryService,
+	msg memory.Message,
+) error {
+	msg.Role = memory.UserRole
+	err := mem.Save(ctx, msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to save message")
 	}
 
 	return nil
