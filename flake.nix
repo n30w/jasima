@@ -51,7 +51,7 @@
       devShells = eachSystem (pkgs: {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_23
+            nodejs_24
             pnpm
 
             go_1_24
