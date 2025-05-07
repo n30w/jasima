@@ -66,7 +66,7 @@ func (c Command) String() string {
 	case SetResponseTypeToText:
 		return "SET_RESPONSE_TYPE_TO_TEXT"
 	case RequestJsonDictionaryUpdate:
-		return "REQUEST_JSON_DICTIONARIY_UPDATE"
+		return "REQUEST_JSON_DICTIONARY_UPDATE"
 	case Latch:
 		return "LATCH"
 	case Unlatch:
