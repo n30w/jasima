@@ -24,6 +24,7 @@ func init() {
 					"response": {
 						Type:        genai.TypeString,
 						Description: "Your response",
+						Required:    []string{"response"},
 					},
 				},
 			},
@@ -59,9 +60,11 @@ func init() {
 									Description: "Whether to remove the word or not",
 								},
 							},
+							Required: []string{"word", "definition", "remove"},
 						},
 					},
 				},
+				Required: []string{"entries"},
 			},
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "dictionary_entries",
