@@ -1,6 +1,7 @@
 package llms
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/log"
@@ -16,10 +17,6 @@ type llm struct {
 
 	defaultConfig *RequestConfig
 
-	// responseFormat selects the type of response that is expected from the
-	// LLM, like structured JSON output.
-	responseFormat ResponseFormat
-
 	logger *log.Logger
 }
 
@@ -32,11 +29,10 @@ func newLLM(mc ModelConfig, l *log.Logger) (*llm, error) {
 	l.Debugf("Creating new LLM instance with these options: %+v", mc)
 
 	return &llm{
-		model:          mc.Provider,
-		instructions:   mc.Instructions,
-		defaultConfig:  &mc.RequestConfig,
-		responseFormat: ResponseFormatText,
-		logger:         l,
+		model:         mc.Provider,
+		instructions:  mc.Instructions,
+		defaultConfig: &mc.RequestConfig,
+		logger:        l,
 	}, nil
 }
 
@@ -44,11 +40,18 @@ func (l *llm) SetInstructions(s string) {
 	l.instructions = s
 }
 
-type ResponseFormat int
-
-const (
-	ResponseFormatText ResponseFormat = iota
-)
+func (l *llm) setTemperature(t float64) float64 {
+	switch l.model {
+	case ProviderGoogleGemini_2_0_Flash:
+		fallthrough
+	case ProviderGoogleGemini_2_5_Flash:
+		fallthrough
+	case ProviderDeepseek:
+		return t * 2
+	default:
+		return t
+	}
+}
 
 type LLMProvider int
 
@@ -120,8 +123,8 @@ type RequestConfig struct {
 }
 
 func (cfg RequestConfig) validate() error {
-	if cfg.Temperature < 0.0 || cfg.Temperature > 2.0 {
-		return errors.New("temperature must be between 0.0 and 2.0")
+	if cfg.Temperature < 0.0 || cfg.Temperature > 1.0 {
+		return errors.New("temperature must be between 0.0 and 1.0")
 	}
 	if cfg.TopP < 0.0 || cfg.TopP > 1.0 {
 		return errors.New("top_p must be between 0.0 and 1.0")
@@ -152,4 +155,8 @@ func buildString(strs ...string) string {
 	return sb.String()
 }
 
-type Requestable interface{}
+var thinkTagPattern = regexp.MustCompile(`(?s)<think>.*?</think>\n?`)
+
+func removeThinkingTags(response string) string {
+	return thinkTagPattern.ReplaceAllString(response, "")
+}

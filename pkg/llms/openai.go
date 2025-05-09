@@ -60,10 +60,15 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 	p := &openai.ChatCompletionNewParams{
 		Seed:                openai.Int(c.defaultConfig.Seed),
 		MaxCompletionTokens: openai.Int(c.defaultConfig.MaxTokens),
-		Temperature:         openai.Float(c.defaultConfig.Temperature),
-		PresencePenalty:     openai.Float(c.defaultConfig.PresencePenalty),
-		FrequencyPenalty:    openai.Float(c.defaultConfig.FrequencyPenalty),
-		Model:               c.model.String(),
+		Temperature: openai.Float(
+			c.setTemperature(
+				c.defaultConfig.
+					Temperature,
+			),
+		),
+		PresencePenalty:  openai.Float(c.defaultConfig.PresencePenalty),
+		FrequencyPenalty: openai.Float(c.defaultConfig.FrequencyPenalty),
+		Model:            c.model.String(),
 	}
 
 	// If a config is provided, use it.
@@ -72,7 +77,7 @@ func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
 		p = &openai.ChatCompletionNewParams{
 			Seed:                openai.Int(rc.Seed),
 			MaxCompletionTokens: openai.Int(rc.MaxTokens),
-			Temperature:         openai.Float(rc.Temperature),
+			Temperature:         openai.Float(c.setTemperature(rc.Temperature)),
 			PresencePenalty:     openai.Float(rc.PresencePenalty),
 			FrequencyPenalty:    openai.Float(rc.FrequencyPenalty),
 			Model:               c.model.String(),
@@ -133,10 +138,6 @@ func (c openAIClient) prepare(
 	}
 
 	return contents
-}
-
-func (c openAIClient) SetInstructions(s string) {
-	c.instructions = s
 }
 
 func (c openAIClient) AppendInstructions(s string) {

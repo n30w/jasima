@@ -42,3 +42,13 @@ func (g *schemaRegistry) lookup(v reflect.Type) (*schema, error) {
 
 	return s, nil
 }
+
+func lookupType[T any]() (*schema, error) {
+	var v T
+	t := reflect.TypeOf(v)
+	s, err := schemas.lookup(t)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to retrieve schema")
+	}
+	return s, nil
+}

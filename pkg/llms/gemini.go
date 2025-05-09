@@ -3,7 +3,6 @@ package llms
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
@@ -53,7 +52,14 @@ func NewGoogleGemini(
 
 func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateContentConfig {
 	params := &genai.GenerateContentConfig{
-		Temperature:     genai.Ptr(float32(c.defaultConfig.Temperature)),
+		Temperature: genai.Ptr(
+			float32(
+				c.setTemperature(
+					c.defaultConfig.
+						Temperature,
+				),
+			),
+		),
 		MaxOutputTokens: int32(c.defaultConfig.MaxTokens),
 		Seed:            genai.Ptr(int32(c.defaultConfig.Seed)),
 		// PresencePenalty:  genai.Ptr(float32(c.defaultConfig.PresencePenalty)),
@@ -62,7 +68,14 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 
 	if rc != nil {
 		params = &genai.GenerateContentConfig{
-			Temperature:     genai.Ptr(float32(rc.Temperature)),
+			Temperature: genai.Ptr(
+				float32(
+					c.setTemperature(
+						rc.
+							Temperature,
+					),
+				),
+			),
 			MaxOutputTokens: int32(rc.MaxTokens),
 			Seed:            genai.Ptr(int32(rc.Seed)),
 			// PresencePenalty:  genai.Ptr(float32(rc.PresencePenalty)),
@@ -115,7 +128,14 @@ func (c GoogleGemini) request(
 		c.cfg,
 	)
 	if err != nil {
-		return "", errors.Wrap(err, "gemini client failed to make request")
+		var e *genai.APIError
+		switch {
+		case errors.As(err, &e):
+			c.logger.Infof("%d: %s", e.Code, e.Message)
+			return "*no comment*", nil
+		default:
+			return "", errors.Wrap(err, "gemini client failed to make request")
+		}
 	}
 
 	return result.Text(), nil
@@ -155,10 +175,6 @@ func (c GoogleGemini) String() string {
 	return fmt.Sprintf("Google Gemini %s", c.model)
 }
 
-func (c GoogleGemini) SetInstructions(s string) {
-	c.instructions = s
-}
-
 func (c GoogleGemini) AppendInstructions(s string) {
 	c.instructions = buildString(c.instructions, s)
 }
@@ -169,13 +185,11 @@ func RequestTypedGoogleGemini[T any](
 	llm *GoogleGemini,
 ) (string, error) {
 	var (
-		v      T
 		err    error
 		result string
 	)
 
-	t := reflect.TypeOf(v)
-	s, err := schemas.lookup(t)
+	s, err := lookupType[T]()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to retrieve schema for gemini")
 	}

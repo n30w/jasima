@@ -1,19 +1,23 @@
 package llms
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
-	"codeberg.org/n30w/jasima/pkg/memory"
-	"codeberg.org/n30w/jasima/pkg/utils"
 	"github.com/pkg/errors"
 
 	"github.com/charmbracelet/log"
 	ol "github.com/ollama/ollama/api"
+
+	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 const defaultOllamaUrl = "http://localhost:11434"
@@ -23,6 +27,7 @@ type Ollama struct {
 	cfg    *ol.ChatRequest
 	client *ol.Client
 	logger *log.Logger
+	hc     *http.Client
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
@@ -52,6 +57,8 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 		return nil, errors.New("ollama is not running or invalid host URL")
 	}
 
+	l.Debug("Ollama is online.")
+
 	// Then set up the chat API route.
 
 	u.Path = "/api/chat"
@@ -72,15 +79,21 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 		llm:    nl,
 		client: cfe,
 		logger: l,
+		hc:     httpClient,
 	}, nil
 }
 
-func (c Ollama) buildRequestParams(rc *RequestConfig) *ol.ChatRequest {
+func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
 	p := &ol.Options{
-		Seed:             int(c.defaultConfig.Seed),
-		TopK:             int(c.defaultConfig.TopK),
-		TopP:             float32(c.defaultConfig.TopP),
-		Temperature:      float32(c.defaultConfig.Temperature),
+		Seed: int(c.defaultConfig.Seed),
+		TopK: int(c.defaultConfig.TopK),
+		TopP: float32(c.defaultConfig.TopP),
+		Temperature: float32(
+			c.setTemperature(
+				c.defaultConfig.
+					Temperature,
+			),
+		),
 		PresencePenalty:  float32(c.defaultConfig.PresencePenalty),
 		FrequencyPenalty: float32(c.defaultConfig.FrequencyPenalty),
 	}
@@ -90,63 +103,91 @@ func (c Ollama) buildRequestParams(rc *RequestConfig) *ol.ChatRequest {
 			Seed:             int(rc.Seed),
 			TopK:             int(rc.TopK),
 			TopP:             float32(rc.TopP),
-			Temperature:      float32(rc.Temperature),
+			Temperature:      float32(c.setTemperature(rc.Temperature)),
 			PresencePenalty:  float32(rc.PresencePenalty),
 			FrequencyPenalty: float32(rc.FrequencyPenalty),
 		}
 	}
 
-	var m map[string]any
-
-	b, _ := json.Marshal(p)
-	_ = json.Unmarshal(b, &m)
+	m, err := utils.StructToMap(p)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert struct to map")
+	}
 
 	return &ol.ChatRequest{
 		Model:     c.model.String(),
 		Stream:    new(bool),
 		Options:   m,
 		KeepAlive: &ol.Duration{Duration: 1 * time.Minute},
-	}
+	}, nil
 }
 
-func (c Ollama) Request(ctx context.Context, messages []memory.Message) (string, error) {
-	c.cfg = c.buildRequestParams(nil)
+func (c Ollama) Request(ctx context.Context, messages []memory.Message) (
+	string,
+	error,
+) {
+	var err error
+
+	c.cfg, err = c.buildRequestParams(nil)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to build request params")
+	}
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to make ollama request")
 	}
 
-	return v, nil
+	s := removeThinkingTags(v)
+
+	return strings.TrimSpace(s), nil
 }
 
-func (c Ollama) request(
-	ctx context.Context,
-	messages []memory.Message,
-) (string, error) {
-	if c.cfg == nil {
-		return "", errors.New("no configuration provided")
-	}
-
-	var result string
+func (c Ollama) request(ctx context.Context, messages []memory.Message) (
+	string,
+	error,
+) {
+	var (
+		err    error
+		result ol.ChatResponse
+		u      = defaultOllamaUrl + "/api/chat"
+	)
 
 	contents := c.prepare(messages)
 
 	c.cfg.Messages = contents
 
-	err := c.client.Chat(
-		ctx,
-		c.cfg,
-		func(r ol.ChatResponse) error {
-			result = r.Message.Content
-			return nil
-		},
-	)
+	body, err := json.Marshal(c.cfg)
 	if err != nil {
-		return "", errors.Wrap(err, "ollama failed to make request")
+		return "", errors.Wrap(err, "failed to marshal configuration")
 	}
 
-	return result, nil
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, u,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create request")
+	}
+
+	res, err := c.hc.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to send request")
+	}
+
+	defer res.Body.Close()
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to read response body")
+	}
+
+	err = json.Unmarshal(resBody, &result)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to unmarshal response body")
+	}
+
+	return result.Message.Content, nil
 }
 
 func (c Ollama) prepare(messages []memory.Message) []ol.Message {
@@ -180,10 +221,6 @@ func (c Ollama) String() string {
 	return fmt.Sprintf("Ollama %s", c.model)
 }
 
-func (c Ollama) SetInstructions(s string) {
-	c.instructions = s
-}
-
 func (c Ollama) AppendInstructions(s string) {
 	c.instructions = buildString(c.instructions, s)
 }
@@ -198,19 +235,27 @@ func RequestTypedOllama[T any](
 		result string
 	)
 
-	llm.cfg = llm.buildRequestParams(nil)
-
-	a := utils.GenerateSchema[T]()
-
-	err = llm.cfg.Format.UnmarshalJSON(a.([]byte))
+	_, err = lookupType[T]()
 	if err != nil {
-		return "", errors.Wrap(err, "failed to unmarshal JSON")
+		return "", errors.Wrap(err, "failed to lookup type")
 	}
+
+	llm.cfg, err = llm.buildRequestParams(nil)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to build request params")
+	}
+
+	s, err := utils.GenerateJsonSchema[T]()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to generate json schema")
+	}
+
+	llm.cfg.Format = s
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to make typed ollama request")
 	}
 
-	return result, nil
+	return strings.TrimSpace(result), nil
 }

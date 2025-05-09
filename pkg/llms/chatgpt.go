@@ -3,7 +3,6 @@ package llms
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/charmbracelet/log"
 	"github.com/openai/openai-go"
@@ -64,13 +63,11 @@ func RequestTypedChatGPT[T any](
 	llm *OpenAIChatGPT,
 ) (string, error) {
 	var (
-		v      T
 		err    error
 		result string
 	)
 
-	t := reflect.TypeOf(v)
-	s, err := schemas.lookup(t)
+	s, err := lookupType[T]()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to retrieve schema for ChatGPT")
 	}
