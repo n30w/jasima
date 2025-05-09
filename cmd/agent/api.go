@@ -332,6 +332,10 @@ func (c *client) DispatchToLLM(
 	ctx context.Context,
 	msg *memory.Message,
 ) {
+	defer func() {
+		<-ctx.Done()
+	}()
+
 	if c.latch {
 		c.logger.Warn("Discarding response...", "latch", c.latch)
 		return
@@ -441,6 +445,8 @@ func (c *client) ReceiveMessages(
 			// Change the response to text only. LLM will not use structured
 			// JSON for output.
 		case agent.Latch:
+			cancel(errors.New(statusMsg))
+
 			if c.latch {
 				c.logger.Debug("Already latched, doing nothing...")
 				break
@@ -448,12 +454,9 @@ func (c *client) ReceiveMessages(
 
 			c.latch = true
 
-			cancel(errors.New(statusMsg))
-
 		case agent.RequestJsonDictionaryUpdate:
 
 			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
-			ctx.Done()
 
 		case agent.SendInitialMessage:
 
@@ -496,6 +499,7 @@ func (c *client) ReceiveMessages(
 			} else {
 				// Send the data to the LLM.
 				if c.latch {
+					cancel(errors.New("Latch is true"))
 					c.logger.Debug("Latch is TRUE. Only saving message...")
 					err = c.memory.Save(
 						ctx, c.NewMessageFrom(
@@ -504,7 +508,6 @@ func (c *client) ReceiveMessages(
 						),
 					)
 					if err != nil {
-						cancel(errors.New("failed to save to memory"))
 						c.channels.errs <- err
 						return
 					}

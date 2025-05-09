@@ -117,6 +117,8 @@ func typedRequest[T any](
 	c.channels.responses <- newMsg
 
 	c.logger.Debug("Message sent to response channel")
+
+	<-ctx.Done()
 }
 
 // selectRequestType returns the result of a particular request given type `T`.
