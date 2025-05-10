@@ -216,7 +216,7 @@ func (s *ConlangServer) iterate(
 	// Concurrent dictionary evolution based.
 
 	if initialLayer == chat.DictionaryLayer {
-		go s.iterateUpdateDictionary(cmd, newGeneration)
+		s.iterateUpdateDictionary(cmd, newGeneration)
 	}
 
 	return newGeneration, nil
@@ -258,7 +258,9 @@ func (s *ConlangServer) iterateUpdateDictionary(
 	)(dictSysAgent)
 
 	var updates memory.DictionaryEntries
+
 	dictUpdates := <-s.gs.Channel.ToServer
+
 	err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
 	if err != nil {
 		s.errs <- errors.Wrap(
@@ -268,11 +270,9 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		return
 	}
 
-	select {
-	case s.dictUpdatesChan <- updates:
-		s.logger.Info("Updates sent to dictionary channel")
-	default:
-	}
+	s.dictUpdatesChan <- updates
+
+	s.logger.Info("Updates sent to dictionary channel")
 
 	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
 	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
