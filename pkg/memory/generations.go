@@ -39,6 +39,11 @@ func (s SpecificationGeneration) Copy() SpecificationGeneration {
 	return newMap
 }
 
+type SpecificationUpdate struct {
+	Specification string `json:"specification" jsonschema_description:"Update"`
+	Explanation   string `json:"explanation" jsonschema_description:"Explanation of update"`
+}
+
 type DictionaryGeneration map[string]DictionaryEntry
 
 func (d DictionaryGeneration) Copy() DictionaryGeneration {
