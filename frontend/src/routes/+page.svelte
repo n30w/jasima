@@ -1,8 +1,6 @@
 <script lang="ts">
 	/** eslint-disable svelte/no-at-html-tags */
 	import { EventSource } from 'eventsource';
-	import { animate, stagger, utils } from 'animejs';
-	import Markdown from '$lib/Markdown.svelte';
 	import { typewriter } from '$lib/typewriter';
 	import type { PageProps } from './$types';
 
