@@ -36,7 +36,7 @@
 	});
 </script>
 
-<div class="flex flex-wrap gap-1">
+<div class="flex flex-wrap gap-1 p-2">
 	{#each currDict as [key, value] (key)}
 		<div class="h-fit max-w-1/3 border-1 p-2 hover:bg-neutral-100">
 			{#if currLog.has(value.word)}
