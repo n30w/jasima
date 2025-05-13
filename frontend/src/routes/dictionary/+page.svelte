@@ -64,8 +64,8 @@
 	{#each currDict as [key, value] (key)}
 		<div
 			class={[
-				'h-fit max-w-1/3 border-1 p-2 transition-colors duration-150 hover:bg-neutral-100',
-				isCurrUsed(value.word) && 'bg-amber-200'
+				'h-fit max-w-1/3 border-1 p-2 transition-all duration-150 ease-in',
+				isCurrUsed(value.word) && 'bg-green-300'
 			]}
 		>
 			{#if currLog.has(value.word)}
