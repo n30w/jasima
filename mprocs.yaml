@@ -19,3 +19,5 @@ procs:
     shell: "task run-agent-system-a"
   system-b:
     shell: "task run-agent-system-b"
+  system-c:
+    shell: "task run-agent-system-c"
