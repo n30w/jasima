@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/memory"
 	"codeberg.org/n30w/jasima/pkg/utils"
 
@@ -145,22 +146,24 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 }
 
 type Broadcasters struct {
-	Messages            *Broadcaster[memory.Message]
-	Generation          *Broadcaster[memory.Generation]
-	Specification       *Broadcaster[memory.SpecificationGeneration]
-	CurrentTime         *Broadcaster[string]
-	TestMessageFeed     *Broadcaster[memory.Message]
-	TestGenerationsFeed *Broadcaster[memory.Generation]
+	Messages                  *Broadcaster[memory.Message]
+	MessageWordDictExtraction *Broadcaster[chat.AgentDictionaryWordsDetectionResponse]
+	Generation                *Broadcaster[memory.Generation]
+	Specification             *Broadcaster[memory.SpecificationGeneration]
+	CurrentTime               *Broadcaster[string]
+	TestMessageFeed           *Broadcaster[memory.Message]
+	TestGenerationsFeed       *Broadcaster[memory.Generation]
 }
 
 func NewBroadcasters(l *log.Logger) *Broadcasters {
 	return &Broadcasters{
-		Messages:            NewBroadcaster[memory.Message](l),
-		Generation:          NewBroadcaster[memory.Generation](l),
-		Specification:       NewBroadcaster[memory.SpecificationGeneration](l),
-		CurrentTime:         NewBroadcaster[string](l),
-		TestMessageFeed:     NewBroadcaster[memory.Message](l),
-		TestGenerationsFeed: NewBroadcaster[memory.Generation](l),
+		Messages:                  NewBroadcaster[memory.Message](l),
+		MessageWordDictExtraction: NewBroadcaster[chat.AgentDictionaryWordsDetectionResponse](l),
+		Generation:                NewBroadcaster[memory.Generation](l),
+		Specification:             NewBroadcaster[memory.SpecificationGeneration](l),
+		CurrentTime:               NewBroadcaster[string](l),
+		TestMessageFeed:           NewBroadcaster[memory.Message](l),
+		TestGenerationsFeed:       NewBroadcaster[memory.Generation](l),
 	}
 }
 
@@ -184,9 +187,16 @@ func (s WebServer) ListenAndServe(
 		),
 	)
 	handler.HandleFunc(
+		"/chat/message/dictionaryWordDetection",
+		s.Broadcasters.MessageWordDictExtraction.InitialData(s.InitialData.RecentUsedWords),
+	)
+	handler.HandleFunc(
 		"/generations",
 		s.Broadcasters.Generation.InitialData(s.InitialData.RecentGenerations),
 	)
+
+	// Test routes.
+
 	handler.HandleFunc(
 		"/test/chat",
 		s.Broadcasters.TestMessageFeed.InitialData(s.InitialData.RecentMessages),
@@ -228,6 +238,7 @@ type InitialData struct {
 	RecentMessages       *utils.FixedQueue[memory.Message]
 	RecentGenerations    *utils.FixedQueue[memory.Generation]
 	RecentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
+	RecentUsedWords      *utils.FixedQueue[chat.AgentDictionaryWordsDetectionResponse]
 }
 
 func NewInitialData() (*InitialData, error) {
@@ -252,10 +263,16 @@ func NewInitialData() (*InitialData, error) {
 		)
 	}
 
+	usedWords, err := utils.NewFixedQueue[chat.AgentDictionaryWordsDetectionResponse](2)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to make recent used words queue")
+	}
+
 	initData := &InitialData{
 		RecentMessages:       recentMessagesQueue,
 		RecentGenerations:    rg,
 		RecentSpecifications: specs,
+		RecentUsedWords:      usedWords,
 	}
 	return initData, nil
 }

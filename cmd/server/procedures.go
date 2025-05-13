@@ -154,11 +154,40 @@ func (s *ConlangServer) iterate(
 	s.gs.Channel.ToClients <- kickoff
 
 	for i := range exchanges {
+
 		m := <-s.procedureChan
+
 		newGeneration.Transcript[initialLayer] = append(
 			newGeneration.Transcript[initialLayer],
 			m,
 		)
+
+		// Retrieve the extracted words.
+
+		dw, err := s.getExtractedWordsFromText(cmd, newGeneration, m)
+		if err != nil {
+			return newGeneration, errors.Wrap(
+				err,
+				"failed getting extracted words",
+			)
+		}
+
+		err = s.ws.InitialData.RecentUsedWords.Enqueue(dw)
+		if err != nil {
+			return newGeneration, errors.Wrap(
+				err,
+				"failed to enqueue words",
+			)
+		}
+
+		// Broadcast the sent message.
+
+		s.ws.Broadcasters.Messages.Broadcast(m)
+
+		// Broadcast the extracted words from the sent message.
+
+		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(dw)
+
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
@@ -208,18 +237,62 @@ func (s *ConlangServer) iterate(
 
 	// JK some more.
 
-	s.ws.Broadcasters.Specification.Broadcast(
-		newGeneration.
-			Specifications,
-	)
-
-	// Concurrent dictionary evolution based.
+	s.ws.Broadcasters.Specification.Broadcast(newGeneration.Specifications)
 
 	if initialLayer == chat.DictionaryLayer {
+		// Update the dictionary.
+
 		s.iterateUpdateDictionary(cmd, newGeneration)
 	}
 
 	return newGeneration, nil
+}
+
+func (s *ConlangServer) getExtractedWordsFromText(
+	cmd network.CommandForAgent,
+	newGeneration memory.Generation,
+	m memory.Message,
+) (chat.AgentDictionaryWordsDetectionResponse, error) {
+	var dictionaryWords chat.AgentDictionaryWordsDetectionResponse
+
+	sysAgentDictExtractor, err := s.gs.GetClientByName("SYSTEM_AGENT_C")
+	if err != nil {
+		return dictionaryWords, errors.Wrap(
+			err,
+			"failed to retrieve client by name",
+		)
+	}
+
+	var sb2 strings.Builder
+
+	sb2.WriteString(newGeneration.Dictionary.String())
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(
+		agent.AppendInstructions,
+		sb2.String(),
+	)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(
+		agent.RequestDictionaryWordDetection,
+		m.Text.String(),
+	)(sysAgentDictExtractor)
+
+	words := <-s.gs.Channel.ToServer
+
+	err = json.Unmarshal([]byte(words.Text), &dictionaryWords)
+	if err != nil {
+		return dictionaryWords, errors.Wrap(
+			err,
+			"failed to unmarshal dictionary words",
+		)
+	}
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(sysAgentDictExtractor)
+
+	return dictionaryWords, nil
 }
 
 func (s *ConlangServer) iterateUpdateDictionary(
@@ -279,12 +352,25 @@ func (s *ConlangServer) iterateUpdateDictionary(
 	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
 }
 
+// func (s *ConlangServer) iterateLogogram() {
+// 	exchanges := 5
+//
+// 	// Setup instructions for agent A, the generator.
+//
+// 	// Setup instructions for agent B, the adversary.
+//
+// 	for i := range exchanges {
+// 		m := <-s.procedureChan
+// 		// Emit the message.
+// 	}
+// }
+
 // Evolve manages the entire evolutionary function loop.
 func (s *ConlangServer) Evolve() {
 	var (
 		err         error
 		errMsg      = "failed to evolve generation %d"
-		targetTotal = 10
+		targetTotal = 11
 	)
 
 	joinCtx, joinCtxCancel := context.WithCancel(context.Background())
@@ -376,6 +462,7 @@ func (s *ConlangServer) Evolve() {
 		}
 
 		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
+
 	}
 
 	s.gs.Listening = false

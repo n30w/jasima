@@ -47,6 +47,7 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan memory.DictionaryEntries
+	dictionary      memory.DictionaryGeneration
 	generations     *utils.FixedQueue[memory.Generation]
 	ws              *network.WebServer
 	errs            chan error
@@ -92,6 +93,14 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed loading dictionary from file")
 	}
 
+	// Then for each entry of the dictionary, go ahead and set the logogram
+	// values to the SVGs that had been loaded.
+
+	for k := range dictionaryGen1 {
+		v := dictionaryGen1[k]
+		v.Logogram = logographyGen1[k]
+	}
+
 	initialGen := memory.Generation{
 		Transcript:     transcriptGen1,
 		Logography:     logographyGen1,
@@ -126,7 +135,10 @@ func NewConlangServer(
 
 	err = webServer.InitialData.RecentGenerations.Enqueue(initialGen)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to enqueue initial generation to recent generations")
+		return nil, errors.Wrap(
+			err,
+			"failed to enqueue initial generation to recent generations",
+		)
 	}
 
 	return &ConlangServer{
@@ -138,6 +150,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.DictionaryEntries, 1),
+		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
 		errs:            errs,
@@ -156,7 +169,7 @@ func (s *ConlangServer) Router() {
 			s.logger.Errorf("failed to save message to InitialData: %v", err)
 		}
 
-		s.ws.Broadcasters.Messages.Broadcast(msg)
+		// s.ws.Broadcasters.Messages.Broadcast(msg)
 
 		return nil
 	}
@@ -257,7 +270,10 @@ func (s *ConlangServer) StartProcedures() {
 		go func() {
 			msgs, err := loadJsonFile[memory.Message]("./outputs/chats/chat_5.json")
 			if err != nil {
-				s.errs <- errors.Wrap(err, "failed to load test chats json file")
+				s.errs <- errors.Wrap(
+					err,
+					"failed to load test chats json file",
+				)
 				return
 			}
 

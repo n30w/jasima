@@ -39,6 +39,11 @@ const (
 
 	RequestJsonDictionaryUpdate Command = 22
 
+	RequestLogogramIteration Command = 23
+	RequestLogogramCritique  Command = 24
+
+	RequestDictionaryWordDetection Command = 25
+
 	// Latch requires a client go into `latch` mode.
 	Latch Command = 10
 
@@ -67,6 +72,12 @@ func (c Command) String() string {
 		return "SET_RESPONSE_TYPE_TO_TEXT"
 	case RequestJsonDictionaryUpdate:
 		return "REQUEST_JSON_DICTIONARY_UPDATE"
+	case RequestLogogramIteration:
+		return "REQUEST_LOGOGRAM_ITERATION"
+	case RequestLogogramCritique:
+		return "REQUEST_LOGOGRAM_CRITIQUE"
+	case RequestDictionaryWordDetection:
+		return "REQUEST_DICTIONARY_WORD_DETECTION"
 	case Latch:
 		return "LATCH"
 	case Unlatch:

@@ -82,6 +82,9 @@ type DictionaryEntry struct {
 	// queried to remove an entry from the dictionary, this field would be
 	// set to `true`.
 	Remove bool `json:"remove" jsonschema_description:"Remove word"`
+
+	// Logogram is the logogram of the word.
+	Logogram string `json:"logogram,omitempty,omitzero" jsonschema_description:"Dictionary entry logogram"`
 }
 
 type DictionaryEntries struct {

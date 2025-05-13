@@ -178,3 +178,18 @@ func NewPbMessage(
 type AgentResponseText struct {
 	Response string `json:"response" jsonschema_description:"Your response"`
 }
+
+type AgentLogogramIterationResponse struct {
+	Name      string `json:"name" jsonschema_description:"Logogram name"`
+	Svg       string `json:"svg" jsonschema_description:"Logogram svg"`
+	Reasoning string `json:"reasoning" jsonschema_description:"Logogram reasoning"`
+}
+
+type AgentLogogramCritiqueResponse struct {
+	Name     string `json:"name" jsonschema_description:"Logogram name"`
+	Critique string `json:"critique" jsonschema_description:"Logogram critique"`
+}
+
+type AgentDictionaryWordsDetectionResponse struct {
+	Words []string `json:"words" jsonschema_description:"Words in the dictionary from the text"`
+}
