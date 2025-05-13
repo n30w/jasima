@@ -6,6 +6,9 @@
 
 	const src = data.generationsSrc;
 
+	const src2 = data.host + '/wordDetection';
+
+	let currUsed: string[] = $state([]);
 	let currDict: Map<string, DictionaryEntry> = $state(new Map<string, DictionaryEntry>());
 	let currLog: Map<string, string> = $state(new Map<string, string>());
 
@@ -34,11 +37,37 @@
 
 		return () => es.close(); // Clean up when component unmounts
 	});
+
+	$effect(() => {
+		const es2 = new EventSource(src2);
+		es2.onmessage = (event) => {
+			try {
+				const json: UsedWords = JSON.parse(event.data);
+				currUsed = [...json.words];
+				// console.log(json);
+			} catch (err) {
+				console.log(err);
+			}
+		};
+
+		es2.onerror = (err) => {
+			console.error('SSE error:', err);
+		};
+
+		return () => es2.close();
+	});
+
+	const isCurrUsed = (v: string): boolean => currUsed.includes(v);
 </script>
 
-<div class="flex flex-wrap gap-1">
+<div class="flex flex-wrap gap-1 p-2">
 	{#each currDict as [key, value] (key)}
-		<div class="h-fit max-w-1/3 border-1 p-2 hover:bg-neutral-100">
+		<div
+			class={[
+				'h-fit max-w-1/3 border-1 p-2 transition-colors duration-150 hover:bg-neutral-100',
+				isCurrUsed(value.word) && 'bg-amber-200'
+			]}
+		>
 			{#if currLog.has(value.word)}
 				<div class="h-10 w-10">
 					{#key key}

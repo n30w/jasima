@@ -458,6 +458,21 @@ func (c *client) ReceiveMessages(
 
 			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
 
+		case agent.RequestLogogramIteration:
+
+			go typedRequest[chat.AgentLogogramIterationResponse](ctx, msg, c)
+
+		case agent.RequestLogogramCritique:
+
+			go typedRequest[chat.AgentLogogramCritiqueResponse](ctx, msg, c)
+
+		case agent.RequestDictionaryWordDetection:
+
+			go typedRequest[chat.AgentDictionaryWordsDetectionResponse](
+				ctx,
+				msg, c,
+			)
+
 		case agent.SendInitialMessage:
 
 			cancel(errors.New(statusMsg))

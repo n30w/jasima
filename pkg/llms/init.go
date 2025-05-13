@@ -73,4 +73,79 @@ func init() {
 			},
 		},
 	)
+
+	schemas.register(
+		reflect.TypeOf(chat.AgentLogogramIterationResponse{}), &schema{
+			gemini: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"name": {
+						Type:        genai.TypeString,
+						Description: "The name of the logogram",
+					},
+					"svg": {
+						Type:        genai.TypeString,
+						Description: "The svg file for the logogram",
+					},
+					"reasoning": {
+						Type:        genai.TypeString,
+						Description: "The logogram change reasoning",
+					},
+				},
+				Required: []string{"name", "svg", "reasoning"},
+			},
+			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
+				Name:   "logogram_iteration",
+				Strict: openai.Bool(true),
+				Schema: utils.GenerateSchema[chat.AgentLogogramIterationResponse](),
+			},
+		},
+	)
+
+	schemas.register(
+		reflect.TypeOf(chat.AgentLogogramCritiqueResponse{}), &schema{
+			gemini: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"name": {
+						Type:        genai.TypeString,
+						Description: "The name of the logogram",
+					},
+					"critique": {
+						Type:        genai.TypeString,
+						Description: "The logogram critique",
+					},
+				},
+				Required: []string{"name", "critique"},
+			},
+			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
+				Name:   "logogram_critique",
+				Strict: openai.Bool(true),
+				Schema: utils.GenerateSchema[chat.AgentLogogramCritiqueResponse](),
+			},
+		},
+	)
+
+	schemas.register(
+		reflect.TypeOf(chat.AgentDictionaryWordsDetectionResponse{}), &schema{
+			gemini: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"words": {
+						Type:        genai.TypeArray,
+						Description: "Words in the dictionary from the text",
+						Items: &genai.Schema{
+							Type: genai.TypeString,
+						},
+					},
+				},
+				Required: []string{"words"},
+			},
+			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
+				Name:   "dictionary_words",
+				Strict: openai.Bool(true),
+				Schema: utils.GenerateSchema[chat.AgentDictionaryWordsDetectionResponse](),
+			},
+		},
+	)
 }
