@@ -9,6 +9,7 @@ type DictionaryEntry = {
 	word: string;
 	definition: string;
 	remove: boolean;
+	logogram: string;
 };
 
 type Dictionary = Map<string, DictionaryEntry>;
@@ -20,4 +21,8 @@ type Generation = {
 	logography: Map<string, string>;
 	specifications: Map<number, string>;
 	dictionary: Dictionary;
+};
+
+type UsedWords = {
+	words: string[];
 };

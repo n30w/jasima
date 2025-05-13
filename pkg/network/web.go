@@ -187,7 +187,7 @@ func (s WebServer) ListenAndServe(
 		),
 	)
 	handler.HandleFunc(
-		"/chat/message/dictionaryWordDetection",
+		"/wordDetection",
 		s.Broadcasters.MessageWordDictExtraction.InitialData(s.InitialData.RecentUsedWords),
 	)
 	handler.HandleFunc(
@@ -308,7 +308,7 @@ func (c *WebClient[T]) serve() error {
 				return errors.Wrap(err, errMsg)
 			}
 
-			rc.Flush()
+			_ = rc.Flush()
 
 		case <-c.done:
 			return nil
