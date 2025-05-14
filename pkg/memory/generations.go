@@ -74,21 +74,10 @@ func (d DictionaryGeneration) MarshalJSON() ([]byte, error) {
 }
 
 type DictionaryEntry struct {
-	Word       string `json:"word" jsonschema_description:"Dictionary entry word"`
-	Definition string `json:"definition" jsonschema_description:"Dictionary entry definition"`
-
-	// Remove represents whether a word should be removed from the dictionary.
-	// This is used when sending data to and from an agent. If an agent is
-	// queried to remove an entry from the dictionary, this field would be
-	// set to `true`.
-	Remove bool `json:"remove" jsonschema_description:"Remove word"`
+	chat.DictionaryEntryResponse
 
 	// Logogram is the logogram of the word.
-	Logogram string `json:"logogram,omitempty,omitzero" jsonschema_description:"Dictionary entry logogram"`
-}
-
-type DictionaryEntries struct {
-	Entries []DictionaryEntry `json:"entries" jsonschema_description:"Dictionary entries"`
+	Logogram string `json:"logogram,omitempty" jsonschema_description:"Dictionary entry logogram"`
 }
 
 // Generation contains all generational information related to a single

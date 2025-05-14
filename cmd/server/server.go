@@ -46,7 +46,7 @@ type ConlangServer struct {
 	gs              *network.GRPCServer
 	config          *config
 	procedureChan   chan memory.Message
-	dictUpdatesChan chan memory.DictionaryEntries
+	dictUpdatesChan chan chat.DictionaryEntriesResponse
 	dictionary      memory.DictionaryGeneration
 	generations     *utils.FixedQueue[memory.Generation]
 	ws              *network.WebServer
@@ -149,7 +149,7 @@ func NewConlangServer(
 		procedureChan: make(chan memory.Message),
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
-		dictUpdatesChan: make(chan memory.DictionaryEntries, 1),
+		dictUpdatesChan: make(chan chat.DictionaryEntriesResponse, 1),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,

@@ -175,6 +175,10 @@ func NewPbMessage(
 	return m
 }
 
+type AgentResponseStop struct {
+	Stop bool `json:"stop" jsonschema_description:"Indicates if the conversation is done"`
+}
+
 type AgentResponseText struct {
 	Response string `json:"response" jsonschema_description:"Your response"`
 }
@@ -183,13 +187,30 @@ type AgentLogogramIterationResponse struct {
 	Name      string `json:"name" jsonschema_description:"Logogram name"`
 	Svg       string `json:"svg" jsonschema_description:"Logogram svg"`
 	Reasoning string `json:"reasoning" jsonschema_description:"Logogram reasoning"`
+	AgentResponseStop
 }
 
 type AgentLogogramCritiqueResponse struct {
 	Name     string `json:"name" jsonschema_description:"Logogram name"`
 	Critique string `json:"critique" jsonschema_description:"Logogram critique"`
+	AgentResponseStop
 }
 
 type AgentDictionaryWordsDetectionResponse struct {
 	Words []string `json:"words" jsonschema_description:"Words in the dictionary from the text"`
+}
+
+type DictionaryEntryResponse struct {
+	Word       string `json:"word" jsonschema_description:"Dictionary entry word"`
+	Definition string `json:"definition" jsonschema_description:"Dictionary entry definition"`
+
+	// Remove represents whether a word should be removed from the dictionary.
+	// This is used when sending data to and from an agent. If an agent is
+	// queried to remove an entry from the dictionary, this field would be
+	// set to `true`.
+	Remove bool `json:"remove" jsonschema_description:"Remove word"`
+}
+
+type DictionaryEntriesResponse struct {
+	Entries []DictionaryEntryResponse `json:"entries" jsonschema_description:"Dictionary entries"`
 }

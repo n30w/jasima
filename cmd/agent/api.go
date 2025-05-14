@@ -456,7 +456,7 @@ func (c *client) ReceiveMessages(
 
 		case agent.RequestJsonDictionaryUpdate:
 
-			go typedRequest[memory.DictionaryEntries](ctx, msg, c)
+			go typedRequest[chat.DictionaryEntriesResponse](ctx, msg, c)
 
 		case agent.RequestLogogramIteration:
 

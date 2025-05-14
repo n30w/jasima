@@ -7,13 +7,17 @@ import (
 	"google.golang.org/genai"
 
 	"codeberg.org/n30w/jasima/pkg/chat"
-	"codeberg.org/n30w/jasima/pkg/memory"
 	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 var schemas *schemaRegistry
 
 func init() {
+	stopBool := &genai.Schema{
+		Type:        genai.TypeBoolean,
+		Description: "Indicates if the conversation is done",
+	}
+
 	schemas = newSchemaRegistry()
 
 	schemas.register(
@@ -37,7 +41,7 @@ func init() {
 	)
 
 	schemas.register(
-		reflect.TypeOf(memory.DictionaryEntries{}), &schema{
+		reflect.TypeOf(chat.DictionaryEntriesResponse{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -69,7 +73,7 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "dictionary_entries",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[memory.DictionaryEntries](),
+				Schema: utils.GenerateSchema[chat.DictionaryEntriesResponse](),
 			},
 		},
 	)
@@ -91,8 +95,9 @@ func init() {
 						Type:        genai.TypeString,
 						Description: "The logogram change reasoning",
 					},
+					"stop": stopBool,
 				},
-				Required: []string{"name", "svg", "reasoning"},
+				Required: []string{"name", "svg", "reasoning", "stop"},
 			},
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_iteration",
@@ -115,8 +120,9 @@ func init() {
 						Type:        genai.TypeString,
 						Description: "The logogram critique",
 					},
+					"stop": stopBool,
 				},
-				Required: []string{"name", "critique"},
+				Required: []string{"name", "critique", "stop"},
 			},
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_critique",

@@ -330,7 +330,7 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
 	)(dictSysAgent)
 
-	var updates memory.DictionaryEntries
+	var updates chat.DictionaryEntriesResponse
 
 	dictUpdates := <-s.gs.Channel.ToServer
 
@@ -427,7 +427,6 @@ func (s *ConlangServer) Evolve() {
 		currentDict := newGeneration.Dictionary.Copy()
 
 		for _, update := range updates.Entries {
-			currentDict[update.Word] = update
 
 			if update.Remove {
 				_, ok := currentDict[update.Word]
@@ -440,7 +439,16 @@ func (s *ConlangServer) Evolve() {
 				}
 
 				delete(currentDict, update.Word)
+				continue
 			}
+
+			entry := currentDict[update.Word]
+
+			entry.Word = update.Word
+			entry.Definition = update.Definition
+			entry.Remove = update.Remove
+
+			currentDict[update.Word] = entry
 		}
 
 		newGeneration.Dictionary = currentDict.Copy()
