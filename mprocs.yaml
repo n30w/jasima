@@ -21,3 +21,7 @@ procs:
     shell: "task run-agent-system-b"
   system-c:
     shell: "task run-agent-system-c"
+  system-d:
+    shell: "task run-agent-system-logogram-gen"
+  system-e:
+    shell: "task run-agent-system-logogram-adv"
