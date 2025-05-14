@@ -159,6 +159,9 @@ func newClient(
 			cfg.ModelConfig,
 			logger,
 		)
+
+		sleepDuration = 16
+
 	default:
 		err = errors.New("invalid LLM provider")
 	}
@@ -378,7 +381,7 @@ func (c *client) DispatchToLLM(
 
 	time.Sleep(time.Second * c.sleepDuration)
 
-	// When data is received back from the query, fill the channel
+	// When data is received back from the query, fill the channel.
 
 	c.logger.Debug("Piping message to response channel...")
 
@@ -438,12 +441,9 @@ func (c *client) ReceiveMessages(
 			}
 		case agent.ResetInstructions:
 			cancel(errors.New(statusMsg))
+
 			c.llm.SetInstructions(c.ModelConfig.Instructions)
-		case agent.SetResponseTypeToJson:
-			// Change the response to structured JSON output.
-		case agent.SetResponseTypeToText:
-			// Change the response to text only. LLM will not use structured
-			// JSON for output.
+
 		case agent.Latch:
 			cancel(errors.New(statusMsg))
 
