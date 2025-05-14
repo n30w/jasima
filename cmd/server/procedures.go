@@ -352,28 +352,139 @@ func (s *ConlangServer) iterateUpdateDictionary(
 	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
 }
 
-// func (s *ConlangServer) iterateLogogram() {
-// 	exchanges := 5
-//
-// 	// Setup instructions for agent A, the generator.
-//
-// 	// Setup instructions for agent B, the adversary.
-//
-// 	for i := range exchanges {
-// 		m := <-s.procedureChan
-// 		// Emit the message.
-// 	}
-// }
+func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word string) (
+	string,
+	error,
+) {
+	genericInstructions := "\nHere is the current dictionary:\n" + newGeneration.Specifications[chat.DictionaryLayer].String() + "\nHere is the current logography specification:\n" + newGeneration.Specifications[chat.LogographyLayer].String()
 
-// Evolve manages the entire evolutionary function loop.
-func (s *ConlangServer) Evolve() {
 	var (
-		err         error
-		errMsg      = "failed to evolve generation %d"
-		targetTotal = 11
+		// exchanges    = 5
+		done         = false
+		i            = 0
+		cmd          = network.BuildCommand(s.config.name)
+		sendCommands = network.SendCommandBuilder(s.gs.Channel.ToClients)
+		clients      = s.gs.GetClientsByLayer(chat.SystemLayer)
+		currentSvg   = ""
+
+		generator = clients[0]
+		adversary = clients[1]
+
+		generatorInstructions = cmd(
+			agent.AppendInstructions,
+			agent.LogogramGeneratorInstructions+genericInstructions,
+		)(generator)
+		adversaryInstructions = cmd(
+			agent.AppendInstructions,
+			agent.LogogramAdversaryInstructions+genericInstructions,
+		)(adversary)
 	)
 
-	joinCtx, joinCtxCancel := context.WithCancel(context.Background())
+	// Fresh slate.
+
+	sendCommands(clients, cmd(agent.Latch), cmd(agent.ClearMemory))
+
+	s.gs.Channel.ToClients <- generatorInstructions
+	s.gs.Channel.ToClients <- adversaryInstructions
+
+	sendCommands(clients, cmd(agent.Unlatch))
+
+	// Send the initial message.
+
+	initMsg := chat.AgentLogogramIterationResponse{
+		Name:      word,
+		Svg:       s.dictionary[word].Logogram,
+		Reasoning: "This is the initial svg.",
+	}
+
+	initMsgJson, err := json.Marshal(initMsg)
+	if err != nil {
+		return "", err
+	}
+
+	kickoff := cmd(agent.SendInitialMessage, string(initMsgJson))(generator)
+
+	s.gs.Channel.ToClients <- kickoff
+
+	for !done {
+		m := <-s.gs.Channel.ToServer
+
+		i++
+
+		var msg *chat.Message
+
+		// Switch the message to the recipient based on the sender. If the
+		// sender is the generator, rewrite the response into one for
+		// the adversary. If the sender is the adversary, rewrite the message
+		// for the generator.
+
+		switch m.Sender {
+		case generator.Name:
+
+			// Make a message for the adversary.
+
+			var res chat.AgentLogogramIterationResponse
+
+			err := json.Unmarshal([]byte(m.Text), &res)
+			if err != nil {
+				return "", errors.Wrap(err, "failed to unmarshal agent logogram iteration")
+			}
+
+			currentSvg = res.Svg
+
+			if res.Stop {
+				done = true
+			}
+
+			msg = cmd(
+				agent.RequestLogogramCritique,
+				res.Svg+"\nReasoning: "+res.Reasoning,
+			)(adversary)
+
+		case adversary.Name:
+
+			// Make a message for the generator.
+
+			var res chat.AgentLogogramCritiqueResponse
+
+			err := json.Unmarshal([]byte(m.Text), &res)
+			if err != nil {
+				return "", errors.Wrap(err, "failed to unmarshal generator logogram critique")
+			}
+
+			if res.Stop {
+				done = true
+			}
+
+			msg = cmd(agent.RequestLogogramIteration, res.Critique)(generator)
+		}
+
+		if done {
+			continue
+		}
+
+		s.gs.Channel.ToClients <- msg
+
+		// Emit the message.
+		s.logger.Debugf("Exchanges: %d", i)
+	}
+
+	// Put everything back.
+
+	sendCommands(
+		clients,
+		cmd(agent.Latch),
+		cmd(agent.ClearMemory),
+		cmd(agent.ResetInstructions),
+	)
+
+	return currentSvg, nil
+}
+
+func (s *ConlangServer) WaitForClients(ctx context.Context) error {
+	targetTotal := 11
+
+	joinCtx, joinCtxCancel := context.WithCancel(ctx)
 
 	go func() {
 		joined := false
@@ -390,6 +501,16 @@ func (s *ConlangServer) Evolve() {
 
 	s.logger.Info("All clients joined!")
 
+	return nil
+}
+
+// Evolve manages the entire evolutionary function loop.
+func (s *ConlangServer) Evolve(ctx context.Context) error {
+	var (
+		err    error
+		errMsg = "failed to evolve generation %d"
+	)
+
 	timer := utils.Timer(time.Now())
 
 	for i := range s.config.procedures.maxGenerations {
@@ -397,8 +518,7 @@ func (s *ConlangServer) Evolve() {
 
 		genSlice, err := s.generations.ToSlice()
 		if err != nil {
-			s.errs <- errors.Wrap(err, errMsg)
-			return
+			return errors.Wrap(err, errMsg)
 		}
 
 		// Starts on Layer 4, recurses to 1.
@@ -409,8 +529,7 @@ func (s *ConlangServer) Evolve() {
 			s.config.procedures.maxExchanges,
 		)
 		if err != nil {
-			s.errs <- errors.Wrapf(err, "failed to iterate on generation %d", i)
-			return
+			return errors.Wrapf(err, "failed to iterate on generation %d", i)
 		}
 
 		s.logger.Infof(
@@ -453,6 +572,15 @@ func (s *ConlangServer) Evolve() {
 
 		newGeneration.Dictionary = currentDict.Copy()
 
+		w := "suli"
+
+		svg, err := s.iterateLogogram(newGeneration, w)
+		if err != nil {
+			s.errs <- err
+		}
+
+		newGeneration.Logography[w] = svg
+
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
 			s.errs <- errors.Wrapf(
@@ -470,7 +598,6 @@ func (s *ConlangServer) Evolve() {
 		}
 
 		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
-
 	}
 
 	s.gs.Listening = false
@@ -484,8 +611,7 @@ func (s *ConlangServer) Evolve() {
 
 	allMsgs, err := s.memory.All()
 	if err != nil {
-		s.errs <- err
-		return
+		return err
 	}
 
 	fileName := fmt.Sprintf(
@@ -494,8 +620,7 @@ func (s *ConlangServer) Evolve() {
 	)
 	err = saveToJson(allMsgs, fileName)
 	if err != nil {
-		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
-		return
+		return errors.Wrap(err, "evolution failed to save JSON")
 	}
 
 	s.logger.Infof("Saved chat to %s", fileName)
@@ -507,16 +632,17 @@ func (s *ConlangServer) Evolve() {
 
 	g, err := s.generations.ToSlice()
 	if err != nil {
-		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
+		return errors.Wrap(err, "evolution failed to save JSON")
 	}
 
 	err = saveToJson(g, fileName)
 	if err != nil {
-		s.errs <- errors.Wrap(err, "evolution failed to save JSON")
-		return
+		return errors.Wrap(err, "evolution failed to save JSON")
 	}
 
 	s.logger.Infof("Saved generations to %s", fileName)
+
+	return nil
 }
 
 // outputTestData continuously outputs messages to the test API. This is

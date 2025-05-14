@@ -40,6 +40,8 @@ type MemoryService interface {
 	fmt.Stringer
 }
 
+type job func(ctx context.Context) error
+
 type ConlangServer struct {
 	logger          *log.Logger
 	memory          MemoryService
@@ -47,6 +49,7 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan chat.DictionaryEntriesResponse
+	procedures      chan *utils.FixedQueue[job]
 	dictionary      memory.DictionaryGeneration
 	generations     *utils.FixedQueue[memory.Generation]
 	ws              *network.WebServer
@@ -150,6 +153,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan chat.DictionaryEntriesResponse, 1),
+		procedures:      make(chan *utils.FixedQueue[job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
@@ -168,8 +172,6 @@ func (s *ConlangServer) Router() {
 		if err != nil {
 			s.logger.Errorf("failed to save message to InitialData: %v", err)
 		}
-
-		// s.ws.Broadcasters.Messages.Broadcast(msg)
 
 		return nil
 	}
@@ -264,7 +266,12 @@ func (s *ConlangServer) WebEvents() {
 }
 
 func (s *ConlangServer) StartProcedures() {
-	go s.Evolve()
+	jobs, _ := utils.NewFixedQueue[job](100)
+
+	_ = jobs.Enqueue(s.WaitForClients)
+	_ = jobs.Enqueue(s.Evolve)
+
+	s.procedures <- jobs
 
 	if s.config.debugEnabled && s.config.broadcastTestData {
 		go func() {
@@ -307,8 +314,24 @@ func (s *ConlangServer) StartProcedures() {
 	}
 }
 
-func (s *ConlangServer) Run(errs chan error) {
+func (s *ConlangServer) ProcessJobs() {
+	for jobs := range s.procedures {
+		for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
+			ctx, cancel := context.WithCancel(context.Background())
+			err = j(ctx)
+			if err != nil {
+				s.errs <- err
+				cancel()
+				return
+			}
+			cancel()
+		}
+	}
+}
+
+func (s *ConlangServer) Run() {
 	s.Router()
 	s.WebEvents()
 	s.StartProcedures()
+	go s.ProcessJobs()
 }

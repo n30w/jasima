@@ -143,7 +143,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	cs.Run(errs)
+	cs.Run()
 
 	for e := range errs {
 		if e != nil {
