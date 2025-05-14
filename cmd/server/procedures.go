@@ -176,7 +176,7 @@ func (s *ConlangServer) iterate(
 				)
 			}
 		case extractWithRegex:
-			usedWords = FindUsedWords(newGeneration.Dictionary, m.Text.String())
+			usedWords = findUsedWords(newGeneration.Dictionary, m.Text.String())
 		}
 
 		err = s.ws.InitialData.RecentUsedWords.Enqueue(usedWords)

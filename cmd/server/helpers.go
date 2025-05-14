@@ -200,7 +200,7 @@ func saveMessageTo(
 	return nil
 }
 
-func FindUsedWords(
+func findUsedWords(
 	dict memory.DictionaryGeneration,
 	text string,
 ) chat.AgentDictionaryWordsDetectionResponse {
