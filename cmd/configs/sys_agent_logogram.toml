@@ -16,7 +16,7 @@ instructions = "Given this toki pona dictionary, please extract the individual w
 
 initialize = ""
 
-temperature = 0.5
+temperature = 0.75
 
 [network]
 
