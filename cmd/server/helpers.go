@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -197,4 +198,31 @@ func saveMessageTo(
 	}
 
 	return nil
+}
+
+func FindUsedWords(
+	dict memory.DictionaryGeneration,
+	text string,
+) chat.AgentDictionaryWordsDetectionResponse {
+	res := chat.AgentDictionaryWordsDetectionResponse{
+		Words: make([]string, 0),
+	}
+
+	wordSet := make(map[string]struct{})
+	textLower := strings.ToLower(text)
+
+	for _, v := range dict {
+		wordLower := strings.ToLower(v.Word)
+		pattern := fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(wordLower))
+		re := regexp.MustCompile(pattern)
+
+		if re.MatchString(textLower) {
+			if _, exists := wordSet[wordLower]; !exists {
+				res.Words = append(res.Words, v.Word)
+				wordSet[wordLower] = struct{}{}
+			}
+		}
+	}
+
+	return res
 }

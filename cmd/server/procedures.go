@@ -164,15 +164,22 @@ func (s *ConlangServer) iterate(
 
 		// Retrieve the extracted words.
 
-		dw, err := s.getExtractedWordsFromText(cmd, newGeneration, m)
-		if err != nil {
-			return newGeneration, errors.Wrap(
-				err,
-				"failed getting extracted words",
-			)
+		var usedWords chat.AgentDictionaryWordsDetectionResponse
+
+		switch s.config.procedures.dictionaryWordExtractionMethod {
+		case extractWithAgent:
+			usedWords, err = s.getExtractedWordsFromText(cmd, newGeneration, m)
+			if err != nil {
+				return newGeneration, errors.Wrap(
+					err,
+					"failed getting extracted words",
+				)
+			}
+		case extractWithRegex:
+			usedWords = FindUsedWords(newGeneration.Dictionary, m.Text.String())
 		}
 
-		err = s.ws.InitialData.RecentUsedWords.Enqueue(dw)
+		err = s.ws.InitialData.RecentUsedWords.Enqueue(usedWords)
 		if err != nil {
 			return newGeneration, errors.Wrap(
 				err,
@@ -186,7 +193,7 @@ func (s *ConlangServer) iterate(
 
 		// Broadcast the extracted words from the sent message.
 
-		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(dw)
+		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
 
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}

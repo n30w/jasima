@@ -13,16 +13,17 @@ import (
 )
 
 const (
-	DefaultSpecResourcePath   = "./resources/specifications"
-	DefaultDictionaryJsonPath = "./resources/specifications/dictionary.json"
-	DefaultSvgResourcePath    = "./resources/logography"
-	DefaultLogToFilePath      = "./outputs/logs/server_log_%s.log"
-	DefaultDebugToggle        = false
-	DefaultBroadcastTestData  = false
-	DefaultMaxExchanges       = 25
-	DefaultMaxGenerations     = 1
-	DefaultLogToFileToggle    = false
-	DefaultServerName         = "SERVER"
+	DefaultSpecResourcePath           = "./resources/specifications"
+	DefaultDictionaryJsonPath         = "./resources/specifications/dictionary.json"
+	DefaultSvgResourcePath            = "./resources/logography"
+	DefaultLogToFilePath              = "./outputs/logs/server_log_%s.log"
+	DefaultDebugToggle                = false
+	DefaultBroadcastTestData          = false
+	DefaultMaxExchanges               = 25
+	DefaultMaxGenerations             = 1
+	DefaultDictionaryExtractionMethod = 0
+	DefaultLogToFileToggle            = false
+	DefaultServerName                 = "SERVER"
 )
 
 func main() {
@@ -51,6 +52,11 @@ func main() {
 			"exchanges",
 			DefaultMaxExchanges,
 			"total exchanges between agents per layer",
+		)
+		flagDictExtractMethod = flag.Int(
+			"dictionaryExtractMethod",
+			DefaultDictionaryExtractionMethod,
+			"dictionary extraction method",
 		)
 		flagGenerations = flag.Int(
 			"generations",
@@ -87,24 +93,6 @@ func main() {
 
 	logger := log.NewWithOptions(os.Stderr, logOptions)
 
-	logger.Info(
-		"Initializing with these options",
-		"debug",
-		*flagDebug,
-		"logToFile",
-		*flagLogToFile,
-		"specs",
-		*flagSpecificationPath,
-		"exchanges",
-		*flagExchanges,
-		"generations",
-		*flagGenerations,
-		"name",
-		*flagServerName,
-		"broadcastTestData",
-		*flagBroadcastTestData,
-	)
-
 	cfg := &config{
 		name:              *flagServerName,
 		debugEnabled:      *flagDebug,
@@ -115,10 +103,31 @@ func main() {
 			dictionary:     *flagDictionaryJsonPath,
 		},
 		procedures: procedureConfig{
-			maxExchanges:   *flagExchanges,
-			maxGenerations: *flagGenerations,
+			maxExchanges:                   *flagExchanges,
+			maxGenerations:                 *flagGenerations,
+			dictionaryWordExtractionMethod: dictExtractMethod(*flagDictExtractMethod),
 		},
 	}
+
+	logger.Info(
+		"Initializing with these options",
+		"debug",
+		cfg.debugEnabled,
+		"logToFile",
+		*flagLogToFile,
+		"specs",
+		cfg.files.specifications,
+		"exchanges",
+		cfg.procedures.maxExchanges,
+		"generations",
+		cfg.procedures.maxGenerations,
+		"name",
+		cfg.name,
+		"broadcastTestData",
+		cfg.broadcastTestData,
+		"dictionaryExtractionMethod",
+		cfg.procedures.dictionaryWordExtractionMethod,
+	)
 
 	errs := make(chan error)
 

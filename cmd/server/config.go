@@ -8,6 +8,11 @@ type procedureConfig struct {
 	// maxGenerations represents the maximum number of generations to evolve.
 	// When set to 0, the procedure evolves forever.
 	maxGenerations int
+
+	// dictionaryWordExtractionMethod defines which extraction method to use
+	// for extracting dictionary words from a text. Two options exist:
+	// `0` for regex-based and `1` for agent based.
+	dictionaryWordExtractionMethod dictExtractMethod
 }
 
 type filePathConfig struct {
@@ -22,4 +27,18 @@ type config struct {
 	broadcastTestData bool
 	files             filePathConfig
 	procedures        procedureConfig
+}
+
+type dictExtractMethod int
+
+const (
+	extractWithRegex dictExtractMethod = 0
+	extractWithAgent dictExtractMethod = 1
+)
+
+func (d dictExtractMethod) String() string {
+	return [...]string{
+		"EXTRACT_WITH_REGEX",
+		"EXTRACT_WITH_AGENT",
+	}[d]
 }
