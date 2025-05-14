@@ -441,27 +441,27 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 	return currentSvg, nil
 }
 
-func (s *ConlangServer) WaitForClients(ctx context.Context) error {
-	targetTotal := 11
+func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		joinCtx, joinCtxCancel := context.WithCancel(ctx)
 
-	joinCtx, joinCtxCancel := context.WithCancel(ctx)
-
-	go func() {
-		joined := false
-		for !joined {
-			time.Sleep(1 * time.Second)
-			if s.gs.TotalClients() >= targetTotal {
-				joined = true
+		go func() {
+			joined := false
+			for !joined {
+				time.Sleep(1 * time.Second)
+				if s.gs.TotalClients() >= total {
+					joined = true
+				}
 			}
-		}
-		joinCtxCancel()
-	}()
+			joinCtxCancel()
+		}()
 
-	<-joinCtx.Done()
+		<-joinCtx.Done()
 
-	s.logger.Info("All clients joined!")
+		s.logger.Info("All clients joined!")
 
-	return nil
+		return nil
+	}
 }
 
 // Evolve manages the entire evolutionary function loop.

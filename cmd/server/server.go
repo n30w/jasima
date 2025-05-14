@@ -54,6 +54,12 @@ type ConlangServer struct {
 	generations     *utils.FixedQueue[memory.Generation]
 	ws              *network.WebServer
 	errs            chan error
+
+	// cmd builds commands that can be sent to an agent.
+	cmd network.CommandForAgent
+
+	// sendCommands sends commands to agents.
+	sendCommands network.CommandsSender
 }
 
 func NewConlangServer(
@@ -144,7 +150,7 @@ func NewConlangServer(
 		)
 	}
 
-	return &ConlangServer{
+	cs := &ConlangServer{
 		memory:        m,
 		gs:            grpcServer,
 		ws:            webServer,
@@ -157,8 +163,13 @@ func NewConlangServer(
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
+		cmd:             network.BuildCommand(cfg.name),
 		errs:            errs,
-	}, nil
+	}
+
+	cs.sendCommands = network.SendCommandBuilder(cs.gs.Channel.ToClients)
+
+	return cs, nil
 }
 
 func (s *ConlangServer) Router() {
@@ -268,7 +279,7 @@ func (s *ConlangServer) WebEvents() {
 func (s *ConlangServer) StartProcedures() {
 	jobs, _ := utils.NewFixedQueue[job](100)
 
-	_ = jobs.Enqueue(s.WaitForClients)
+	_ = jobs.Enqueue(s.WaitForClients(11))
 	_ = jobs.Enqueue(s.Evolve)
 
 	s.procedures <- jobs

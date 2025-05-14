@@ -8,6 +8,7 @@ import (
 type (
 	CommandForAgent func(agent.Command, ...string) MessageFor
 	MessageFor      func(client *GRPCClient) *chat.Message
+	CommandsSender  func([]*GRPCClient, ...MessageFor)
 )
 
 func BuildCommand(sender string) CommandForAgent {
