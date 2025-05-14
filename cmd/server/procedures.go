@@ -63,17 +63,15 @@ func (s *ConlangServer) iterate(
 	}
 
 	var (
-		timer        = utils.Timer(time.Now())
-		clients      = s.gs.GetClientsByLayer(initialLayer)
-		cmd          = network.BuildCommand(s.config.name)
-		sendCommands = network.SendCommandBuilder(s.gs.Channel.ToClients)
+		timer   = utils.Timer(time.Now())
+		clients = s.gs.GetClientsByLayer(initialLayer)
 
 		// kickoff is the command that is sent to kick off the layer's
 		// iteration exchanges. It consists of the initializer client, which
 		// is the first client of the layer, and content, which is the text
 		// in the message that the initializer client will send to other
 		// clients on the layer.
-		kickoff = cmd(
+		kickoff = s.cmd(
 			agent.SendInitialMessage,
 			fmt.Sprintf(
 				"Hello, "+
@@ -93,7 +91,7 @@ func (s *ConlangServer) iterate(
 
 		// addSysAgentInstructions is a command to append the current
 		// specification to the system agent(s).
-		addSysAgentInstructions = cmd(
+		addSysAgentInstructions = s.cmd(
 			agent.AppendInstructions,
 			fmt.Sprintf(
 				"The current specification is for: %s. "+
@@ -143,10 +141,10 @@ func (s *ConlangServer) iterate(
 	sb.WriteString("Here is the complete grammar of the language:\n")
 	sb.WriteString(string(newGeneration.Specifications[chat.GrammarLayer]))
 
-	sendCommands(
+	s.sendCommands(
 		clients,
-		cmd(agent.AppendInstructions, sb.String()),
-		cmd(agent.Unlatch),
+		s.cmd(agent.AppendInstructions, sb.String()),
+		s.cmd(agent.Unlatch),
 	)
 
 	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
@@ -164,27 +162,9 @@ func (s *ConlangServer) iterate(
 
 		// Retrieve the extracted words.
 
-		var usedWords chat.AgentDictionaryWordsDetectionResponse
-
-		switch s.config.procedures.dictionaryWordExtractionMethod {
-		case extractWithAgent:
-			usedWords, err = s.getExtractedWordsFromText(cmd, newGeneration, m)
-			if err != nil {
-				return newGeneration, errors.Wrap(
-					err,
-					"failed getting extracted words",
-				)
-			}
-		case extractWithRegex:
-			usedWords = findUsedWords(newGeneration.Dictionary, m.Text.String())
-		}
-
-		err = s.ws.InitialData.RecentUsedWords.Enqueue(usedWords)
+		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
 		if err != nil {
-			return newGeneration, errors.Wrap(
-				err,
-				"failed to enqueue words",
-			)
+			return newGeneration, errors.Wrap(err, "failed finding used words")
 		}
 
 		// Broadcast the sent message.
@@ -198,19 +178,15 @@ func (s *ConlangServer) iterate(
 		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 	}
 
-	sendCommands(
-		clients,
-		cmd(agent.Latch),
-		cmd(agent.ClearMemory),
-		cmd(agent.ResetInstructions),
-	)
+	s.resetAgents(clients)
 
 	sb.Reset()
 
 	// The system agent will ONLY summarize the chat log, and not read the
 	// other Specifications for other layers (for now at least).
+
 	s.gs.Channel.ToClients <- addSysAgentInstructions
-	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(sysClient)
+	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(sysClient)
 
 	msg := s.messageToSystemAgent(
 		sysClient.Name,
@@ -225,12 +201,7 @@ func (s *ConlangServer) iterate(
 
 	sb.Reset()
 
-	sendCommands(
-		clients,
-		cmd(agent.Latch),
-		cmd(agent.ClearMemory),
-		cmd(agent.ResetInstructions),
-	)
+	s.resetAgents(clients)
 
 	s.logger.Infof(
 		"%s took %s to complete",
@@ -249,14 +220,13 @@ func (s *ConlangServer) iterate(
 	if initialLayer == chat.DictionaryLayer {
 		// Update the dictionary.
 
-		s.iterateUpdateDictionary(cmd, newGeneration)
+		s.iterateUpdateDictionary(newGeneration)
 	}
 
 	return newGeneration, nil
 }
 
 func (s *ConlangServer) iterateUpdateDictionary(
-	cmd network.CommandForAgent,
 	newGeneration memory.Generation,
 ) {
 	s.logger.Info("Initiating dictionary updates...")
@@ -267,14 +237,16 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		return
 	}
 
+	clients := []*network.GRPCClient{dictSysAgent}
+
 	genDict, err := json.Marshal(newGeneration.Dictionary)
 	if err != nil {
 		s.errs <- errors.Wrap(err, "failed to Marshal dictionary")
 		return
 	}
 
-	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
-	s.gs.Channel.ToClients <- cmd(
+	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(dictSysAgent)
+	s.gs.Channel.ToClients <- s.cmd(
 		agent.AppendInstructions,
 		fmt.Sprintf(
 			"This is the current dictionary\n%s",
@@ -284,8 +256,8 @@ func (s *ConlangServer) iterateUpdateDictionary(
 
 	// Send results to dictionary LLM.
 
-	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(dictSysAgent)
-	s.gs.Channel.ToClients <- cmd(
+	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(dictSysAgent)
+	s.gs.Channel.ToClients <- s.cmd(
 		agent.RequestJsonDictionaryUpdate,
 		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
 	)(dictSysAgent)
@@ -307,9 +279,7 @@ func (s *ConlangServer) iterateUpdateDictionary(
 
 	s.logger.Info("Updates sent to dictionary channel")
 
-	s.gs.Channel.ToClients <- cmd(agent.Latch)(dictSysAgent)
-	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(dictSysAgent)
-	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(dictSysAgent)
+	s.resetAgents(clients)
 }
 
 func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word string) (
@@ -318,36 +288,40 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 ) {
 	genericInstructions := "\nHere is the current dictionary:\n" + newGeneration.Specifications[chat.DictionaryLayer].String() + "\nHere is the current logography specification:\n" + newGeneration.Specifications[chat.LogographyLayer].String()
 
+	generator, err := s.gs.GetClientByName("SYSTEM_AGENT_D")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to find generator agent")
+	}
+
+	adversary, err := s.gs.GetClientByName("SYSTEM_AGENT_E")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to find adversary agent")
+	}
+
 	var (
-		// exchanges    = 5
-		done         = false
-		i            = 0
-		cmd          = network.BuildCommand(s.config.name)
-		sendCommands = network.SendCommandBuilder(s.gs.Channel.ToClients)
-		clients      = s.gs.GetClientsByLayer(chat.SystemLayer)
-		currentSvg   = ""
+		done       = false
+		i          = 0
+		clients    = []*network.GRPCClient{generator, adversary}
+		currentSvg = ""
 
-		generator = clients[0]
-		adversary = clients[1]
-
-		generatorInstructions = cmd(
-			agent.AppendInstructions,
+		generatorInstructions = s.cmd(
+			agent.SetInstructions,
 			agent.LogogramGeneratorInstructions+genericInstructions,
 		)(generator)
-		adversaryInstructions = cmd(
-			agent.AppendInstructions,
+		adversaryInstructions = s.cmd(
+			agent.SetInstructions,
 			agent.LogogramAdversaryInstructions+genericInstructions,
 		)(adversary)
 	)
 
 	// Fresh slate.
 
-	sendCommands(clients, cmd(agent.Latch), cmd(agent.ClearMemory))
+	s.sendCommands(clients, s.cmd(agent.Latch), s.cmd(agent.ClearMemory))
 
 	s.gs.Channel.ToClients <- generatorInstructions
 	s.gs.Channel.ToClients <- adversaryInstructions
 
-	sendCommands(clients, cmd(agent.Unlatch))
+	s.sendCommands(clients, s.cmd(agent.Unlatch))
 
 	// Send the initial message.
 
@@ -362,7 +336,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 		return "", err
 	}
 
-	kickoff := cmd(agent.SendInitialMessage, string(initMsgJson))(generator)
+	kickoff := s.cmd(agent.SendInitialMessage, string(initMsgJson))(generator)
 
 	s.gs.Channel.ToClients <- kickoff
 
@@ -396,7 +370,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 				done = true
 			}
 
-			msg = cmd(
+			msg = s.cmd(
 				agent.RequestLogogramCritique,
 				res.Svg+"\nReasoning: "+res.Reasoning,
 			)(adversary)
@@ -416,7 +390,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 				done = true
 			}
 
-			msg = cmd(agent.RequestLogogramIteration, res.Critique)(generator)
+			msg = s.cmd(agent.RequestLogogramIteration, res.Critique)(generator)
 		}
 
 		if done {
@@ -425,18 +399,28 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 		s.gs.Channel.ToClients <- msg
 
+		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
+		if err != nil {
+			return "", errors.Wrap(err, "failed finding used words")
+		}
+
+		// Broadcast the sent message.
+
+		s.ws.Broadcasters.Messages.Broadcast(m)
+
+		// Broadcast the extracted words from the sent message.
+
+		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
+
 		// Emit the message.
 		s.logger.Debugf("Exchanges: %d", i)
+
+		time.Sleep(10 * time.Second)
 	}
 
 	// Put everything back.
 
-	sendCommands(
-		clients,
-		cmd(agent.Latch),
-		cmd(agent.ClearMemory),
-		cmd(agent.ResetInstructions),
-	)
+	s.resetAgents(clients)
 
 	return currentSvg, nil
 }
