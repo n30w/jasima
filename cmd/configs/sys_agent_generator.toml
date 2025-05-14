@@ -1,0 +1,27 @@
+# Name of the agent.
+name = "SYSTEM_AGENT_C"
+
+# Receiver of name's messages.
+peers = ["SERVER"]
+
+layer = 0
+
+[model]
+
+# LLM service provider.
+provider = 0
+
+# Initial system instructions.
+instructions = "Given this toki pona dictionary, please extract the individual words that were used in the user provided text that are also in the dictionary. You will respond with a JSON object of this schema: { 'words': string[] }. The words array contains words that exist in both the dictionary and the submitted text. This array should only include the word's name and nothing related to its definition or anything like that. You do not need to format the JSON, simply make it machine readable."
+
+initialize = ""
+
+temperature = 0.5
+
+[network]
+
+# Host and port of the main server that routes messages.
+router = "localhost:50051"
+
+# URL of the database.
+database = ""
