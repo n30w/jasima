@@ -43,14 +43,6 @@ type Message struct {
 	Command    agent.Command `json:"command"`
 }
 
-func NewMessage(role ChatRole, text string) Message {
-	return Message{
-		Timestamp: time.Now(),
-		Role:      role,
-		Text:      chat.Content(text),
-	}
-}
-
 func NewChatMessage(
 	sender, receiver string, text string, layer int32,
 	command ...int32,
