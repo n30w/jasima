@@ -10,8 +10,10 @@ import (
 	"regexp"
 	"strings"
 
+	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/network"
 
 	"github.com/pkg/errors"
 )
@@ -225,4 +227,51 @@ func findUsedWords(
 	}
 
 	return res
+}
+
+func (s *ConlangServer) getExtractedWordsFromText(
+	cmd network.CommandForAgent,
+	newGeneration memory.Generation,
+	m memory.Message,
+) (chat.AgentDictionaryWordsDetectionResponse, error) {
+	var dictionaryWords chat.AgentDictionaryWordsDetectionResponse
+
+	sysAgentDictExtractor, err := s.gs.GetClientByName("SYSTEM_AGENT_C")
+	if err != nil {
+		return dictionaryWords, errors.Wrap(
+			err,
+			"failed to retrieve client by name",
+		)
+	}
+
+	var sb2 strings.Builder
+
+	sb2.WriteString(newGeneration.Dictionary.String())
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(
+		agent.AppendInstructions,
+		sb2.String(),
+	)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.Unlatch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(
+		agent.RequestDictionaryWordDetection,
+		m.Text.String(),
+	)(sysAgentDictExtractor)
+
+	words := <-s.gs.Channel.ToServer
+
+	err = json.Unmarshal([]byte(words.Text), &dictionaryWords)
+	if err != nil {
+		return dictionaryWords, errors.Wrap(
+			err,
+			"failed to unmarshal dictionary words",
+		)
+	}
+
+	s.gs.Channel.ToClients <- cmd(agent.Latch)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.ClearMemory)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- cmd(agent.ResetInstructions)(sysAgentDictExtractor)
+
+	return dictionaryWords, nil
 }
