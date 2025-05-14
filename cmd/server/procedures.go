@@ -397,6 +397,8 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 			continue
 		}
 
+		time.Sleep(10 * time.Second)
+
 		s.gs.Channel.ToClients <- msg
 
 		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
@@ -414,8 +416,6 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 		// Emit the message.
 		s.logger.Debugf("Exchanges: %d", i)
-
-		time.Sleep(10 * time.Second)
 	}
 
 	// Put everything back.
