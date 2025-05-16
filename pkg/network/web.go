@@ -1,10 +1,13 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -315,4 +318,64 @@ func (c *WebClient[T]) serve() error {
 			return nil
 		}
 	}
+}
+
+type HttpRequestClient[T any] struct {
+	hc *http.Client
+	u  *url.URL
+	l  *log.Logger
+}
+
+func NewHttpRequestClient[T any](u *url.URL, logger *log.Logger) (*HttpRequestClient[T], error) {
+	if u == nil {
+		return nil, errors.New("url cannot be nil")
+	}
+
+	hc := &http.Client{Timeout: 0}
+
+	return &HttpRequestClient[T]{
+		hc: hc,
+		u:  u,
+		l:  logger,
+	}, nil
+}
+
+// PreparePost prepares a body for a POST request, then returns a function that
+// executes that POST request.
+func (h HttpRequestClient[T]) PreparePost(body any) (func(context.Context) (T, error), error) {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to prepare http request body")
+	}
+
+	return func(ctx context.Context) (T, error) {
+		var v T
+
+		req, err := http.NewRequestWithContext(
+			ctx, http.MethodPost, h.u.String(),
+			bytes.NewReader(b),
+		)
+		if err != nil {
+			return v, errors.Wrap(err, "failed to create request")
+		}
+
+		res, err := h.hc.Do(req)
+		if err != nil {
+			return v, errors.Wrap(err, "failed to send request")
+		}
+
+		defer res.Body.Close()
+
+		resBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return v, errors.Wrap(err, "failed to read response body")
+		}
+
+		err = json.Unmarshal(resBody, &v)
+		if err != nil {
+			return v, errors.Wrap(err, "failed to unmarshal response body")
+		}
+
+		return v, nil
+	}, nil
 }

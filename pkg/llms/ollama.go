@@ -1,12 +1,8 @@
 package llms
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -17,6 +13,7 @@ import (
 	ol "github.com/ollama/ollama/api"
 
 	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/network"
 	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
@@ -26,7 +23,7 @@ type Ollama struct {
 	*llm
 	cfg    *ol.ChatRequest
 	logger *log.Logger
-	hc     *http.Client
+	hc     *network.HttpRequestClient[ol.ChatResponse]
 	u      *url.URL
 }
 
@@ -45,23 +42,12 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 		}
 	}
 
-	httpClient := &http.Client{Timeout: 0}
-
-	// First check if Ollama is alive. Make a GET request. We don't care
-	// about the value it returns. We only need to know if it errors.
-
-	u.Path = "/api/version"
-
-	_, err = httpClient.Get(u.String())
-	if err != nil {
-		return nil, errors.New("ollama is not running or invalid host URL")
-	}
-
-	l.Debug("Ollama is online.")
-
-	// Set the url path to the real path.
-
 	u.Path = "/api/chat"
+
+	hc, err := network.NewHttpRequestClient[ol.ChatResponse](u, l)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create http request client")
+	}
 
 	newConf := mc
 	g := defaultOllamaConfig
@@ -76,7 +62,7 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 	return &Ollama{
 		llm:    nl,
 		logger: l,
-		hc:     httpClient,
+		hc:     hc,
 		u:      u,
 	}, nil
 }
@@ -145,11 +131,6 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
-	var (
-		err    error
-		result ol.ChatResponse
-		reqUrl = c.u.String()
-	)
 	if c.cfg == nil {
 		return "", errNoConfigurationProvided
 	}
@@ -158,38 +139,16 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 		return "", errNoContentsInRequest
 	}
 
-	contents := c.prepare(messages)
+	c.cfg.Messages = c.prepare(messages)
 
-	c.cfg.Messages = contents
-
-	body, err := json.Marshal(c.cfg)
+	request, err := c.hc.PreparePost(c.cfg)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal configuration")
+		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, reqUrl,
-		bytes.NewReader(body),
-	)
+	result, err := request(ctx)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to create request")
-	}
-
-	res, err := c.hc.Do(req)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to send request")
-	}
-
-	defer res.Body.Close()
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to read response body")
-	}
-
-	err = json.Unmarshal(resBody, &result)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to unmarshal response body")
+		return "", err
 	}
 
 	return result.Message.Content, nil
@@ -261,6 +220,8 @@ func RequestTypedOllama[T any](
 	if err != nil {
 		return "", errors.Wrap(err, "failed to make typed ollama request")
 	}
+
+	result = removeThinkingTags(result)
 
 	return strings.TrimSpace(result), nil
 }
