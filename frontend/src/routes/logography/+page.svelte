@@ -1,37 +1,27 @@
 <script lang="ts">
-	import { fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
 	import type { PageProps } from './$types';
 	import { quintOut } from 'svelte/easing';
+	import { typewriter } from '$lib/typewriter';
+
 	const { data }: PageProps = $props();
-	const src = data.generationsSrc;
 
-	let generations: Generation[] = $state([]);
-	let logos: Map<string, string> = $state(new Map<string, string>());
+	const src = data.logographyDisplay;
 
-	import { animate, svg, stagger } from 'animejs';
-
-	$effect(() => {
-		animate(svg.createDrawable('.line'), {
-			draw: ['0 0', '0 1', '1 1'],
-			ease: 'inOutQuad',
-			duration: 2000,
-			delay: stagger(100),
-			loop: true
-		});
-	});
+	let advRes: string = $state('');
+	let genRes: string = $state('');
+	let svg: string = $state('');
 
 	$effect(() => {
 		const es = new EventSource(src);
 		es.onmessage = (event) => {
 			try {
-				const json: Generation = JSON.parse(event.data);
-				generations = [...generations, json];
-				for (const [key, value] of Object.entries(json.logography)) {
-					logos.set(key, value);
-				}
-				logos = new Map(logos);
+				const json: LogogramIteration = JSON.parse(event.data);
+				svg = json.generator.svg;
+				advRes = json.adversary.response;
+				genRes = json.generator.response;
 			} catch (err) {
-				console.log('Failed to parse JSON from /generations', err);
+				console.log('Failed to parse logogram', err);
 			}
 		};
 
@@ -44,18 +34,27 @@
 	});
 </script>
 
-<div class="mx-auto grid grid-cols-10 gap-2">
-	{#each logos as [key, value] (key)}
-		{#key key}
+<div class="">
+	<div class="flex min-h-screen flex-col items-center justify-center">
+		{#key svg}
 			<div
-				class="flex flex-col-reverse items-center border-1 p-3"
-				transition:fade={{ delay: 100, duration: 500, easing: quintOut }}
+				class="border-1 h-1/2 w-1/2 border-dashed"
+				transition:fly={{ duration: 200, easing: quintOut }}
 			>
-				<h1>{key}</h1>
-				<div class="h-20 w-20">
-					{@html value}
-				</div>
+				{@html svg}
 			</div>
 		{/key}
-	{/each}
+	</div>
+	<div class="absolute left-10 top-10 w-1/2">
+		<h1 class="pb-2 font-light tracking-widest">GENERATOR</h1>
+		{#key genRes}
+			<p class="text-sm" in:typewriter={{ speed: 20 }}>{genRes}</p>
+		{/key}
+	</div>
+	<div class="absolute bottom-10 left-10 w-1/2">
+		<h1 class="font-light tracking-widest">ADVERSARY</h1>
+		{#key advRes}
+			<p class="text-sm" in:typewriter={{ speed: 20 }}>{advRes}</p>
+		{/key}
+	</div>
 </div>

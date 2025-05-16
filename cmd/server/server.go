@@ -119,10 +119,7 @@ func NewConlangServer(
 		Dictionary:     dictionaryGen1,
 	}
 
-	generations, err := utils.NewFixedQueue[memory.Generation](
-		cfg.procedures.
-			maxGenerations + 1,
-	)
+	generations, err := utils.NewFixedQueue[memory.Generation](cfg.procedures.maxGenerations + 1)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create generation queue")
 	}
@@ -308,6 +305,13 @@ func (s *ConlangServer) WebEvents() {
 			)
 		}
 
+		logograms = func(mux *http.ServeMux) {
+			mux.HandleFunc(
+				"/logograms/display",
+				s.ws.Broadcasters.LogogramDisplay.InitialData(s.ws.InitialData.RecentLogogram),
+			)
+		}
+
 		testing = func(mux *http.ServeMux) {
 			mux.HandleFunc(
 				"/test/chat",
@@ -327,6 +331,7 @@ func (s *ConlangServer) WebEvents() {
 		time,
 		chatting,
 		generations,
+		logograms,
 		testing,
 	)
 }

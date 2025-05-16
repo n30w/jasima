@@ -344,12 +344,29 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	s.gs.Channel.ToClients <- kickoff
 
+	logoIter := chat.LogogramIteration{
+		Generator: initMsg,
+		Adversary: chat.AgentLogogramCritiqueResponse{},
+	}
+
+	err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
+	if err != nil {
+		return "", err
+	}
+
+	s.ws.Broadcasters.LogogramDisplay.Broadcast(logoIter)
+
 	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`
 
 	for (!adversaryOk && !generatorOk) && i <= DefaultMaxExchanges {
 		m := <-s.gs.Channel.ToServer
 
 		var msg *chat.Message
+
+		logoIter = chat.LogogramIteration{
+			Generator: logoIter.Generator,
+			Adversary: logoIter.Adversary,
+		}
 
 		// Switch the message to the recipient based on the sender. If the
 		// sender is the generator, rewrite the response into one for
@@ -368,6 +385,8 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 				return "", errors.Wrap(err, "failed to unmarshal agent logogram iteration")
 			}
 
+			logoIter.Generator = res
+
 			currentSvg = res.Svg
 
 			generatorOk = res.Stop
@@ -376,6 +395,8 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 				agent.RequestLogogramCritique,
 				res.Name+"\n"+res.Svg+"\n\n"+res.Response,
 			)(adversary)
+
+			// Validate SVG, send to sys agent for correction.
 
 		case adversary.Name:
 
@@ -387,6 +408,8 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 			if err != nil {
 				return "", errors.Wrap(err, "failed to unmarshal generator logogram critique")
 			}
+
+			logoIter.Adversary = res
 
 			adversaryOk = res.Stop
 
@@ -405,6 +428,13 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 		// Broadcast the extracted words from the sent message.
 
 		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
+
+		err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
+		if err != nil {
+			return "", err
+		}
+
+		s.ws.Broadcasters.LogogramDisplay.Broadcast(logoIter)
 
 		time.Sleep(10 * time.Second)
 

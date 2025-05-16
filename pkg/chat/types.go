@@ -200,6 +200,11 @@ type AgentDictionaryWordsDetectionResponse struct {
 	Words []string `json:"words" jsonschema_description:"Words in the dictionary from the text"`
 }
 
+type LogogramIteration struct {
+	Generator AgentLogogramIterationResponse `json:"generator"`
+	Adversary AgentLogogramCritiqueResponse  `json:"adversary"`
+}
+
 type DictionaryEntryResponse struct {
 	Word       string `json:"word" jsonschema_description:"Dictionary entry word"`
 	Definition string `json:"definition" jsonschema_description:"Dictionary entry definition"`

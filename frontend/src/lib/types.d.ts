@@ -26,3 +26,21 @@ type Generation = {
 type UsedWords = {
 	words: string[];
 };
+
+type agentLogogramIterResponse = {
+	name: string;
+	response: string;
+	stop: boolean;
+};
+
+type agentLogogramAdversaryResp = agentLogogramIterResponse;
+
+type agentLogogramGeneratorResp = {
+	svg: string;
+	agentLogogramIterResponse;
+};
+
+type LogogramIteration = {
+	generator: agentLogogramGeneratorResp;
+	adversary: agentLogogramAdversaryResp;
+};
