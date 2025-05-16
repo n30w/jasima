@@ -44,7 +44,8 @@ type Message struct {
 }
 
 func NewChatMessage(
-	sender, receiver string, text string, layer int32,
+	sender, receiver, text string,
+	layer int32,
 	command ...int32,
 ) *Message {
 	msg := Message{

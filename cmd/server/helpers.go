@@ -329,7 +329,7 @@ func (s *ConlangServer) findUsedWordsAgent(
 
 // resetAgents resets agents to their initial state. First it latches them,
 // then it clears their memory, then it resets their instructions.
-func (s *ConlangServer) resetAgents(clients []*network.GRPCClient) {
+func (s *ConlangServer) resetAgents(clients []*network.ChatClient) {
 	s.sendCommands(
 		clients,
 		s.cmd(agent.Latch),

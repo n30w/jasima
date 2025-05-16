@@ -1,5 +1,19 @@
 package main
 
+const (
+	DefaultSpecResourcePath           = "./resources/specifications"
+	DefaultDictionaryJsonPath         = "./resources/specifications/dictionary.json"
+	DefaultSvgResourcePath            = "./resources/logography"
+	DefaultLogToFilePath              = "./outputs/logs/server_log_%s.log"
+	DefaultDebugToggle                = false
+	DefaultBroadcastTestData          = false
+	DefaultMaxExchanges               = 25
+	DefaultMaxGenerations             = 1
+	DefaultDictionaryExtractionMethod = 0
+	DefaultLogToFileToggle            = false
+	DefaultServerName                 = "SERVER"
+)
+
 type procedureConfig struct {
 	// maxExchanges represents the total exchanges allowed per layer
 	// of evolution.

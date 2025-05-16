@@ -3,78 +3,65 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"codeberg.org/n30w/jasima/pkg/llms"
-	"codeberg.org/n30w/jasima/pkg/memory"
-
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
-)
 
-const (
-	DefaultAgentName = ""
-	// DefaultAgentConfigPath is in relation to where the binary was run and
-	// not the path where the binary exists.
-	DefaultAgentConfigPath        = "./cmd/configs/default_agent.toml"
-	DefaultServerAddress          = "localhost:50051"
-	DefaultPeers                  = ""
-	DefaultInitializationFilePath = ""
-	DefaultTemperatureFloat       = 1.5
-	DefaultModel                  = -1
-	DefaultLayer                  = -1
-	DefaultDebugToggle            = false
+	"codeberg.org/n30w/jasima/pkg/llms"
+	"codeberg.org/n30w/jasima/pkg/memory"
 )
 
 func main() {
-	var err error
-
-	flagName := flag.String(
-		"name",
-		DefaultAgentName,
-		"name of the agent",
-	)
-	flagPeers := flag.String(
-		"peers",
-		DefaultPeers,
-		"comma separated list of agent's peers",
-	)
-	flagServer := flag.String(
-		"server",
-		DefaultServerAddress,
-		"main communication server and routing service",
-	)
-	flagProvider := flag.Int(
-		"model",
-		DefaultModel,
-		"LLM service provider model to use",
-	)
-	flagDebug := flag.Bool(
-		"debug",
-		DefaultDebugToggle,
-		"debug mode, extra logging",
-	)
-	flagConfigPath := flag.String(
-		"configFile",
-		DefaultAgentConfigPath,
-		"configuration file path",
-	)
-	flagTemperature := flag.Float64(
-		"temperature",
-		DefaultTemperatureFloat,
-		"float64 model temperature",
-	)
-	flagInitializePath := flag.String(
-		"initialize",
-		DefaultInitializationFilePath,
-		"initial message file path",
-	)
-	flagLayer := flag.Int(
-		"layer",
-		DefaultLayer,
-		"agent's functional layer",
+	var (
+		flagName = flag.String(
+			"name",
+			DefaultAgentName,
+			"name of the agent",
+		)
+		flagPeers = flag.String(
+			"peers",
+			DefaultPeers,
+			"comma separated list of agent's peers",
+		)
+		flagServer = flag.String(
+			"server",
+			DefaultServerAddress,
+			"main communication server and routing service",
+		)
+		flagProvider = flag.Int(
+			"model",
+			DefaultModel,
+			"LLM service provider model to use",
+		)
+		flagDebug = flag.Bool(
+			"debug",
+			DefaultDebugToggle,
+			"debug mode, extra logging",
+		)
+		flagConfigPath = flag.String(
+			"configFile",
+			DefaultAgentConfigPath,
+			"configuration file path",
+		)
+		flagTemperature = flag.Float64(
+			"temperature",
+			DefaultTemperatureFloat,
+			"float64 model temperature",
+		)
+		flagInitializePath = flag.String(
+			"initialize",
+			DefaultInitializationFilePath,
+			"initial message file path",
+		)
+		flagLayer = flag.Int(
+			"layer",
+			DefaultLayer,
+			"agent's functional layer",
+		)
 	)
 
 	flag.Parse()
@@ -94,7 +81,7 @@ func main() {
 
 	var userConf userConfig
 
-	_, err = toml.DecodeFile(*flagConfigPath, &userConf)
+	_, err := toml.DecodeFile(*flagConfigPath, &userConf)
 	if err != nil {
 		logger.Error(err.Error())
 		logger.Warnf("Failed to load agent config! Using defaults.")
@@ -141,16 +128,17 @@ func main() {
 
 	defer stop()
 
-	mem := memory.NewMemoryStore(0)
-
-	logger.Debug("Initialized memory")
-
 	var (
 		errs = make(chan error)
 		halt = make(chan os.Signal, 1)
 	)
 
-	c, err := newClient(ctx, userConf, mem, logger, errs)
+	ms := &memoryServices{
+		stm: memory.NewMemoryStore(0),
+		ltm: memory.NewMemoryStore(0),
+	}
+
+	c, err := newClient(ctx, userConf, ms, logger, errs)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -169,14 +157,22 @@ func main() {
 
 	c.Run(ctx)
 
-	select {
-	case err = <-errs:
-		logger.Fatalf("encountered error: %v", err)
-	case <-ctx.Done():
-		logger.Info("context done... goodnight.")
-	case <-halt:
-		logger.Info("halted, shutting down...")
+	go func() {
+		select {
+		case err = <-errs:
+			logger.Error(err)
+		case sig := <-halt:
+			logger.Warnf("Received %s, shutting down...", sig)
+		}
+		stop()
+	}()
+
+	<-ctx.Done()
+
+	err = c.Teardown()
+	if err != nil {
+		logger.Fatal(err)
 	}
 
-	c.Teardown()
+	fmt.Printf("\nmi tawa!\n")
 }

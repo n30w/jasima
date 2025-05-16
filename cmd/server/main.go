@@ -12,20 +12,6 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-const (
-	DefaultSpecResourcePath           = "./resources/specifications"
-	DefaultDictionaryJsonPath         = "./resources/specifications/dictionary.json"
-	DefaultSvgResourcePath            = "./resources/logography"
-	DefaultLogToFilePath              = "./outputs/logs/server_log_%s.log"
-	DefaultDebugToggle                = false
-	DefaultBroadcastTestData          = false
-	DefaultMaxExchanges               = 25
-	DefaultMaxGenerations             = 1
-	DefaultDictionaryExtractionMethod = 0
-	DefaultLogToFileToggle            = false
-	DefaultServerName                 = "SERVER"
-)
-
 func main() {
 	var (
 		flagDebug = flag.Bool(

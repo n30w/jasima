@@ -3,7 +3,20 @@ package main
 import (
 	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/llms"
-	"codeberg.org/n30w/jasima/pkg/memory"
+)
+
+const (
+	DefaultAgentName = ""
+	// DefaultAgentConfigPath is in relation to where the binary was run and
+	// not the path where the binary exists.
+	DefaultAgentConfigPath        = "./cmd/configs/default_agent.toml"
+	DefaultServerAddress          = "localhost:50051"
+	DefaultPeers                  = ""
+	DefaultInitializationFilePath = ""
+	DefaultTemperatureFloat       = 1.5
+	DefaultModel                  = -1
+	DefaultLayer                  = -1
+	DefaultDebugToggle            = false
 )
 
 type networkConfig struct {
@@ -25,10 +38,4 @@ type config struct {
 	Layer         chat.Layer
 	ModelConfig   llms.ModelConfig
 	NetworkConfig networkConfig
-}
-
-type channels struct {
-	responses memory.MessageChannel
-	llm       memory.MessageChannel
-	errs      chan error
 }

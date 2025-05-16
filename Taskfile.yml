@@ -21,13 +21,13 @@ tasks:
       - go run ./cmd/agent -debug=true -temperature=0.87 -layer=1 -name="toki" -peers="pona" -model=5
   run-agent-pona:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="pona" -peers="toki" -model=4
+      - go run ./cmd/agent -debug=true -temperature=0.75 -layer=1 -name="pona" -peers="toki" -model=1
   run-agent-penny:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.75 -layer=2 -name="penny" -peers="tails" -model=5
   run-agent-tails:
     cmds:
-      - go run ./cmd/agent -debug=true -temperature=0.72 -layer=2 -name="tails" -peers="penny" -model=1
+      - go run ./cmd/agent -debug=true -temperature=0.74 -layer=2 -name="tails" -peers="penny" -model=0
   run-agent-nickel:
     cmds:
       - go run ./cmd/agent -debug=true -temperature=0.78 -layer=3 -name="nickel" -peers="dime" -model=1

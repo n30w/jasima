@@ -20,9 +20,10 @@ type WebServer struct {
 	InitialData  *InitialData
 	Broadcasters *Broadcasters
 	logger       *log.Logger
+	errs         chan<- error
 }
 
-func NewWebServer(l *log.Logger) (*WebServer, error) {
+func NewWebServer(l *log.Logger, errs chan<- error) (*WebServer, error) {
 	b := NewBroadcasters(l)
 	i, err := NewInitialData()
 	if err != nil {
@@ -32,6 +33,7 @@ func NewWebServer(l *log.Logger) (*WebServer, error) {
 		InitialData:  i,
 		Broadcasters: b,
 		logger:       l,
+		errs:         errs,
 	}, nil
 }
 
@@ -92,7 +94,7 @@ func (b *Broadcaster[T]) InitialData(d *utils.FixedQueue[T]) http.HandlerFunc {
 		// Send initial data so there's something to see on the frontend, other than
 		// just blank data. Make a copy of the queue that is passed in so that we do
 		// not actually discard the stuff inside it. After all, we're using
-		// a pointer to reference its current value for each new GRPCClient.
+		// a pointer to reference its current value for each new ChatClient.
 
 		q, err := d.ToSlice()
 		if err != nil {
@@ -103,7 +105,7 @@ func (b *Broadcaster[T]) InitialData(d *utils.FixedQueue[T]) http.HandlerFunc {
 			c.send <- q[i]
 		}
 
-		// Then serve. This function loops until the GRPCClient disconnects.
+		// Then serve. This function loops until the ChatClient disconnects.
 
 		err = c.serve()
 		if err != nil {
@@ -128,7 +130,7 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 	b.webClients[c] = struct{}{}
 	b.mu.Unlock()
 
-	b.logger.Infof("Web GRPCClient connected @ %s", r.RemoteAddr)
+	b.logger.Infof("Web ChatClient connected @ %s", r.RemoteAddr)
 
 	defer func() {
 		b.mu.Lock()
@@ -136,7 +138,7 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 		b.mu.Unlock()
 		c.cancel()
 		close(c.send)
-		b.logger.Infof("Web GRPCClient disconnected @ %s", r.RemoteAddr)
+		b.logger.Infof("Web ChatClient disconnected @ %s", r.RemoteAddr)
 	}()
 
 	err := c.serve()
@@ -169,7 +171,6 @@ func NewBroadcasters(l *log.Logger) *Broadcasters {
 
 func (s WebServer) ListenAndServe(
 	port string,
-	errs chan<- error,
 ) {
 	p := makePortString(port)
 
@@ -210,7 +211,7 @@ func (s WebServer) ListenAndServe(
 
 	err := http.ListenAndServe(p, handler)
 	if err != nil {
-		errs <- err
+		s.errs <- err
 		return
 	}
 }
@@ -285,7 +286,7 @@ type WebClient[T any] struct {
 }
 
 func (c *WebClient[T]) serve() error {
-	errMsg := "failed serving GRPCClient"
+	errMsg := "failed serving ChatClient"
 
 	rc := http.NewResponseController(c.conn)
 

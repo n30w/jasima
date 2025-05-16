@@ -1,10 +1,13 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -24,29 +27,31 @@ type channels struct {
 	ToServer memory.MessageChannel
 }
 
-type GRPCServer struct {
+type ChatServer struct {
 	chat.UnimplementedChatServiceServer
 	clients *clientele
 	mu      sync.Mutex
 	Name    chat.Name
 	logger  *log.Logger
-	Channel channels
+	Channel *channels
 
 	// listening determines whether the server will operate on messages,
 	// whether it be through routing, saving, etc.
 	Listening bool
 }
 
-func NewGRPCServer(logger *log.Logger, name string) *GRPCServer {
+func NewChatServer(logger *log.Logger, name string) *ChatServer {
 	clients := &clientele{
 		byNameMap:  make(nameToClientsMap),
 		byLayerMap: make(layerToNamesMap),
 	}
-	chs := channels{
+
+	chs := &channels{
 		ToClients: make(chan *chat.Message),
 		ToServer:  make(memory.MessageChannel),
 	}
-	return &GRPCServer{
+
+	return &ChatServer{
 		Name:      chat.Name(name),
 		Listening: true,
 		Channel:   chs,
@@ -55,7 +60,7 @@ func NewGRPCServer(logger *log.Logger, name string) *GRPCServer {
 	}
 }
 
-func (s *GRPCServer) ListenAndServe(
+func (s *ChatServer) ListenAndServe(
 	protocol, port string,
 	errs chan<- error,
 ) {
@@ -80,9 +85,9 @@ func (s *GRPCServer) ListenAndServe(
 	}
 }
 
-// Chat is called by the `GRPCClient`. The lifetime of this function is for as
-// long as the GRPCClient using this function is connected.
-func (s *GRPCServer) Chat(stream chat.ChatService_ChatServer) error {
+// Chat is called by the `ChatClient`. The lifetime of this function is for as
+// long as the ChatClient using this function is connected.
+func (s *ChatServer) Chat(stream chat.ChatService_ChatServer) error {
 	firstMsg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -93,29 +98,27 @@ func (s *GRPCServer) Chat(stream chat.ChatService_ChatServer) error {
 		return err
 	}
 
-	// Enter an infinite listening session when the GRPCClient is connected.
-	// Each GRPCClient receives their own context. `listen` is a blocking call.
+	// Enter an infinite listening session when the ChatClient is connected.
+	// Each ChatClient receives their own context. `listen` is a blocking call.
 
 	err = s.listen(c)
 
 	s.removeClient(c)
 
 	if err == io.EOF {
-		s.logger.Info("Client disconnected", "GRPCClient", c.Name)
+		s.logger.Info("Client disconnected", "ChatClient", c.Name)
 	} else if err != nil {
-		return errors.Wrap(err, "unexpected GRPCClient disconnection")
+		return errors.Wrap(err, "unexpected ChatClient disconnection")
 	}
 
 	return nil
 }
 
-// listen is called when a GRPCClient connection with `Chat` has already been
+// listen is called when a ChatClient connection with `Chat` has already been
 // established. It disconnects clients when they error or when they disconnect
 // from the server. It also calls `routeMessage` when a message is received
-// from the connected GRPCClient.
-func (s *GRPCServer) listen(
-	c *GRPCClient,
-) error {
+// from the connected ChatClient.
+func (s *ChatServer) listen(c *ChatClient) error {
 	var (
 		err          error
 		msg          *chat.Message
@@ -124,7 +127,7 @@ func (s *GRPCServer) listen(
 
 	for !disconnected {
 
-		// Wait for a message to come in from the GRPCClient. This is a blocking call.
+		// Wait for a message to come in from the ChatClient. This is a blocking call.
 
 		msg, err = c.stream.Recv()
 		if err != nil {
@@ -147,7 +150,6 @@ func (s *GRPCServer) listen(
 		}
 
 		c.mu.Unlock()
-
 	}
 
 	if err != nil {
@@ -160,7 +162,7 @@ func (s *GRPCServer) listen(
 // Broadcast forwards a message `msg` to all clients on a layer, excluding the
 // sender. If a message has peers to send to, the message will not be broadcast
 // across the entire layer but only broadcasted to the peer in question.
-func (s *GRPCServer) Broadcast(msg *memory.Message) error {
+func (s *ChatServer) Broadcast(msg *memory.Message) error {
 	var err error
 
 	if msg.Receiver != "" {
@@ -194,10 +196,10 @@ func (s *GRPCServer) Broadcast(msg *memory.Message) error {
 	return nil
 }
 
-// forward forwards a message `msg` to a GRPCClient. The GRPCClient should exist in
+// forward forwards a message `msg` to a ChatClient. The ChatClient should exist in
 // the list of clients maintaining an active connection. routeMessage returns
-// an error if the GRPCClient does not exist.
-func (s *GRPCServer) forward(msg *memory.Message) error {
+// an error if the ChatClient does not exist.
+func (s *ChatServer) forward(msg *memory.Message) error {
 	c, err := s.getClientByName(msg.Receiver)
 	if err != nil {
 		return err
@@ -211,17 +213,17 @@ func (s *GRPCServer) forward(msg *memory.Message) error {
 	return nil
 }
 
-func (s *GRPCServer) TotalClients() int {
+func (s *ChatServer) TotalClients() int {
 	return s.clients.total
 }
 
-// initClient initializes a GRPCClient connection and adds the GRPCClient to the
+// initClient initializes a ChatClient connection and adds the ChatClient to the
 // list of clients currently maintaining a connection.
-func (s *GRPCServer) initClient(
+func (s *ChatServer) initClient(
 	stream chat.ChatService_ChatServer,
 	msg *chat.Message,
-) (*GRPCClient, error) {
-	c, err := newClient(stream, msg.Sender, msg.Content, msg.Layer)
+) (*ChatClient, error) {
+	c, err := newChatClient(stream, msg.Sender, msg.Layer)
 	if err != nil {
 		return nil, err
 	}
@@ -230,35 +232,35 @@ func (s *GRPCServer) initClient(
 
 	s.logger.Info(
 		"Client connected",
-		"GRPCClient",
+		"client",
 		c.String(),
-		"Layer",
+		"layer",
 		c.layer,
 	)
 
 	return c, nil
 }
 
-func (s *GRPCServer) AddClient(c *GRPCClient) {
+func (s *ChatServer) AddClient(c *ChatClient) {
 	s.addClient(c)
 }
 
-func (s *GRPCServer) RemoveClient(c *GRPCClient) {
+func (s *ChatServer) RemoveClient(c *ChatClient) {
 	s.removeClient(c)
 }
 
-func (s *GRPCServer) GetClientsByLayer(layer chat.Layer) []*GRPCClient {
+func (s *ChatServer) GetClientsByLayer(layer chat.Layer) []*ChatClient {
 	return s.getClientsByLayer(layer)
 }
 
-func (s *GRPCServer) GetClientByName(name chat.Name) (*GRPCClient, error) {
+func (s *ChatServer) GetClientByName(name chat.Name) (*ChatClient, error) {
 	return s.getClientByName(name)
 }
 
-// addClient adds a GRPCClient to the list of clients that maintain an active
+// addClient adds a ChatClient to the list of clients that maintain an active
 // connection to the server.
-func (s *GRPCServer) addClient(client *GRPCClient) {
-	// Add the GRPCClient to the list of current clients. Multiple connections may
+func (s *ChatServer) addClient(client *ChatClient) {
+	// Add the ChatClient to the list of current clients. Multiple connections may
 	// happen all at once, so we need to lock and unlock the mutex to avoid
 	// race conditions.
 
@@ -269,9 +271,9 @@ func (s *GRPCServer) addClient(client *GRPCClient) {
 	s.mu.Unlock()
 }
 
-// removeClient removes a GRPCClient from the list of clients that maintain an
+// removeClient removes a ChatClient from the list of clients that maintain an
 // active connection to the server.
-func (s *GRPCServer) removeClient(client *GRPCClient) {
+func (s *ChatServer) removeClient(client *ChatClient) {
 	s.mu.Lock()
 	s.clients.removeByName(client)
 	s.clients.removeByLayer(client)
@@ -281,8 +283,8 @@ func (s *GRPCServer) removeClient(client *GRPCClient) {
 
 // getClientsByLayer retrieves all the clients of a Layer and returns them
 // in an array of pointers to those clients.
-func (s *GRPCServer) getClientsByLayer(layer chat.Layer) []*GRPCClient {
-	var c []*GRPCClient
+func (s *ChatServer) getClientsByLayer(layer chat.Layer) []*ChatClient {
+	var c []*ChatClient
 
 	s.mu.Lock()
 	c = s.clients.byLayer(layer)
@@ -291,42 +293,40 @@ func (s *GRPCServer) getClientsByLayer(layer chat.Layer) []*GRPCClient {
 	return c
 }
 
-func (s *GRPCServer) getClientByName(name chat.Name) (*GRPCClient, error) {
-	var c *GRPCClient
+func (s *ChatServer) getClientByName(name chat.Name) (*ChatClient, error) {
+	var c *ChatClient
 	var ok bool
 
 	c, ok = s.clients.byName(name)
 
 	if !ok {
-		return nil, fmt.Errorf("GRPCClient with name: '%s' not found", name)
+		return nil, fmt.Errorf("ChatClient with name: '%s' not found", name)
 	}
 
 	return c, nil
 }
 
-// GRPCClient represents a GRPCClient connected to the server.
-type GRPCClient struct {
+// ChatClient represents a client connected to the server.
+type ChatClient struct {
 	Name     chat.Name
 	stream   chat.ChatService_ChatServer
-	model    string
 	layer    chat.Layer
 	channels map[chan *chat.Message]struct{}
 	mu       sync.Mutex
 }
 
-func newClient(
+func newChatClient(
 	stream chat.ChatService_ChatServer,
-	name, model string,
+	name string,
 	l int32,
-) (*GRPCClient, error) {
+) (*ChatClient, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
 
-	c := &GRPCClient{
+	c := &ChatClient{
 		stream:   stream,
 		Name:     chat.Name(name),
-		model:    model,
 		layer:    chat.Layer(l),
 		mu:       sync.Mutex{},
 		channels: make(map[chan *chat.Message]struct{}),
@@ -335,7 +335,7 @@ func newClient(
 	return c, nil
 }
 
-func (c *GRPCClient) SendWithChannel(
+func (c *ChatClient) SendWithChannel(
 	msg *memory.Message,
 	command ...agent.Command,
 ) (chan *chat.Message, error) {
@@ -354,7 +354,7 @@ func (c *GRPCClient) SendWithChannel(
 	return ch, c.send(pbMsg)
 }
 
-func (c *GRPCClient) Send(msg *memory.Message, command ...agent.Command) error {
+func (c *ChatClient) Send(msg *memory.Message, command ...agent.Command) error {
 	pbMsg := chat.NewPbMessage(
 		msg.Sender, msg.Receiver, msg.Text, msg.Layer,
 		command...,
@@ -363,7 +363,7 @@ func (c *GRPCClient) Send(msg *memory.Message, command ...agent.Command) error {
 	return c.send(pbMsg)
 }
 
-func (c *GRPCClient) send(msg *chat.Message) error {
+func (c *ChatClient) send(msg *chat.Message) error {
 	err := c.stream.Send(msg)
 	if err != nil {
 		return fmt.Errorf(
@@ -376,14 +376,14 @@ func (c *GRPCClient) send(msg *chat.Message) error {
 	return nil
 }
 
-func (c *GRPCClient) String() string {
-	return fmt.Sprintf("%s<%s>", c.Name, c.model)
+func (c *ChatClient) String() string {
+	return c.Name.String()
 }
 
 type (
 	namesMap         map[chat.Name]struct{}
 	layerToNamesMap  map[chat.Layer]namesMap
-	nameToClientsMap map[chat.Name]*GRPCClient
+	nameToClientsMap map[chat.Name]*ChatClient
 )
 
 type clientele struct {
@@ -392,15 +392,15 @@ type clientele struct {
 	total      int
 }
 
-func (ct *clientele) addByName(c *GRPCClient) {
+func (ct *clientele) addByName(c *ChatClient) {
 	ct.byNameMap[c.Name] = c
 }
 
-func (ct *clientele) removeByName(c *GRPCClient) {
+func (ct *clientele) removeByName(c *ChatClient) {
 	delete(ct.byNameMap, c.Name)
 }
 
-func (ct *clientele) addByLayer(c *GRPCClient) {
+func (ct *clientele) addByLayer(c *ChatClient) {
 	_, ok := ct.byLayerMap[c.layer]
 	if !ok {
 		ct.byLayerMap[c.layer] = make(namesMap)
@@ -409,19 +409,19 @@ func (ct *clientele) addByLayer(c *GRPCClient) {
 	ct.byLayerMap[c.layer][c.Name] = struct{}{}
 }
 
-func (ct *clientele) removeByLayer(c *GRPCClient) {
+func (ct *clientele) removeByLayer(c *ChatClient) {
 	delete(ct.byLayerMap[c.layer], c.Name)
 }
 
-func (ct *clientele) byName(n chat.Name) (*GRPCClient, bool) {
+func (ct *clientele) byName(n chat.Name) (*ChatClient, bool) {
 	c, ok := ct.byNameMap[n]
 	return c, ok
 }
 
 // byLayer receives a Layer parameter to retrieve an `n` list of clients with
 // that specified Layer.
-func (ct *clientele) byLayer(layer chat.Layer) []*GRPCClient {
-	clients := make([]*GRPCClient, 0)
+func (ct *clientele) byLayer(layer chat.Layer) []*ChatClient {
+	clients := make([]*ChatClient, 0)
 	l := ct.byLayerMap[layer]
 
 	for k := range l {
@@ -432,4 +432,89 @@ func (ct *clientele) byLayer(layer chat.Layer) []*GRPCClient {
 	}
 
 	return clients
+}
+
+// ChatClientService defines a facade for an agent to use to communicate
+// chat messages to and from a server.
+type ChatClientService struct {
+	conn       grpc.BidiStreamingClient[chat.Message, chat.Message]
+	grpcClient *grpc.ClientConn
+	channel    *channels
+}
+
+func NewChatClientService(
+	ctx context.Context,
+	url string,
+	inbound chan *chat.Message,
+) (*ChatClientService, error) {
+	grpcClient, err := grpc.NewClient(
+		url,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// The implementation of `Chat` is in the server code. This is where the
+	// client establishes the initial connection to the server.
+	conn, err := chat.NewChatServiceClient(grpcClient).Chat(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChatClientService{
+		conn:       conn,
+		grpcClient: grpcClient,
+		channel: &channels{
+			ToClients: inbound,
+		},
+	}, nil
+}
+
+func (c *ChatClientService) Send(msg *chat.Message) error {
+	return c.conn.Send(msg)
+}
+
+func (c *ChatClientService) Receive() error {
+	return c.listen()
+}
+
+func (c *ChatClientService) listen() error {
+	var (
+		err          error
+		msg          *chat.Message
+		disconnected bool
+	)
+
+	for !disconnected {
+
+		// Wait for message to come in from server. This is a blocking call.
+
+		msg, err = c.conn.Recv()
+		switch {
+		case err == io.EOF:
+			err = errors.New("server closed connection")
+			fallthrough
+		case err != nil:
+			disconnected = true
+			continue
+		}
+
+		c.channel.ToClients <- msg
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ChatClientService) Close() error {
+	err := c.conn.CloseSend()
+	if err != nil {
+		return err
+	}
+
+	return c.grpcClient.Close()
 }

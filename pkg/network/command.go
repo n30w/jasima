@@ -7,8 +7,8 @@ import (
 
 type (
 	CommandForAgent func(agent.Command, ...string) MessageFor
-	MessageFor      func(client *GRPCClient) *chat.Message
-	CommandsSender  func([]*GRPCClient, ...MessageFor)
+	MessageFor      func(client *ChatClient) *chat.Message
+	CommandsSender  func([]*ChatClient, ...MessageFor)
 )
 
 func BuildCommand(sender string) CommandForAgent {
@@ -16,7 +16,7 @@ func BuildCommand(sender string) CommandForAgent {
 		command agent.Command,
 		content ...string,
 	) MessageFor {
-		return func(c *GRPCClient) *chat.Message {
+		return func(c *ChatClient) *chat.Message {
 			msg := &chat.Message{
 				Sender:   sender,
 				Receiver: c.Name.String(),
@@ -36,8 +36,8 @@ func BuildCommand(sender string) CommandForAgent {
 
 func SendCommandBuilder(
 	pool chan<- *chat.Message,
-) func([]*GRPCClient, ...MessageFor) {
-	return func(clients []*GRPCClient, commands ...MessageFor) {
+) func([]*ChatClient, ...MessageFor) {
+	return func(clients []*ChatClient, commands ...MessageFor) {
 		for _, c := range clients {
 			for _, cmd := range commands {
 				pool <- cmd(c)

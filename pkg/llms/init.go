@@ -13,10 +13,16 @@ import (
 var schemas *schemaRegistry
 
 func init() {
-	stopBool := &genai.Schema{
-		Type:        genai.TypeBoolean,
-		Description: "Indicates if the conversation is done",
-	}
+	var (
+		stopBool = &genai.Schema{
+			Type:        genai.TypeBoolean,
+			Description: "Indicates if you want to end the conversation",
+		}
+		responseTextString = &genai.Schema{
+			Type:        genai.TypeString,
+			Description: "Your response",
+		}
+	)
 
 	schemas = newSchemaRegistry()
 
@@ -91,13 +97,10 @@ func init() {
 						Type:        genai.TypeString,
 						Description: "The svg file for the logogram",
 					},
-					"reasoning": {
-						Type:        genai.TypeString,
-						Description: "The logogram change reasoning",
-					},
-					"stop": stopBool,
+					"response": responseTextString,
+					"stop":     stopBool,
 				},
-				Required: []string{"name", "svg", "reasoning", "stop"},
+				Required: []string{"name", "svg", "response", "stop"},
 			},
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_iteration",
@@ -116,13 +119,10 @@ func init() {
 						Type:        genai.TypeString,
 						Description: "The name of the logogram",
 					},
-					"critique": {
-						Type:        genai.TypeString,
-						Description: "The logogram critique",
-					},
-					"stop": stopBool,
+					"response": responseTextString,
+					"stop":     stopBool,
 				},
-				Required: []string{"name", "critique", "stop"},
+				Required: []string{"name", "response", "stop"},
 			},
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_critique",

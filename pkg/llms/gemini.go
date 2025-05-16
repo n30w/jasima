@@ -3,6 +3,7 @@ package llms
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
@@ -105,12 +106,14 @@ func (c GoogleGemini) Request(
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
-		return "", errors.Wrap(err, "LLM request failed")
+		return "", err
 	}
 
 	return v, nil
 }
 
+// request makes a request to the Gemini API. See Gemini API error codes here:
+// https://ai.google.dev/gemini-api/docs/troubleshooting
 func (c GoogleGemini) request(
 	ctx context.Context,
 	messages []memory.Message,
@@ -121,24 +124,62 @@ func (c GoogleGemini) request(
 
 	contents := c.prepare(messages)
 
-	result, err := c.client.Models.GenerateContent(
-		ctx,
-		c.model.String(),
-		contents,
-		c.cfg,
-	)
-	if err != nil {
-		var e *genai.APIError
-		switch {
-		case errors.As(err, &e):
-			c.logger.Infof("%d: %s", e.Code, e.Message)
-			return "*no comment*", nil
-		default:
-			return "", errors.Wrap(err, "gemini client failed to make request")
-		}
+	if len(contents) == 0 {
+		return "", errors.New("cannot send message with no contents")
 	}
 
-	return result.Text(), nil
+	var (
+		done   bool
+		err    error
+		tries  int
+		apiErr genai.APIError
+		res    *genai.GenerateContentResponse
+		result string
+		retry  time.Duration = 0
+	)
+
+	for !done {
+		if tries >= maxRequestRetries {
+			done = true
+			continue
+		}
+
+		res, err = c.client.Models.GenerateContent(
+			ctx,
+			c.model.String(),
+			contents,
+			c.cfg,
+		)
+		if err != nil {
+			ok := errors.As(err, &apiErr)
+			if ok {
+				if apiErr.Code == 500 || apiErr.Code == 503 {
+					c.logger.Warnf("API error: %d %s", apiErr.Code, apiErr.Message)
+					c.logger.Debugf("Retrying in %s", retryInterval)
+					retry = retryInterval
+				}
+			}
+
+			if retry == 0 {
+				done = true
+			}
+
+			time.Sleep(retry)
+
+			continue
+		}
+
+		result = res.Text()
+		done = true
+
+		tries++
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
 }
 
 // prepare adheres memories to the `genai` library `content` type.

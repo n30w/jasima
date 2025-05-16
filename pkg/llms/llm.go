@@ -3,9 +3,15 @@ package llms
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
+)
+
+const (
+	maxRequestRetries = 3
+	retryInterval     = 180 * time.Second
 )
 
 type llm struct {

@@ -237,7 +237,7 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		return
 	}
 
-	clients := []*network.GRPCClient{dictSysAgent}
+	clients := []*network.ChatClient{dictSysAgent}
 
 	genDict, err := json.Marshal(newGeneration.Dictionary)
 	if err != nil {
@@ -299,9 +299,8 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 	}
 
 	var (
-		done       = false
 		i          = 0
-		clients    = []*network.GRPCClient{generator, adversary}
+		clients    = []*network.ChatClient{generator, adversary}
 		currentSvg = ""
 
 		generatorInstructions = s.cmd(
@@ -312,6 +311,9 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 			agent.SetInstructions,
 			agent.LogogramAdversaryInstructions+genericInstructions,
 		)(adversary)
+
+		generatorOk = false
+		adversaryOk = false
 	)
 
 	// Fresh slate.
@@ -326,9 +328,11 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 	// Send the initial message.
 
 	initMsg := chat.AgentLogogramIterationResponse{
-		Name:      word,
-		Svg:       s.dictionary[word].Logogram,
-		Reasoning: "This is the initial svg.",
+		Name: word,
+		Svg:  s.dictionary[word].Logogram,
+		AgentResponseText: chat.AgentResponseText{
+			Response: "This is the initial svg. We will be developing logogram for the word: " + word,
+		},
 	}
 
 	initMsgJson, err := json.Marshal(initMsg)
@@ -340,7 +344,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	s.gs.Channel.ToClients <- kickoff
 
-	for !done {
+	for !adversaryOk && !generatorOk {
 		m := <-s.gs.Channel.ToServer
 
 		i++
@@ -366,13 +370,11 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 			currentSvg = res.Svg
 
-			if res.Stop {
-				done = true
-			}
+			generatorOk = res.Stop
 
 			msg = s.cmd(
 				agent.RequestLogogramCritique,
-				res.Svg+"\nReasoning: "+res.Reasoning,
+				res.Name+"\n"+res.Svg+"\n\n"+res.Response,
 			)(adversary)
 
 		case adversary.Name:
@@ -386,20 +388,10 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 				return "", errors.Wrap(err, "failed to unmarshal generator logogram critique")
 			}
 
-			if res.Stop {
-				done = true
-			}
+			adversaryOk = res.Stop
 
-			msg = s.cmd(agent.RequestLogogramIteration, res.Critique)(generator)
+			msg = s.cmd(agent.RequestLogogramIteration, res.Response)(generator)
 		}
-
-		if done {
-			continue
-		}
-
-		time.Sleep(10 * time.Second)
-
-		s.gs.Channel.ToClients <- msg
 
 		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
 		if err != nil {
@@ -414,7 +406,10 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
 
-		// Emit the message.
+		time.Sleep(10 * time.Second)
+
+		s.gs.Channel.ToClients <- msg
+
 		s.logger.Debugf("Exchanges: %d", i)
 	}
 
@@ -449,7 +444,7 @@ func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) erro
 }
 
 // Evolve manages the entire evolutionary function loop.
-func (s *ConlangServer) Evolve(ctx context.Context) error {
+func (s *ConlangServer) Evolve(_ context.Context) error {
 	var (
 		err    error
 		errMsg = "failed to evolve generation %d"
@@ -520,14 +515,14 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 
 		svg, err := s.iterateLogogram(newGeneration, w)
 		if err != nil {
-			s.errs <- err
+			return err
 		}
 
 		newGeneration.Logography[w] = svg
 
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
-			s.errs <- errors.Wrapf(
+			return errors.Wrapf(
 				err,
 				"failed to enqueue new generation %d", i,
 			)
@@ -535,13 +530,15 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 
 		err = s.ws.InitialData.RecentGenerations.Enqueue(newGeneration)
 		if err != nil {
-			s.errs <- errors.Wrapf(
+			return errors.Wrapf(
 				err,
 				"failed to enqueue new generation to initial data %d", i,
 			)
 		}
 
 		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
+
+		time.Sleep(10 * time.Second)
 	}
 
 	s.gs.Listening = false
@@ -587,6 +584,26 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 	s.logger.Infof("Saved generations to %s", fileName)
 
 	return nil
+}
+
+func (s *ConlangServer) testIterateLogogram(_ context.Context) error {
+	g, err := s.generations.ToSlice()
+	if err != nil {
+		return err
+	}
+
+	svg, err := s.iterateLogogram(g[0], "suli")
+	if err != nil {
+		return err
+	}
+
+	s.logger.Printf("%s\n", svg)
+
+	return nil
+}
+
+func (s *ConlangServer) selfDestruct(_ context.Context) error {
+	return errors.New("SERVER KILLED FROM SELF-DESTRUCTION")
 }
 
 // outputTestData continuously outputs messages to the test API. This is

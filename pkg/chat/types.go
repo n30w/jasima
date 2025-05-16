@@ -176,7 +176,7 @@ func NewPbMessage(
 }
 
 type AgentResponseStop struct {
-	Stop bool `json:"stop" jsonschema_description:"Indicates if the conversation is done"`
+	Stop bool `json:"stop" jsonschema_description:"Indicates if you want to end the conversation"`
 }
 
 type AgentResponseText struct {
@@ -184,15 +184,15 @@ type AgentResponseText struct {
 }
 
 type AgentLogogramIterationResponse struct {
-	Name      string `json:"name" jsonschema_description:"Logogram name"`
-	Svg       string `json:"svg" jsonschema_description:"Logogram svg"`
-	Reasoning string `json:"reasoning" jsonschema_description:"Logogram reasoning"`
+	Name string `json:"name" jsonschema_description:"Logogram name"`
+	Svg  string `json:"svg" jsonschema_description:"Logogram svg"`
+	AgentResponseText
 	AgentResponseStop
 }
 
 type AgentLogogramCritiqueResponse struct {
-	Name     string `json:"name" jsonschema_description:"Logogram name"`
-	Critique string `json:"critique" jsonschema_description:"Logogram critique"`
+	Name string `json:"name" jsonschema_description:"Logogram name"`
+	AgentResponseText
 	AgentResponseStop
 }
 

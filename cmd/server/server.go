@@ -45,7 +45,7 @@ type job func(ctx context.Context) error
 type ConlangServer struct {
 	logger          *log.Logger
 	memory          MemoryService
-	gs              *network.GRPCServer
+	gs              *network.ChatServer
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan chat.DictionaryEntriesResponse
@@ -108,6 +108,7 @@ func NewConlangServer(
 	for k := range dictionaryGen1 {
 		v := dictionaryGen1[k]
 		v.Logogram = logographyGen1[k]
+		dictionaryGen1[k] = v
 	}
 
 	initialGen := memory.Generation{
@@ -130,12 +131,12 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to enqueue initial generation")
 	}
 
-	webServer, err := network.NewWebServer(l)
+	webServer, err := network.NewWebServer(l, errs)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create web server")
 	}
 
-	grpcServer := network.NewGRPCServer(l, cfg.name)
+	grpcServer := network.NewChatServer(l, cfg.name)
 
 	err = webServer.InitialData.RecentSpecifications.Enqueue(specificationsGen1)
 	if err != nil {
@@ -173,92 +174,94 @@ func NewConlangServer(
 }
 
 func (s *ConlangServer) Router() {
-	eventsRoute := func(ctx context.Context, pbMsg *chat.Message) error {
-		msg := *memory.NewChatMessage(
-			pbMsg.Sender, pbMsg.Receiver,
-			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-		)
-
-		err := s.ws.InitialData.RecentMessages.Enqueue(msg)
-		if err != nil {
-			s.logger.Errorf("failed to save message to InitialData: %v", err)
-		}
-
-		return nil
-	}
-
-	printConsoleData := func(ctx context.Context, pbMsg *chat.Message) error {
-		msg := *memory.NewChatMessage(
-			pbMsg.Sender, pbMsg.Receiver,
-			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-		)
-
-		s.logger.Debugf("MESSAGE: %+v", msg)
-
-		if msg.Command != agent.NoCommand {
-			s.logger.Debugf(
-				"Issued command %s to %s", msg.Command,
-				msg.Receiver,
+	var (
+		eventsRoute = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 			)
-		}
 
-		return nil
-	}
+			err := s.ws.InitialData.RecentMessages.Enqueue(msg)
+			if err != nil {
+				s.logger.Errorf("failed to save message to InitialData: %v", err)
+			}
 
-	messageRoute := func(ctx context.Context, pbMsg *chat.Message) error {
-		msg := *memory.NewChatMessage(
-			pbMsg.Sender, pbMsg.Receiver,
-			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-		)
-
-		if msg.Layer == chat.SystemLayer && msg.
-			Receiver == s.gs.Name {
-			s.gs.Channel.ToServer <- msg
 			return nil
 		}
 
-		err := s.gs.Broadcast(&msg)
-		if err != nil {
-			return errors.Wrap(err, "failed to broadcast message to clients")
-		}
+		printConsoleData = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
 
-		return nil
-	}
+			s.logger.Debugf("MESSAGE: %+v", msg)
 
-	procedureRoute := func(ctx context.Context, pbMsg *chat.Message) error {
-		msg := *memory.NewChatMessage(
-			pbMsg.Sender, pbMsg.Receiver,
-			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-		)
-
-		if msg.Sender != s.gs.Name {
-			// This is necessary so the procedure channel does NOT block
-			// the main router loop.
-			select {
-			case s.procedureChan <- msg:
-				s.logger.Debug("Dispatching message to procedure channel")
-			default:
+			if msg.Command != agent.NoCommand {
+				s.logger.Debugf(
+					"Issued command %s to %s", msg.Command,
+					msg.Receiver,
+				)
 			}
+
+			return nil
 		}
 
-		return nil
-	}
+		messageRoute = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
 
-	saveMessage := func(ctx context.Context, pbMsg *chat.Message) error {
-		msg := *memory.NewChatMessage(
-			pbMsg.Sender, pbMsg.Receiver,
-			pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-		)
+			if msg.Layer == chat.SystemLayer && msg.
+				Receiver == s.gs.Name {
+				s.gs.Channel.ToServer <- msg
+				return nil
+			}
 
-		err := saveMessageTo(ctx, s.memory, msg)
-		if err != nil {
-			return errors.Wrap(err, "failed to save message to memory")
+			err := s.gs.Broadcast(&msg)
+			if err != nil {
+				return errors.Wrap(err, "failed to broadcast message to clients")
+			}
+
+			return nil
 		}
 
-		return nil
-	}
+		procedureRoute = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
 
-	routeMessages := chat.BuildRouter(
+			if msg.Sender != s.gs.Name {
+				// This is necessary so the procedure channel does NOT block
+				// the main router loop.
+				select {
+				case s.procedureChan <- msg:
+					s.logger.Debug("Dispatching message to procedure channel")
+				default:
+				}
+			}
+
+			return nil
+		}
+
+		saveMessage = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
+
+			err := saveMessageTo(ctx, s.memory, msg)
+			if err != nil {
+				return errors.Wrap(err, "failed to save message to memory")
+			}
+
+			return nil
+		}
+	)
+
+	routeMessages := chat.BuildRouter[*chat.Message](
 		s.gs.Channel.ToClients,
 		printConsoleData,
 		saveMessage,
@@ -273,13 +276,15 @@ func (s *ConlangServer) Router() {
 
 func (s *ConlangServer) WebEvents() {
 	go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
-	go s.ws.ListenAndServe("7070", s.errs)
+	go s.ws.ListenAndServe("7070")
 }
 
 func (s *ConlangServer) StartProcedures() {
 	jobs, _ := utils.NewFixedQueue[job](100)
 
 	_ = jobs.Enqueue(s.WaitForClients(11))
+	_ = jobs.Enqueue(s.testIterateLogogram)
+	_ = jobs.Enqueue(s.selfDestruct)
 	_ = jobs.Enqueue(s.Evolve)
 
 	s.procedures <- jobs
@@ -316,8 +321,6 @@ func (s *ConlangServer) StartProcedures() {
 					return
 				}
 			}
-
-			// s.logger.Debug(gens)
 
 			// Output test data to channel.
 			go s.outputTestData(msgs, gens)
