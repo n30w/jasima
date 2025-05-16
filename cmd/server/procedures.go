@@ -344,10 +344,10 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	s.gs.Channel.ToClients <- kickoff
 
-	for !adversaryOk && !generatorOk {
-		m := <-s.gs.Channel.ToServer
+	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`
 
-		i++
+	for (!adversaryOk && !generatorOk) && i <= DefaultMaxExchanges {
+		m := <-s.gs.Channel.ToServer
 
 		var msg *chat.Message
 
@@ -409,6 +409,11 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 		time.Sleep(10 * time.Second)
 
 		s.gs.Channel.ToClients <- msg
+
+		// `i` is incremented here because an exchange is only when a message
+		// traverses the boundary of one agent to another.
+
+		i++
 
 		s.logger.Debugf("Exchanges: %d", i)
 	}
