@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -275,8 +276,59 @@ func (s *ConlangServer) Router() {
 }
 
 func (s *ConlangServer) WebEvents() {
-	go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
-	go s.ws.ListenAndServe("7070")
+	var (
+		time = func(mux *http.ServeMux) {
+			go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
+
+			mux.HandleFunc("/time", s.ws.Broadcasters.CurrentTime.HandleClient)
+		}
+
+		chatting = func(mux *http.ServeMux) {
+			mux.HandleFunc(
+				"/chat", s.ws.Broadcasters.Messages.InitialData(
+					s.ws.InitialData.RecentMessages,
+				),
+			)
+			mux.HandleFunc(
+				"/wordDetection",
+				s.ws.Broadcasters.MessageWordDictExtraction.InitialData(
+					s.ws.InitialData.RecentUsedWords,
+				),
+			)
+		}
+
+		generations = func(mux *http.ServeMux) {
+			mux.HandleFunc(
+				"/specifications",
+				s.ws.Broadcasters.Specification.InitialData(s.ws.InitialData.RecentSpecifications),
+			)
+			mux.HandleFunc(
+				"/generations",
+				s.ws.Broadcasters.Generation.InitialData(s.ws.InitialData.RecentGenerations),
+			)
+		}
+
+		testing = func(mux *http.ServeMux) {
+			mux.HandleFunc(
+				"/test/chat",
+				s.ws.Broadcasters.TestMessageFeed.InitialData(s.ws.InitialData.RecentMessages),
+			)
+			mux.HandleFunc(
+				"/test/generations",
+				s.ws.Broadcasters.TestGenerationsFeed.InitialData(
+					s.ws.InitialData.RecentGenerations,
+				),
+			)
+		}
+	)
+
+	s.ws.ListenAndServe(
+		"7070",
+		time,
+		chatting,
+		generations,
+		testing,
+	)
 }
 
 func (s *ConlangServer) StartProcedures() {
@@ -345,7 +397,7 @@ func (s *ConlangServer) ProcessJobs() {
 
 func (s *ConlangServer) Run() {
 	s.Router()
-	s.WebEvents()
+	go s.WebEvents()
 	s.StartProcedures()
 	go s.ProcessJobs()
 }
