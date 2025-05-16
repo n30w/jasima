@@ -119,14 +119,14 @@ func (c GoogleGemini) request(
 	messages []memory.Message,
 ) (string, error) {
 	if c.cfg == nil {
-		return "", errors.New("no configuration provided")
+		return "", errNoConfigurationProvided
+	}
+
+	if len(messages) == 0 {
+		return "", errNoContentsInRequest
 	}
 
 	contents := c.prepare(messages)
-
-	if len(contents) == 0 {
-		return "", errors.New("cannot send message with no contents")
-	}
 
 	var (
 		done   bool

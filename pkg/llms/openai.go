@@ -92,7 +92,11 @@ func (c openAIClient) request(
 	messages []memory.Message,
 ) (string, error) {
 	if c.cfg == nil {
-		return "", errors.New("no configuration provided")
+		return "", errNoConfigurationProvided
+	}
+
+	if len(messages) == 0 {
+		return "", errNoContentsInRequest
 	}
 
 	c.cfg.Messages = c.prepare(messages)

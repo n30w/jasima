@@ -137,21 +137,27 @@ func (cfg RequestConfig) validate() error {
 	if cfg.Temperature < 0.0 || cfg.Temperature > 1.0 {
 		return errors.New("temperature must be between 0.0 and 1.0")
 	}
+
 	if cfg.TopP < 0.0 || cfg.TopP > 1.0 {
 		return errors.New("top_p must be between 0.0 and 1.0")
 	}
+
 	if cfg.TopK < 0 {
 		return errors.New("top_k must be non-negative")
 	}
+
 	if cfg.MaxTokens < 1 {
 		return errors.New("max_tokens must be greater than 0")
 	}
+
 	if cfg.PresencePenalty < -2.0 || cfg.PresencePenalty > 2.0 {
 		return errors.New("presence_penalty must be between -2.0 and 2.0")
 	}
+
 	if cfg.FrequencyPenalty < -2.0 || cfg.FrequencyPenalty > 2.0 {
 		return errors.New("frequency_penalty must be between -2.0 and 2.0")
 	}
+
 	return nil
 }
 
@@ -171,3 +177,14 @@ var thinkTagPattern = regexp.MustCompile(`(?s)<think>.*?</think>\n?`)
 func removeThinkingTags(response string) string {
 	return thinkTagPattern.ReplaceAllString(response, "")
 }
+
+type llmError string
+
+func (l llmError) Error() string {
+	return string(l)
+}
+
+const (
+	errNoContentsInRequest     llmError = "cannot send request with no content"
+	errNoConfigurationProvided llmError = "no configuration provided"
+)

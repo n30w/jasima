@@ -25,9 +25,9 @@ const defaultOllamaUrl = "http://localhost:11434"
 type Ollama struct {
 	*llm
 	cfg    *ol.ChatRequest
-	client *ol.Client
 	logger *log.Logger
 	hc     *http.Client
+	u      *url.URL
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
@@ -59,11 +59,9 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 
 	l.Debug("Ollama is online.")
 
-	// Then set up the chat API route.
+	// Set the url path to the real path.
 
 	u.Path = "/api/chat"
-
-	cfe := ol.NewClient(u, httpClient)
 
 	newConf := mc
 	g := defaultOllamaConfig
@@ -77,9 +75,9 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 
 	return &Ollama{
 		llm:    nl,
-		client: cfe,
 		logger: l,
 		hc:     httpClient,
+		u:      u,
 	}, nil
 }
 
@@ -150,8 +148,15 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	var (
 		err    error
 		result ol.ChatResponse
-		u      = defaultOllamaUrl + "/api/chat"
+		reqUrl = c.u.String()
 	)
+	if c.cfg == nil {
+		return "", errNoConfigurationProvided
+	}
+
+	if len(messages) == 0 {
+		return "", errNoContentsInRequest
+	}
 
 	contents := c.prepare(messages)
 
@@ -163,7 +168,7 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	}
 
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, u,
+		ctx, http.MethodPost, reqUrl,
 		bytes.NewReader(body),
 	)
 	if err != nil {
