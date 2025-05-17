@@ -262,7 +262,7 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
 	)(dictSysAgent)
 
-	var updates chat.ResponseDictionaryEntries
+	var updates memory.ResponseDictionaryEntries
 
 	dictUpdates := <-s.gs.Channel.ToServer
 
@@ -327,10 +327,10 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	// Send the initial message.
 
-	initMsg := chat.ResponseLogogramIteration{
+	initMsg := memory.ResponseLogogramIteration{
 		Name: word,
 		Svg:  s.dictionary[word].Logogram,
-		ResponseText: chat.ResponseText{
+		ResponseText: memory.ResponseText{
 			Response: "This is the initial svg. We will be developing logogram for the word: " + word,
 		},
 	}
@@ -344,9 +344,9 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	s.gs.Channel.ToClients <- kickoff
 
-	logoIter := chat.LogogramIteration{
+	logoIter := memory.LogogramIteration{
 		Generator: initMsg,
-		Adversary: chat.ResponseLogogramCritique{},
+		Adversary: memory.ResponseLogogramCritique{},
 	}
 
 	err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
@@ -363,7 +363,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 		var msg *chat.Message
 
-		logoIter = chat.LogogramIteration{
+		logoIter = memory.LogogramIteration{
 			Generator: logoIter.Generator,
 			Adversary: logoIter.Adversary,
 		}
@@ -378,7 +378,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 			// Make a message for the adversary.
 
-			var res chat.ResponseLogogramIteration
+			var res memory.ResponseLogogramIteration
 
 			err := json.Unmarshal([]byte(m.Text), &res)
 			if err != nil {
@@ -402,7 +402,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 			// Make a message for the generator.
 
-			var res chat.ResponseLogogramCritique
+			var res memory.ResponseLogogramCritique
 
 			err := json.Unmarshal([]byte(m.Text), &res)
 			if err != nil {
@@ -539,7 +539,6 @@ func (s *ConlangServer) Evolve(_ context.Context) error {
 
 			entry.Word = update.Word
 			entry.Definition = update.Definition
-			entry.Remove = update.Remove
 
 			currentDict[update.Word] = entry
 		}

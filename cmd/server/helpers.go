@@ -207,9 +207,9 @@ func saveMessageTo(
 func (s *ConlangServer) extractUsedWords(
 	dict memory.DictionaryGeneration,
 	text string,
-) (chat.ResponseDictionaryWordsDetection, error) {
+) (memory.ResponseDictionaryWordsDetection, error) {
 	var (
-		usedWords chat.ResponseDictionaryWordsDetection
+		usedWords memory.ResponseDictionaryWordsDetection
 		err       error
 	)
 
@@ -232,9 +232,9 @@ func (s *ConlangServer) extractUsedWords(
 func (s *ConlangServer) findUsedWords(
 	dict memory.DictionaryGeneration,
 	text string,
-) (chat.ResponseDictionaryWordsDetection, error) {
+) (memory.ResponseDictionaryWordsDetection, error) {
 	var (
-		usedWords chat.ResponseDictionaryWordsDetection
+		usedWords memory.ResponseDictionaryWordsDetection
 		err       error
 	)
 
@@ -257,8 +257,8 @@ func (s *ConlangServer) findUsedWords(
 func (s *ConlangServer) findUsedWordsRegex(
 	dict memory.DictionaryGeneration,
 	text string,
-) chat.ResponseDictionaryWordsDetection {
-	res := chat.ResponseDictionaryWordsDetection{
+) memory.ResponseDictionaryWordsDetection {
+	res := memory.ResponseDictionaryWordsDetection{
 		Words: make([]string, 0),
 	}
 
@@ -284,8 +284,8 @@ func (s *ConlangServer) findUsedWordsRegex(
 func (s *ConlangServer) findUsedWordsAgent(
 	dict memory.DictionaryGeneration,
 	text string,
-) (chat.ResponseDictionaryWordsDetection, error) {
-	var dictionaryWords chat.ResponseDictionaryWordsDetection
+) (memory.ResponseDictionaryWordsDetection, error) {
+	var dictionaryWords memory.ResponseDictionaryWordsDetection
 
 	sysAgentDictExtractor, err := s.gs.GetClientByName("SYSTEM_AGENT_C")
 	if err != nil {

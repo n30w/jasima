@@ -100,7 +100,6 @@ type ModelConfig struct {
 	Provider     LLMProvider
 	Instructions string
 	Initialize   string
-	Temperature  float64
 	RequestConfig
 }
 

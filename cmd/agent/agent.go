@@ -254,19 +254,19 @@ func (c *client) action(
 
 	case agent.RequestJsonDictionaryUpdate:
 
-		go typedRequest[chat.ResponseDictionaryEntries](ctx, msg, c)
+		go typedRequest[memory.ResponseDictionaryEntries](ctx, msg, c)
 
 	case agent.RequestLogogramIteration:
 
-		go typedRequest[chat.ResponseLogogramIteration](ctx, msg, c)
+		go typedRequest[memory.ResponseLogogramIteration](ctx, msg, c)
 
 	case agent.RequestLogogramCritique:
 
-		go typedRequest[chat.ResponseLogogramCritique](ctx, msg, c)
+		go typedRequest[memory.ResponseLogogramCritique](ctx, msg, c)
 
 	case agent.RequestDictionaryWordDetection:
 
-		go typedRequest[chat.ResponseDictionaryWordsDetection](ctx, msg, c)
+		go typedRequest[memory.ResponseDictionaryWordsDetection](ctx, msg, c)
 
 	case agent.SendInitialMessage:
 

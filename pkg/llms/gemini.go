@@ -53,14 +53,7 @@ func NewGoogleGemini(
 
 func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateContentConfig {
 	params := &genai.GenerateContentConfig{
-		Temperature: genai.Ptr(
-			float32(
-				c.setTemperature(
-					c.defaultConfig.
-						Temperature,
-				),
-			),
-		),
+		Temperature:     genai.Ptr(float32(c.setTemperature(c.defaultConfig.Temperature))),
 		MaxOutputTokens: int32(c.defaultConfig.MaxTokens),
 		Seed:            genai.Ptr(int32(c.defaultConfig.Seed)),
 		// PresencePenalty:  genai.Ptr(float32(c.defaultConfig.PresencePenalty)),
@@ -69,14 +62,7 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 
 	if rc != nil {
 		params = &genai.GenerateContentConfig{
-			Temperature: genai.Ptr(
-				float32(
-					c.setTemperature(
-						rc.
-							Temperature,
-					),
-				),
-			),
+			Temperature:     genai.Ptr(float32(c.setTemperature(rc.Temperature))),
 			MaxOutputTokens: int32(rc.MaxTokens),
 			Seed:            genai.Ptr(int32(rc.Seed)),
 			// PresencePenalty:  genai.Ptr(float32(rc.PresencePenalty)),

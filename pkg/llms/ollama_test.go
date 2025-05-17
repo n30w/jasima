@@ -33,7 +33,6 @@ func buildTestOllama(t *testing.T) (*Ollama, error) {
 	mc := ModelConfig{
 		Provider:      ProviderOllama,
 		Instructions:  "instructions are added later in test cases.",
-		Temperature:   0.75,
 		RequestConfig: *defaultOllamaConfig,
 	}
 

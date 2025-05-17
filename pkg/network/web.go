@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/memory"
 	"codeberg.org/n30w/jasima/pkg/utils"
 
@@ -152,10 +151,10 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 
 type Broadcasters struct {
 	Messages                  *Broadcaster[memory.Message]
-	MessageWordDictExtraction *Broadcaster[chat.ResponseDictionaryWordsDetection]
+	MessageWordDictExtraction *Broadcaster[memory.ResponseDictionaryWordsDetection]
 	Generation                *Broadcaster[memory.Generation]
 	Specification             *Broadcaster[memory.SpecificationGeneration]
-	LogogramDisplay           *Broadcaster[chat.LogogramIteration]
+	LogogramDisplay           *Broadcaster[memory.LogogramIteration]
 	CurrentTime               *Broadcaster[string]
 	TestMessageFeed           *Broadcaster[memory.Message]
 	TestGenerationsFeed       *Broadcaster[memory.Generation]
@@ -164,10 +163,10 @@ type Broadcasters struct {
 func NewBroadcasters(l *log.Logger) *Broadcasters {
 	return &Broadcasters{
 		Messages:                  NewBroadcaster[memory.Message](l),
-		MessageWordDictExtraction: NewBroadcaster[chat.ResponseDictionaryWordsDetection](l),
+		MessageWordDictExtraction: NewBroadcaster[memory.ResponseDictionaryWordsDetection](l),
 		Generation:                NewBroadcaster[memory.Generation](l),
 		Specification:             NewBroadcaster[memory.SpecificationGeneration](l),
-		LogogramDisplay:           NewBroadcaster[chat.LogogramIteration](l),
+		LogogramDisplay:           NewBroadcaster[memory.LogogramIteration](l),
 		CurrentTime:               NewBroadcaster[string](l),
 		TestMessageFeed:           NewBroadcaster[memory.Message](l),
 		TestGenerationsFeed:       NewBroadcaster[memory.Generation](l),
@@ -216,9 +215,9 @@ func addEventHeaders(w http.ResponseWriter) {
 type InitialData struct {
 	RecentMessages       *utils.FixedQueue[memory.Message]
 	RecentGenerations    *utils.FixedQueue[memory.Generation]
-	RecentLogogram       *utils.FixedQueue[chat.LogogramIteration]
+	RecentLogogram       *utils.FixedQueue[memory.LogogramIteration]
 	RecentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
-	RecentUsedWords      *utils.FixedQueue[chat.ResponseDictionaryWordsDetection]
+	RecentUsedWords      *utils.FixedQueue[memory.ResponseDictionaryWordsDetection]
 }
 
 func NewInitialData() (*InitialData, error) {
@@ -243,12 +242,12 @@ func NewInitialData() (*InitialData, error) {
 		)
 	}
 
-	usedWords, err := utils.NewFixedQueue[chat.ResponseDictionaryWordsDetection](2)
+	usedWords, err := utils.NewFixedQueue[memory.ResponseDictionaryWordsDetection](2)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make recent used words queue")
 	}
 
-	rl, err := utils.NewFixedQueue[chat.LogogramIteration](2)
+	rl, err := utils.NewFixedQueue[memory.LogogramIteration](2)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make recent logogram queue")
 	}

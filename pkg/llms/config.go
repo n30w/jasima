@@ -1,7 +1,7 @@
 package llms
 
 var defaultDeepseekConfig = &RequestConfig{
-	Temperature:      1.72,
+	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,
 	MaxTokens:        4096,
@@ -28,7 +28,7 @@ var defaultChatGPTConfig = &RequestConfig{
 }
 
 var defaultGeminiConfig = &RequestConfig{
-	Temperature:      1.75,
+	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,
 	MaxTokens:        8192,
@@ -37,7 +37,7 @@ var defaultGeminiConfig = &RequestConfig{
 }
 
 var defaultOllamaConfig = &RequestConfig{
-	Temperature:      1.75,
+	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,
 	MaxTokens:        3000,
