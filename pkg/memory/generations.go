@@ -74,7 +74,7 @@ func (d DictionaryGeneration) MarshalJSON() ([]byte, error) {
 }
 
 type DictionaryEntry struct {
-	chat.DictionaryEntryResponse
+	chat.ResponseDictionaryEntry
 
 	// Logogram is the logogram of the word.
 	Logogram string `json:"logogram,omitempty" jsonschema_description:"Dictionary entry logogram"`

@@ -262,7 +262,7 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
 	)(dictSysAgent)
 
-	var updates chat.DictionaryEntriesResponse
+	var updates chat.ResponseDictionaryEntries
 
 	dictUpdates := <-s.gs.Channel.ToServer
 
@@ -327,10 +327,10 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	// Send the initial message.
 
-	initMsg := chat.AgentLogogramIterationResponse{
+	initMsg := chat.ResponseLogogramIteration{
 		Name: word,
 		Svg:  s.dictionary[word].Logogram,
-		AgentResponseText: chat.AgentResponseText{
+		ResponseText: chat.ResponseText{
 			Response: "This is the initial svg. We will be developing logogram for the word: " + word,
 		},
 	}
@@ -346,7 +346,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	logoIter := chat.LogogramIteration{
 		Generator: initMsg,
-		Adversary: chat.AgentLogogramCritiqueResponse{},
+		Adversary: chat.ResponseLogogramCritique{},
 	}
 
 	err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
@@ -358,7 +358,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`
 
-	for (!adversaryOk && !generatorOk) && i <= DefaultMaxExchanges {
+	for (!adversaryOk || !generatorOk) && i <= DefaultMaxExchanges {
 		m := <-s.gs.Channel.ToServer
 
 		var msg *chat.Message
@@ -378,7 +378,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 			// Make a message for the adversary.
 
-			var res chat.AgentLogogramIterationResponse
+			var res chat.ResponseLogogramIteration
 
 			err := json.Unmarshal([]byte(m.Text), &res)
 			if err != nil {
@@ -402,7 +402,7 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 			// Make a message for the generator.
 
-			var res chat.AgentLogogramCritiqueResponse
+			var res chat.ResponseLogogramCritique
 
 			err := json.Unmarshal([]byte(m.Text), &res)
 			if err != nil {

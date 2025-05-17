@@ -152,7 +152,7 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 
 type Broadcasters struct {
 	Messages                  *Broadcaster[memory.Message]
-	MessageWordDictExtraction *Broadcaster[chat.AgentDictionaryWordsDetectionResponse]
+	MessageWordDictExtraction *Broadcaster[chat.ResponseDictionaryWordsDetection]
 	Generation                *Broadcaster[memory.Generation]
 	Specification             *Broadcaster[memory.SpecificationGeneration]
 	LogogramDisplay           *Broadcaster[chat.LogogramIteration]
@@ -164,7 +164,7 @@ type Broadcasters struct {
 func NewBroadcasters(l *log.Logger) *Broadcasters {
 	return &Broadcasters{
 		Messages:                  NewBroadcaster[memory.Message](l),
-		MessageWordDictExtraction: NewBroadcaster[chat.AgentDictionaryWordsDetectionResponse](l),
+		MessageWordDictExtraction: NewBroadcaster[chat.ResponseDictionaryWordsDetection](l),
 		Generation:                NewBroadcaster[memory.Generation](l),
 		Specification:             NewBroadcaster[memory.SpecificationGeneration](l),
 		LogogramDisplay:           NewBroadcaster[chat.LogogramIteration](l),
@@ -218,7 +218,7 @@ type InitialData struct {
 	RecentGenerations    *utils.FixedQueue[memory.Generation]
 	RecentLogogram       *utils.FixedQueue[chat.LogogramIteration]
 	RecentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
-	RecentUsedWords      *utils.FixedQueue[chat.AgentDictionaryWordsDetectionResponse]
+	RecentUsedWords      *utils.FixedQueue[chat.ResponseDictionaryWordsDetection]
 }
 
 func NewInitialData() (*InitialData, error) {
@@ -243,7 +243,7 @@ func NewInitialData() (*InitialData, error) {
 		)
 	}
 
-	usedWords, err := utils.NewFixedQueue[chat.AgentDictionaryWordsDetectionResponse](2)
+	usedWords, err := utils.NewFixedQueue[chat.ResponseDictionaryWordsDetection](2)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make recent used words queue")
 	}

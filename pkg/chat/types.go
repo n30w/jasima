@@ -175,37 +175,39 @@ func NewPbMessage(
 	return m
 }
 
-type AgentResponseStop struct {
+// type selfTunableParameters struct{}
+
+type responseStop struct {
 	Stop bool `json:"stop" jsonschema_description:"Indicates if you want to end the conversation"`
 }
 
-type AgentResponseText struct {
+type ResponseText struct {
 	Response string `json:"response" jsonschema_description:"Your response"`
 }
 
-type AgentLogogramIterationResponse struct {
+type ResponseLogogramIteration struct {
 	Name string `json:"name" jsonschema_description:"Logogram name"`
 	Svg  string `json:"svg" jsonschema_description:"Logogram svg"`
-	AgentResponseText
-	AgentResponseStop
+	ResponseText
+	responseStop
 }
 
-type AgentLogogramCritiqueResponse struct {
+type ResponseLogogramCritique struct {
 	Name string `json:"name" jsonschema_description:"Logogram name"`
-	AgentResponseText
-	AgentResponseStop
+	ResponseText
+	responseStop
 }
 
-type AgentDictionaryWordsDetectionResponse struct {
+type ResponseDictionaryWordsDetection struct {
 	Words []string `json:"words" jsonschema_description:"Words in the dictionary from the text"`
 }
 
 type LogogramIteration struct {
-	Generator AgentLogogramIterationResponse `json:"generator"`
-	Adversary AgentLogogramCritiqueResponse  `json:"adversary"`
+	Generator ResponseLogogramIteration `json:"generator"`
+	Adversary ResponseLogogramCritique  `json:"adversary"`
 }
 
-type DictionaryEntryResponse struct {
+type ResponseDictionaryEntry struct {
 	Word       string `json:"word" jsonschema_description:"Dictionary entry word"`
 	Definition string `json:"definition" jsonschema_description:"Dictionary entry definition"`
 
@@ -216,6 +218,6 @@ type DictionaryEntryResponse struct {
 	Remove bool `json:"remove" jsonschema_description:"Remove word"`
 }
 
-type DictionaryEntriesResponse struct {
-	Entries []DictionaryEntryResponse `json:"entries" jsonschema_description:"Dictionary entries"`
+type ResponseDictionaryEntries struct {
+	Entries []ResponseDictionaryEntry `json:"entries" jsonschema_description:"Dictionary entries"`
 }

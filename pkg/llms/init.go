@@ -27,7 +27,7 @@ func init() {
 	schemas = newSchemaRegistry()
 
 	schemas.register(
-		reflect.TypeOf(chat.AgentResponseText{}), &schema{
+		reflect.TypeOf(chat.ResponseText{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -41,13 +41,13 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "response",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[chat.AgentResponseText](),
+				Schema: utils.GenerateSchema[chat.ResponseText](),
 			},
 		},
 	)
 
 	schemas.register(
-		reflect.TypeOf(chat.DictionaryEntriesResponse{}), &schema{
+		reflect.TypeOf(chat.ResponseDictionaryEntries{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -79,13 +79,13 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "dictionary_entries",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[chat.DictionaryEntriesResponse](),
+				Schema: utils.GenerateSchema[chat.ResponseDictionaryEntries](),
 			},
 		},
 	)
 
 	schemas.register(
-		reflect.TypeOf(chat.AgentLogogramIterationResponse{}), &schema{
+		reflect.TypeOf(chat.ResponseLogogramIteration{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -105,13 +105,13 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_iteration",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[chat.AgentLogogramIterationResponse](),
+				Schema: utils.GenerateSchema[chat.ResponseLogogramIteration](),
 			},
 		},
 	)
 
 	schemas.register(
-		reflect.TypeOf(chat.AgentLogogramCritiqueResponse{}), &schema{
+		reflect.TypeOf(chat.ResponseLogogramCritique{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -127,13 +127,13 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "logogram_critique",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[chat.AgentLogogramCritiqueResponse](),
+				Schema: utils.GenerateSchema[chat.ResponseLogogramCritique](),
 			},
 		},
 	)
 
 	schemas.register(
-		reflect.TypeOf(chat.AgentDictionaryWordsDetectionResponse{}), &schema{
+		reflect.TypeOf(chat.ResponseDictionaryWordsDetection{}), &schema{
 			gemini: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -150,7 +150,7 @@ func init() {
 			openai: &openai.ResponseFormatJSONSchemaJSONSchemaParam{
 				Name:   "dictionary_words",
 				Strict: openai.Bool(true),
-				Schema: utils.GenerateSchema[chat.AgentDictionaryWordsDetectionResponse](),
+				Schema: utils.GenerateSchema[chat.ResponseDictionaryWordsDetection](),
 			},
 		},
 	)

@@ -49,7 +49,7 @@ type ConlangServer struct {
 	gs              *network.ChatServer
 	config          *config
 	procedureChan   chan memory.Message
-	dictUpdatesChan chan chat.DictionaryEntriesResponse
+	dictUpdatesChan chan chat.ResponseDictionaryEntries
 	procedures      chan *utils.FixedQueue[job]
 	dictionary      memory.DictionaryGeneration
 	generations     *utils.FixedQueue[memory.Generation]
@@ -157,7 +157,7 @@ func NewConlangServer(
 		procedureChan: make(chan memory.Message),
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
-		dictUpdatesChan: make(chan chat.DictionaryEntriesResponse, 1),
+		dictUpdatesChan: make(chan chat.ResponseDictionaryEntries, 1),
 		procedures:      make(chan *utils.FixedQueue[job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
