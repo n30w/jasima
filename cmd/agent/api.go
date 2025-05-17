@@ -23,39 +23,13 @@ func (c *client) Teardown() error {
 	return nil
 }
 
-func (c *client) request(ctx context.Context) (
-	chat.Content,
-	error,
-) {
-	a, err := c.stm.Retrieve(ctx, c.Name, 0)
-	if err != nil {
-		return "", err
-	}
-
-	c.logger.Debug("Sending message to LLM now!")
-
-	t := utils.Timer(time.Now())
-
-	result, err := c.llm.Request(ctx, a, nil)
-	if err != nil {
-		return "", err
-	}
-
-	c.logger.Debugf("LLM responded in %s", t().Truncate(1*time.Millisecond))
-
-	return chat.Content(result), nil
-}
-
-func (c *client) DispatchToLLM(
-	ctx context.Context,
-	msg *memory.Message,
-) {
+func (c *client) DispatchToLLM(ctx context.Context, msg *memory.Message) {
 	select {
 	case <-ctx.Done():
-		c.logger.Warn("Exiting dispatch, context canceled")
+		c.logger.Warn("dispatch context cancelled")
 		return
 	default:
-		err := c.stm.Save(ctx, c.NewMessageFrom(msg.Sender, msg.Text))
+		a, err := c.stm.Retrieve(ctx, c.Name, 0)
 		if err != nil {
 			c.channels.errs <- err
 			return
@@ -63,15 +37,25 @@ func (c *client) DispatchToLLM(
 
 		time.Sleep(time.Second * c.sleepDuration)
 
-		res, err := c.request(ctx)
+		c.logger.Debug("Sending message to LLM now!")
+
+		t := utils.Timer(time.Now())
+
+		// Make the request
+
+		result, err := c.llm.Request(ctx, a, nil)
 		switch {
 		case errors.Is(err, context.Canceled):
-			c.logger.Warn("Exiting dispatch, context canceled")
+			c.logger.Warn("llm request context cancelled")
 			return
 		case err != nil:
 			c.channels.errs <- errors.Wrap(err, "request to llm failed")
 			return
 		}
+
+		c.logger.Debugf("LLM responded in %s", t().Truncate(1*time.Millisecond))
+
+		res := chat.Content(result)
 
 		// Save the LLM's response to memory.
 
@@ -133,14 +117,14 @@ func (c *client) Router() {
 			return nil
 		}
 
-		prevCancel context.CancelCauseFunc
+		prevCancel context.CancelFunc
 
 		// id is the context id. It increments everytime a new message is
 		// received.
 		id int
 
 		messageRouter = func(ctx context.Context, pbMsg *chat.Message) error {
-			msgCtx, cancel := context.WithCancelCause(ctx)
+			msgCtx, cancel := context.WithCancel(ctx)
 			msg := memory.NewChatMessage(
 				pbMsg.Sender, pbMsg.Receiver,
 				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
@@ -148,21 +132,39 @@ func (c *client) Router() {
 
 			err := c.action(msgCtx, prevCancel, id, msg)
 			if err != nil {
-				cancel(err)
+				cancel()
 				return err
 			}
 
 			prevCancel = cancel
 
-			go func(ctx context.Context, ctxId int) {
-				<-ctx.Done()
-				err := context.Cause(ctx)
-				if err != nil {
-					c.logger.Warnf("Cancelled context %d because %s", ctxId, err)
-				}
-			}(msgCtx, id)
+			// go func(parentCtx context.Context, ctxId int) {
+			// 	ctx, cancel := context.WithCancelCause(parentCtx)
+			// 	defer cancel(context.Cause(parentCtx))
+			// 	<-ctx.Done()
+			// 	err := context.Cause(ctx)
+			// 	if err != nil {
+			// 		c.logger.Warnf("Cancelled context %d because %s", ctxId, err)
+			// 	}
+			// }(msgCtx, id)
 
 			id++
+
+			return nil
+		}
+
+		saveMessage = func(ctx context.Context, pbMsg *chat.Message) error {
+			msg := memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
+
+			if msg.Command == agent.NoCommand && msg.Text != "" {
+				err := c.stm.Save(ctx, c.NewMessageFrom(msg.Sender, msg.Text))
+				if err != nil {
+					return err
+				}
+			}
 
 			return nil
 		}
@@ -171,6 +173,7 @@ func (c *client) Router() {
 	routeMessage := chat.BuildRouter[*chat.Message](
 		c.channels.inbound,
 		printConsoleData,
+		saveMessage,
 		messageRouter,
 	)
 

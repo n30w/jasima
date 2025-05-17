@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -213,21 +212,18 @@ func newClient(
 // was received.
 func (c *client) action(
 	ctx context.Context,
-	prevCtxCancel context.CancelCauseFunc,
+	prevCtxCancel context.CancelFunc,
 	ctxId int,
 	msg *memory.Message,
 ) error {
-	var (
-		err       error
-		statusMsg = fmt.Sprintf("%s was executed from context %d", msg.Command, ctxId)
-	)
+	var err error
 
 	// Before any action is executed, cancel the context that came before the
 	// current context. This will cancel contexts used in go routines launched
 	// by this function and may therefore cause a context canceled error.
 
 	if prevCtxCancel != nil {
-		prevCtxCancel(errors.New(statusMsg))
+		prevCtxCancel()
 	}
 
 	switch msg.Command {
@@ -314,17 +310,13 @@ func (c *client) action(
 			// Send the data to the LLM.
 			if c.latch {
 				c.logger.Debug("Latch is TRUE. Only saving message...")
-				err = c.stm.Save(
-					ctx, c.NewMessageFrom(
-						msg.Receiver,
-						msg.Text,
-					),
-				)
+				err = c.stm.Save(ctx, c.NewMessageFrom(msg.Receiver, msg.Text))
 				if err != nil {
 					return err
 				}
 			} else {
 				c.logger.Debug("Dispatching message to LLM service...")
+				c.logger.Debugf("In CTX: %d", ctxId)
 				go c.DispatchToLLM(ctx, msg)
 			}
 		}
@@ -337,9 +329,7 @@ func (c *client) action(
 // response is serialized as a string so that it can be sent over gRPC. Ideally,
 // this should be changed so that the gRPC channel accepts type `T` from the
 // request return, however this will do for now.
-func typedRequest[T any](
-	ctx context.Context, msg *memory.Message, c *client,
-) {
+func typedRequest[T any](ctx context.Context, msg *memory.Message, c *client) {
 	select {
 	case <-ctx.Done():
 		c.logger.Warn("Exiting dispatch, context canceled")
