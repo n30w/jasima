@@ -554,6 +554,8 @@ func (s *ConlangServer) Evolve(_ context.Context) error {
 
 		newGeneration.Logography[w] = svg
 
+		s.dictionary = newGeneration.Dictionary.Copy()
+
 		err = s.generations.Enqueue(newGeneration)
 		if err != nil {
 			return errors.Wrapf(
