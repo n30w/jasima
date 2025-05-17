@@ -317,7 +317,7 @@ func (c *client) action(
 			} else {
 				c.logger.Debug("Dispatching message to LLM service...")
 				c.logger.Debugf("In CTX: %d", ctxId)
-				go c.DispatchToLLM(ctx, msg)
+				go c.DispatchToLLM(ctx)
 			}
 		}
 	}

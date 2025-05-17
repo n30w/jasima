@@ -23,7 +23,7 @@ func (c *client) Teardown() error {
 	return nil
 }
 
-func (c *client) DispatchToLLM(ctx context.Context, msg *memory.Message) {
+func (c *client) DispatchToLLM(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		c.logger.Warn("dispatch context cancelled")
