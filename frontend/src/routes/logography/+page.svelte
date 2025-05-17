@@ -10,7 +10,7 @@
 
 	let advRes: string = $state('');
 	let genRes: string = $state('');
-	let svg: string = $state('');
+	let svg: string = $state.raw('');
 
 	$effect(() => {
 		const es = new EventSource(src);
@@ -36,14 +36,13 @@
 
 <div class="">
 	<div class="flex min-h-screen flex-col items-center justify-center">
-		{#key svg}
-			<div
-				class="border-1 h-1/2 w-1/2 border-dashed"
-				transition:fly={{ duration: 200, easing: quintOut }}
-			>
-				{@html svg}
-			</div>
-		{/key}
+		<div class="border-1 h-1/2 w-1/2 border-dashed">
+			{#key svg}
+				<div transition:fly={{ duration: 300, x: -300, y: -500, easing: quintOut }}>
+					{@html svg}
+				</div>
+			{/key}
+		</div>
 	</div>
 	<div class="absolute left-10 top-10 w-1/2">
 		<h1 class="pb-2 font-light tracking-widest">GENERATOR</h1>
@@ -51,10 +50,10 @@
 			<p class="text-sm" in:typewriter={{ speed: 20 }}>{genRes}</p>
 		{/key}
 	</div>
-	<div class="absolute bottom-10 left-10 w-1/2">
-		<h1 class="font-light tracking-widest">ADVERSARY</h1>
+	<div class="absolute bottom-10 right-10 w-1/2">
+		<h1 class="w-full text-right font-light tracking-widest">ADVERSARY</h1>
 		{#key advRes}
-			<p class="text-sm" in:typewriter={{ speed: 20 }}>{advRes}</p>
+			<p class="text-right text-sm" in:typewriter={{ speed: 20 }}>{advRes}</p>
 		{/key}
 	</div>
 </div>

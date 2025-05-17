@@ -35,10 +35,9 @@ type agentLogogramIterResponse = {
 
 type agentLogogramAdversaryResp = agentLogogramIterResponse;
 
-type agentLogogramGeneratorResp = {
+interface agentLogogramGeneratorResp extends agentLogogramIterResponse {
 	svg: string;
-	agentLogogramIterResponse;
-};
+}
 
 type LogogramIteration = {
 	generator: agentLogogramGeneratorResp;
