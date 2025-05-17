@@ -50,7 +50,7 @@ func (c Claude) Request(
 	messages []memory.Message,
 	rc *RequestConfig,
 ) (string, error) {
-	c.cfg = c.buildRequestParams(rc)
+	c.config = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {

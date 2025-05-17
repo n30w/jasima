@@ -14,9 +14,8 @@ import (
 )
 
 type GoogleGemini struct {
-	*llm
+	*llm[genai.GenerateContentConfig]
 	client *genai.Client
-	cfg    *genai.GenerateContentConfig
 }
 
 func NewGoogleGemini(
@@ -40,7 +39,7 @@ func NewGoogleGemini(
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
-	l, err := newLLM(newConf, logger)
+	l, err := newLLM[genai.GenerateContentConfig](newConf, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Gemini client")
 	}
@@ -89,7 +88,7 @@ func (c GoogleGemini) Request(
 	messages []memory.Message,
 	rc *RequestConfig,
 ) (string, error) {
-	c.cfg = c.buildRequestParams(rc)
+	c.config = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
@@ -105,19 +104,19 @@ func (c GoogleGemini) request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	if c.cfg == nil {
-		return "", errNoConfigurationProvided
-	}
+	var err error
 
-	if len(messages) == 0 {
-		return "", errNoContentsInRequest
+	_, err = c.llm.request(ctx, messages)
+	if err != nil {
+		return "", err
 	}
 
 	contents := c.prepare(messages)
 
+	// Before doing anything, mediate rate of request for rate limits.
+
 	var (
 		done   bool
-		err    error
 		tries  int
 		apiErr genai.APIError
 		res    *genai.GenerateContentResponse
@@ -135,7 +134,7 @@ func (c GoogleGemini) request(
 			ctx,
 			c.model.String(),
 			contents,
-			c.cfg,
+			c.config,
 		)
 		if err != nil {
 			ok := errors.As(err, &apiErr)
@@ -223,10 +222,10 @@ func RequestTypedGoogleGemini[T any](
 		return "", errors.Wrap(err, "failed to retrieve schema for gemini")
 	}
 
-	llm.cfg = llm.buildRequestParams(rc)
+	llm.config = llm.buildRequestParams(rc)
 
-	llm.cfg.ResponseMIMEType = "application/json"
-	llm.cfg.ResponseSchema = s.gemini
+	llm.config.ResponseMIMEType = "application/json"
+	llm.config.ResponseSchema = s.gemini
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {

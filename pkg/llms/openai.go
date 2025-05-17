@@ -11,16 +11,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ChatGPTBaseURL is blank because the OpenAI client library assumes GPT on a
+// defaultChatGPTUrl is blank because the OpenAI client library assumes GPT on a
 // blank base URL.
-const ChatGPTBaseURL = ""
+const defaultChatGPTUrl = ""
 
 // openAIClient wraps the openai library. Use to create custom OpenAI
 // API compatible LLM services.
 type openAIClient struct {
-	*llm
+	*llm[openai.ChatCompletionNewParams]
 	client *openai.Client
-	cfg    *openai.ChatCompletionNewParams
 }
 
 // newOpenAIClient makes a new OpenAI API compatible client. It returns
@@ -33,7 +32,7 @@ func newOpenAIClient(
 ) func(mc ModelConfig) (*openAIClient, error) {
 	var c openai.Client
 
-	if baseUrl == ChatGPTBaseURL {
+	if baseUrl == defaultChatGPTUrl {
 		c = openai.NewClient(option.WithAPIKey(apiKey))
 	} else {
 		c = openai.NewClient(
@@ -43,7 +42,7 @@ func newOpenAIClient(
 	}
 
 	return func(mc ModelConfig) (*openAIClient, error) {
-		l, err := newLLM(mc, logger)
+		l, err := newLLM[openai.ChatCompletionNewParams](mc, logger)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create new openAI client")
 		}
@@ -91,20 +90,16 @@ func (c openAIClient) request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	if c.cfg == nil {
-		return "", errNoConfigurationProvided
+	var err error
+
+	_, err = c.llm.request(ctx, messages)
+	if err != nil {
+		return "", err
 	}
 
-	if len(messages) == 0 {
-		return "", errNoContentsInRequest
-	}
+	c.config.Messages = c.prepare(messages)
 
-	c.cfg.Messages = c.prepare(messages)
-
-	result, err := c.client.Chat.Completions.New(
-		ctx,
-		*c.cfg,
-	)
+	result, err := c.client.Chat.Completions.New(ctx, *c.config)
 	if err != nil {
 		return "", errors.Wrap(
 			err,
@@ -142,12 +137,4 @@ func (c openAIClient) prepare(
 	}
 
 	return contents
-}
-
-func (c openAIClient) AppendInstructions(s string) {
-	c.instructions = buildString(c.instructions, s)
-}
-
-func (c openAIClient) String() string {
-	return c.model.String()
 }

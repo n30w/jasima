@@ -1,10 +1,13 @@
 package llms
 
 import (
+	"context"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
+
+	"codeberg.org/n30w/jasima/pkg/memory"
 )
 
 const (
@@ -12,27 +15,34 @@ const (
 	retryInterval     = 180 * time.Second
 )
 
-type llm struct {
-	// model is the name of the model.
+// llm is a base type for a Large Language Model. The generic `T` is the type
+// for the request configuration, passed to the model specific library
+// request method.
+type llm[T any] struct {
+	// model is the llm service provider.
 	model LLMProvider
 
-	// instructions is a system instruction.
+	// instructions are the system instructions for the model.
 	instructions string
 
+	// defaultConfig is the default configuration for a given model.
 	defaultConfig *RequestConfig
 
+	// config is the configuration used for each request of the LLM.
+	config *T
+
+	// logger is for logging data to the console.
 	logger *log.Logger
 }
 
-func newLLM(mc ModelConfig, l *log.Logger) (*llm, error) {
+// newLLM creates a new llm base.
+func newLLM[T any](mc ModelConfig, l *log.Logger) (*llm[T], error) {
 	err := mc.validate()
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid model config")
 	}
 
-	l.Debugf("Creating new LLM instance with these options: %+v", mc)
-
-	return &llm{
+	return &llm[T]{
 		model:         mc.Provider,
 		instructions:  mc.Instructions,
 		defaultConfig: &mc.RequestConfig,
@@ -40,8 +50,31 @@ func newLLM(mc ModelConfig, l *log.Logger) (*llm, error) {
 	}, nil
 }
 
-func (l *llm) SetInstructions(s string) {
+func (l *llm[T]) SetInstructions(s string) {
 	l.instructions = s
+}
+
+func (l *llm[T]) AppendInstructions(s string) {
+	l.instructions = buildString(l.instructions, s)
+}
+
+func (l *llm[T]) String() string {
+	return l.model.String()
+}
+
+// request checks that a request to an LLM service is ready to be made. This
+// method should be shadowed by any LLM service that is composed of the LLM
+// base.
+func (l *llm[T]) request(_ context.Context, messages []memory.Message) (string, error) {
+	if l.config == nil {
+		return "", errNoConfigurationProvided
+	}
+
+	if len(messages) == 0 {
+		return "", errNoContentsInRequest
+	}
+
+	return "", nil
 }
 
 // setTemperature remaps a temperature value, such as 0.5, to a model specific
@@ -49,7 +82,7 @@ func (l *llm) SetInstructions(s string) {
 // typical 0.0 to 1.0. This function lets config parameters maintain a
 // consistent input mapping of 0.0 to 1.0 rather than having two
 // different mappings.
-func (l *llm) setTemperature(t float64) float64 {
+func (l *llm[T]) setTemperature(t float64) float64 {
 	switch l.model {
 	case ProviderGoogleGemini_2_0_Flash:
 		fallthrough
@@ -75,7 +108,7 @@ const (
 )
 
 func (l LLMProvider) String() string {
-	s := "INVALID PROVIDER"
+	var s string
 
 	switch l {
 	case ProviderGoogleGemini_2_0_Flash:
@@ -91,6 +124,7 @@ func (l LLMProvider) String() string {
 	case ProviderClaude:
 		s = "claude-3-5-haiku-20241022"
 	default:
+		s = "INVALID PROVIDER"
 	}
 
 	return s
@@ -99,7 +133,6 @@ func (l LLMProvider) String() string {
 type ModelConfig struct {
 	Provider     LLMProvider
 	Instructions string
-	Initialize   string
 	RequestConfig
 }
 
@@ -120,6 +153,8 @@ func (cfg *ModelConfig) validate() error {
 	return nil
 }
 
+// RequestConfig is a set of possible configurations for a request to an
+// LLM service.
 type RequestConfig struct {
 	Temperature      float64
 	Seed             int64

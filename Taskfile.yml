@@ -51,10 +51,10 @@ tasks:
       - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_c.toml" -debug=true -model=1
   run-agent-system-logogram-gen:
     cmds:
-      - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_logogram.toml" -debug=true -model=1 -name="SYSTEM_AGENT_D"
+      - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_logogram.toml" -debug=true -model=5 -name="SYSTEM_AGENT_D" -temperature=0.75
   run-agent-system-logogram-adv:
     cmds:
-      - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_logogram.toml" -debug=true -model=5 -name="SYSTEM_AGENT_E"
+      - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_logogram.toml" -debug=true -model=1 -name="SYSTEM_AGENT_E" -temperature=0.75
   run-server:
     cmds:
       - go run ./cmd/server -debug=true -logToFile=false -exchanges=7 -generations=2 -broadcastTestData=false

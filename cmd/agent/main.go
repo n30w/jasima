@@ -52,11 +52,6 @@ func main() {
 			DefaultTemperatureFloat,
 			"float64 model temperature",
 		)
-		flagInitializePath = flag.String(
-			"initialize",
-			DefaultInitializationFilePath,
-			"initial message file path",
-		)
 		flagLayer = flag.Int(
 			"layer",
 			DefaultLayer,
@@ -105,10 +100,6 @@ func main() {
 
 	if *flagTemperature != DefaultTemperatureFloat {
 		userConf.Model.Temperature = *flagTemperature
-	}
-
-	if *flagInitializePath != DefaultInitializationFilePath {
-		userConf.Model.Initialize = *flagInitializePath
 	}
 
 	if *flagLayer != DefaultLayer {

@@ -20,8 +20,7 @@ import (
 const defaultOllamaUrl = "http://localhost:11434"
 
 type Ollama struct {
-	*llm
-	cfg    *ol.ChatRequest
+	*llm[ol.ChatRequest]
 	logger *log.Logger
 	hc     *network.HttpRequestClient[ol.ChatResponse]
 	u      *url.URL
@@ -54,7 +53,7 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
-	nl, err := newLLM(newConf, l)
+	nl, err := newLLM[ol.ChatRequest](newConf, l)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create ollama client")
 	}
@@ -116,7 +115,7 @@ func (c Ollama) Request(
 ) {
 	var err error
 
-	c.cfg, err = c.buildRequestParams(rc)
+	c.config, err = c.buildRequestParams(rc)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to build request params")
 	}
@@ -135,17 +134,16 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
-	if c.cfg == nil {
-		return "", errNoConfigurationProvided
+	var err error
+
+	_, err = c.llm.request(ctx, messages)
+	if err != nil {
+		return "", err
 	}
 
-	if len(messages) == 0 {
-		return "", errNoContentsInRequest
-	}
+	c.config.Messages = c.prepare(messages)
 
-	c.cfg.Messages = c.prepare(messages)
-
-	request, err := c.hc.PreparePost(c.cfg)
+	request, err := c.hc.PreparePost(c.config)
 	if err != nil {
 		return "", err
 	}
@@ -189,10 +187,6 @@ func (c Ollama) String() string {
 	return fmt.Sprintf("Ollama %s", c.model)
 }
 
-func (c Ollama) AppendInstructions(s string) {
-	c.instructions = buildString(c.instructions, s)
-}
-
 func RequestTypedOllama[T any](
 	ctx context.Context,
 	messages []memory.Message,
@@ -209,7 +203,7 @@ func RequestTypedOllama[T any](
 		return "", errors.Wrap(err, "failed to lookup type")
 	}
 
-	llm.cfg, err = llm.buildRequestParams(rc)
+	llm.config, err = llm.buildRequestParams(rc)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to build request params")
 	}
@@ -219,7 +213,7 @@ func RequestTypedOllama[T any](
 		return "", errors.Wrap(err, "failed to generate json schema")
 	}
 
-	llm.cfg.Format = s
+	llm.config.Format = s
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {

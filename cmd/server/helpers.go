@@ -300,10 +300,7 @@ func (s *ConlangServer) findUsedWordsAgent(
 	sb.WriteString(dict.String())
 
 	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(
-		agent.AppendInstructions,
-		sb.String(),
-	)(sysAgentDictExtractor)
+	s.gs.Channel.ToClients <- s.cmd(agent.AppendInstructions, sb.String())(sysAgentDictExtractor)
 	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(sysAgentDictExtractor)
 	s.gs.Channel.ToClients <- s.cmd(
 		agent.RequestDictionaryWordDetection,
