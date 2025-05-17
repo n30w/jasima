@@ -104,9 +104,7 @@ func (c GoogleGemini) request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	var err error
-
-	_, err = c.llm.request(ctx, messages)
+	t, err := c.llm.request(ctx, messages)
 	if err != nil {
 		return "", err
 	}
@@ -164,6 +162,8 @@ func (c GoogleGemini) request(
 	if err != nil {
 		return "", err
 	}
+
+	c.logTime(t())
 
 	return result, nil
 }

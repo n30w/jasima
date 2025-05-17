@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"time"
+
+	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/memory"
-	"codeberg.org/n30w/jasima/pkg/utils"
-
-	"github.com/pkg/errors"
 )
 
 func (c *client) Teardown() error {
@@ -24,53 +22,31 @@ func (c *client) Teardown() error {
 }
 
 func (c *client) DispatchToLLM(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-		c.logger.Warn("dispatch context cancelled")
+	a, err := c.stm.Retrieve(ctx, c.Name, 0)
+	if err != nil {
+		c.channels.errs <- err
 		return
-	default:
-		a, err := c.stm.Retrieve(ctx, c.Name, 0)
-		if err != nil {
-			c.channels.errs <- err
-			return
-		}
-
-		time.Sleep(time.Second * c.sleepDuration)
-
-		c.logger.Debug("Sending message to LLM now!")
-
-		t := utils.Timer(time.Now())
-
-		// Make the request
-
-		result, err := c.llm.Request(ctx, a, nil)
-		switch {
-		case errors.Is(err, context.Canceled):
-			c.logger.Warn("llm request context cancelled")
-			return
-		case err != nil:
-			c.channels.errs <- errors.Wrap(err, "request to llm failed")
-			return
-		}
-
-		c.logger.Debugf("LLM responded in %s", t().Truncate(1*time.Millisecond))
-
-		res := chat.Content(result)
-
-		// Save the LLM's response to memory.
-
-		newMsg := c.NewMessageTo(c.Peers[0], res)
-
-		err = c.stm.Save(ctx, newMsg)
-		if err != nil {
-			c.channels.errs <- err
-			return
-		}
-
-		time.Sleep(time.Second * c.sleepDuration)
-
-		c.channels.responses <- newMsg
 	}
+
+	c.logger.Debug("Sending message to LLM now!")
+
+	res, err := c.llm.Request(ctx, a, nil)
+	if err != nil {
+		c.channels.errs <- errors.Wrap(err, "request to llm failed")
+		return
+	}
+
+	// Save the LLM's response to memory.
+
+	newMsg := c.NewMessageTo(c.Peers[0], chat.Content(res))
+
+	err = c.stm.Save(ctx, newMsg)
+	if err != nil {
+		c.channels.errs <- err
+		return
+	}
+
+	c.channels.responses <- newMsg
 }
 
 // SendMessages listens on the responses channel for messages. When a message

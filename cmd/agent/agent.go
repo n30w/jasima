@@ -42,11 +42,6 @@ type client struct {
 	// latch is `false`, data will be sent to the LLM service and returned.
 	latch bool
 
-	// sleepSeconds is the number of seconds to sleep between requests to an LLM
-	// service. The number will differ based on model, but use the fastest time
-	// for this value.
-	sleepDuration time.Duration
-
 	channels *channels
 
 	// llmServices are the available LLM services the client may use to
@@ -63,10 +58,9 @@ func newClient(
 	errs chan error,
 ) (*client, error) {
 	var (
-		err           error
-		apiKey        string
-		llm           llmService
-		sleepDuration time.Duration = 10
+		err    error
+		apiKey string
+		llm    llmService
 	)
 
 	peerNames := make([]chat.Name, 0)
@@ -161,8 +155,6 @@ func newClient(
 
 		llm = ls.ollama
 
-		sleepDuration = 2
-
 	case llms.ProviderClaude:
 		apiKey = os.Getenv("CLAUDE_API_KEY")
 		llm, err = llms.NewClaude(
@@ -170,8 +162,6 @@ func newClient(
 			cfg.ModelConfig,
 			logger,
 		)
-
-		sleepDuration = 16
 
 	default:
 		err = errors.New("invalid LLM provider")
@@ -197,11 +187,10 @@ func newClient(
 		mc:             mc,
 		// Initially set `latch` to `true` so that data will only be sent in
 		// lockstep with server commands.
-		latch:         true,
-		sleepDuration: sleepDuration,
-		channels:      ch,
-		llmServices:   ls,
-		online:        true,
+		latch:       true,
+		channels:    ch,
+		llmServices: ls,
+		online:      true,
 	}, nil
 }
 

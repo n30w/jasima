@@ -17,7 +17,10 @@ import (
 	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
-const defaultOllamaUrl = "http://localhost:11434"
+const (
+	defaultOllamaUrl           = "http://localhost:11434"
+	defaultOllamaSleepDuration = time.Second * 2
+)
 
 type Ollama struct {
 	*llm[ol.ChatRequest]
@@ -57,6 +60,8 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create ollama client")
 	}
+
+	nl.sleepDuration = defaultOllamaSleepDuration
 
 	return &Ollama{
 		llm:    nl,
@@ -134,9 +139,7 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
-	var err error
-
-	_, err = c.llm.request(ctx, messages)
+	t, err := c.llm.request(ctx, messages)
 	if err != nil {
 		return "", err
 	}
@@ -152,6 +155,8 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	if err != nil {
 		return "", err
 	}
+
+	c.logTime(t())
 
 	return result.Message.Content, nil
 }

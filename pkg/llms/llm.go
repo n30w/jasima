@@ -8,11 +8,13 @@ import (
 	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/pkg/memory"
+	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 const (
-	maxRequestRetries = 3
-	retryInterval     = 180 * time.Second
+	maxRequestRetries    = 3
+	retryInterval        = 180 * time.Second
+	defaultSleepDuration = 10 * time.Second
 )
 
 // llm is a base type for a Large Language Model. The generic `T` is the type
@@ -31,6 +33,11 @@ type llm[T any] struct {
 	// config is the configuration used for each request of the LLM.
 	config *T
 
+	// sleepDuration is the total time the LLM will wait before making
+	// a request to the service. This duration differs based on model,
+	// but for these purposes use the fastest time possible.
+	sleepDuration time.Duration
+
 	// logger is for logging data to the console.
 	logger *log.Logger
 }
@@ -47,6 +54,7 @@ func newLLM[T any](mc ModelConfig, l *log.Logger) (*llm[T], error) {
 		instructions:  mc.Instructions,
 		defaultConfig: &mc.RequestConfig,
 		logger:        l,
+		sleepDuration: defaultSleepDuration,
 	}, nil
 }
 
@@ -62,19 +70,28 @@ func (l *llm[T]) String() string {
 	return l.model.String()
 }
 
-// request checks that a request to an LLM service is ready to be made. This
-// method should be shadowed by any LLM service that is composed of the LLM
-// base.
-func (l *llm[T]) request(_ context.Context, messages []memory.Message) (string, error) {
+// request checks that a request to an LLM service is ready to be made.
+// It returns a timer which can be used to measure the total time made
+// for a request.
+func (l *llm[T]) request(_ context.Context, messages []memory.Message) (
+	func() time.Duration,
+	error,
+) {
 	if l.config == nil {
-		return "", errNoConfigurationProvided
+		return nil, errNoConfigurationProvided
 	}
 
 	if len(messages) == 0 {
-		return "", errNoContentsInRequest
+		return nil, errNoContentsInRequest
 	}
 
-	return "", nil
+	// Sleep for the prescribed time.
+
+	time.Sleep(l.sleepDuration)
+
+	t := utils.Timer(time.Now())
+
+	return t, nil
 }
 
 // setTemperature remaps a temperature value, such as 0.5, to a model specific
@@ -93,6 +110,10 @@ func (l *llm[T]) setTemperature(t float64) float64 {
 	default:
 		return t
 	}
+}
+
+func (l *llm[T]) logTime(t time.Duration) {
+	l.logger.Debugf("LLM request roundtrip took %s", t)
 }
 
 type LLMProvider int

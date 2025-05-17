@@ -90,9 +90,7 @@ func (c openAIClient) request(
 	ctx context.Context,
 	messages []memory.Message,
 ) (string, error) {
-	var err error
-
-	_, err = c.llm.request(ctx, messages)
+	t, err := c.llm.request(ctx, messages)
 	if err != nil {
 		return "", err
 	}
@@ -106,6 +104,8 @@ func (c openAIClient) request(
 			"openai client failed to send request to llm",
 		)
 	}
+
+	c.logTime(t())
 
 	return result.Choices[0].Message.Content, nil
 }
