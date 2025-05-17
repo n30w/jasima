@@ -25,7 +25,7 @@ type llmService interface {
 	// messages is passed in directly, because it allows different services to
 	// adapt the messages to their different submission formats of their
 	// respective APIs.
-	Request(ctx context.Context, messages []memory.Message) (string, error)
+	Request(ctx context.Context, messages []memory.Message, rc *llms.RequestConfig) (string, error)
 
 	// SetInstructions sets the initial instructions for the model.
 	SetInstructions(s string)

@@ -87,8 +87,9 @@ func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateConte
 func (c GoogleGemini) Request(
 	ctx context.Context,
 	messages []memory.Message,
+	rc *RequestConfig,
 ) (string, error) {
-	c.cfg = c.buildRequestParams(nil)
+	c.cfg = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
@@ -210,6 +211,7 @@ func RequestTypedGoogleGemini[T any](
 	ctx context.Context,
 	messages []memory.Message,
 	llm *GoogleGemini,
+	rc *RequestConfig,
 ) (string, error) {
 	var (
 		err    error
@@ -221,7 +223,7 @@ func RequestTypedGoogleGemini[T any](
 		return "", errors.Wrap(err, "failed to retrieve schema for gemini")
 	}
 
-	llm.cfg = llm.buildRequestParams(nil)
+	llm.cfg = llm.buildRequestParams(rc)
 
 	llm.cfg.ResponseMIMEType = "application/json"
 	llm.cfg.ResponseSchema = s.gemini

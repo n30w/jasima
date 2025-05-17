@@ -106,13 +106,17 @@ func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
 	}, nil
 }
 
-func (c Ollama) Request(ctx context.Context, messages []memory.Message) (
+func (c Ollama) Request(
+	ctx context.Context,
+	messages []memory.Message,
+	rc *RequestConfig,
+) (
 	string,
 	error,
 ) {
 	var err error
 
-	c.cfg, err = c.buildRequestParams(nil)
+	c.cfg, err = c.buildRequestParams(rc)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to build request params")
 	}
@@ -193,6 +197,7 @@ func RequestTypedOllama[T any](
 	ctx context.Context,
 	messages []memory.Message,
 	llm *Ollama,
+	rc *RequestConfig,
 ) (string, error) {
 	var (
 		err    error
@@ -204,7 +209,7 @@ func RequestTypedOllama[T any](
 		return "", errors.Wrap(err, "failed to lookup type")
 	}
 
-	llm.cfg, err = llm.buildRequestParams(nil)
+	llm.cfg, err = llm.buildRequestParams(rc)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to build request params")
 	}

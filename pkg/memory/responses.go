@@ -1,16 +1,5 @@
 package memory
 
-type ResponseWithTunable struct {
-	ResponseText
-	ResponseSelfTunableParameters
-}
-
-type ResponseSelfTunableParameters struct {
-	Temperature float64 `json:"temperature"`
-	TopK        float64 `json:"top_k"`
-	TopP        float64 `json:"top_p"`
-}
-
 type ResponseStop struct {
 	Stop bool `json:"stop" jsonschema_description:"Indicates if you want to end the conversation"`
 }

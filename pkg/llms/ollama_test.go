@@ -87,6 +87,7 @@ func TestRequestTypedOllama(t *testing.T) {
 					tt.args.ctx,
 					tt.args.messages,
 					tt.args.llm,
+					nil,
 				)
 				if (err != nil) != tt.wantErr {
 					t.Errorf(
@@ -146,6 +147,7 @@ func TestRequestOllama(t *testing.T) {
 				got, err := llm.Request(
 					tt.args.ctx,
 					tt.args.messages,
+					nil,
 				)
 				if (err != nil) != tt.wantErr {
 					t.Errorf(

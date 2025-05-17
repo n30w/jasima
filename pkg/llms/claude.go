@@ -48,8 +48,9 @@ func NewClaude(
 func (c Claude) Request(
 	ctx context.Context,
 	messages []memory.Message,
+	rc *RequestConfig,
 ) (string, error) {
-	c.cfg = c.buildRequestParams(nil)
+	c.cfg = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {

@@ -40,8 +40,9 @@ func NewDeepseek(apiKey string, mc ModelConfig, l *log.Logger) (
 func (c Deepseek) Request(
 	ctx context.Context,
 	messages []memory.Message,
+	rc *RequestConfig,
 ) (string, error) {
-	c.cfg = c.buildRequestParams(nil)
+	c.cfg = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {

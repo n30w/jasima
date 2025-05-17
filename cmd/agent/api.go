@@ -36,7 +36,7 @@ func (c *client) request(ctx context.Context) (
 
 	t := utils.Timer(time.Now())
 
-	result, err := c.llm.Request(ctx, a)
+	result, err := c.llm.Request(ctx, a, nil)
 	if err != nil {
 		return "", err
 	}

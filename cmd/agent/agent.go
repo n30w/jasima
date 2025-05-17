@@ -400,18 +400,21 @@ func selectRequestType[T any](
 			ctx,
 			messages,
 			c.llmServices.gemini,
+			nil,
 		)
 	case llms.ProviderChatGPT:
 		return llms.RequestTypedChatGPT[T](
 			ctx,
 			messages,
 			c.llmServices.chatgpt,
+			nil,
 		)
 	case llms.ProviderOllama:
 		return llms.RequestTypedOllama[T](
 			ctx,
 			messages,
 			c.llmServices.ollama,
+			nil,
 		)
 	default:
 		c.logger.Warnf(
@@ -419,6 +422,6 @@ func selectRequestType[T any](
 				"using default request method",
 			c.ModelConfig.Provider,
 		)
-		return c.llm.Request(ctx, messages)
+		return c.llm.Request(ctx, messages, nil)
 	}
 }
