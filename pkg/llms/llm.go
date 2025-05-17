@@ -45,7 +45,7 @@ func (l *llm) SetInstructions(s string) {
 }
 
 // setTemperature remaps a temperature value, such as 0.5, to a model specific
-// value. Gemini and Deepseek use a scale from 0.0 to 2.0, rather than the
+// value. GoogleGemini and Deepseek use a scale from 0.0 to 2.0, rather than the
 // typical 0.0 to 1.0. This function lets config parameters maintain a
 // consistent input mapping of 0.0 to 1.0 rather than having two
 // different mappings.
