@@ -57,7 +57,11 @@ func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*config)) (*Web
 
 // ListenAndServe accepts any arbitrary number of `route` functions that
 // register an API route with the HTTP serve mux.
-func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
+func (s WebServer) ListenAndServe(ctx context.Context, routes ...func(*http.ServeMux)) {
+	serverCtx, serverCancel := context.WithCancel(ctx)
+
+	defer serverCancel()
+
 	handler := http.NewServeMux()
 
 	for _, addRoute := range routes {
@@ -66,16 +70,23 @@ func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
 
 	s.logger.Infof("Starting web events service on %s", s.config.addr)
 
-	err := http.Serve(s.listener, handler)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.errs <- errors.Wrap(err, "failed to serve http")
-		return
+	go func() {
+		err := http.Serve(s.listener, handler)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.errs <- errors.Wrap(err, "failed to serve http")
+		}
+		serverCancel()
+	}()
+
+	<-serverCtx.Done()
+
+	err := s.Shutdown()
+	if err != nil {
+		s.errs <- err
 	}
 }
 
-func (s WebServer) Shutdown(timeout time.Duration) error {
-	s.logger.Infof("Shutting down web server with timeout of %s", timeout)
-
+func (s WebServer) Shutdown() error {
 	err := s.listener.Close()
 	if err != nil {
 		return errors.Wrap(err, "failed to shutdown web server")

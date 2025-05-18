@@ -453,173 +453,195 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 
 func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
+		s.logger.Info("Waiting for clients to join...")
+
+		var err error
+
 		joinCtx, joinCtxCancel := context.WithCancel(ctx)
 
+		defer joinCtxCancel()
+
 		go func() {
-			joined := false
-			for !joined {
-				time.Sleep(1 * time.Second)
-				if s.gs.TotalClients() >= total {
-					joined = true
+			defer joinCtxCancel()
+			for {
+				select {
+				case <-joinCtx.Done():
+					err = joinCtx.Err()
+					return
+				case <-time.After(time.Second):
+					if s.gs.TotalClients() >= total {
+						s.logger.Info("All clients joined!")
+						return
+					}
 				}
 			}
-			joinCtxCancel()
 		}()
 
 		<-joinCtx.Done()
 
-		s.logger.Info("All clients joined!")
+		if err != nil {
+			return err
+		}
 
 		return nil
 	}
 }
 
 // Evolve manages the entire evolutionary function loop.
-func (s *ConlangServer) Evolve(_ context.Context) error {
-	var (
-		err    error
-		errMsg = "failed to evolve generation %d"
-	)
+func (s *ConlangServer) Evolve(ctx context.Context) error {
+	evolveCtx, evolveCtxCancel := context.WithCancel(ctx)
 
-	timer := utils.Timer(time.Now())
+	defer evolveCtxCancel()
 
-	for i := range s.config.procedures.maxGenerations {
-		elapsedTime := utils.Timer(time.Now())
-
-		genSlice, err := s.generations.ToSlice()
-		if err != nil {
-			return errors.Wrap(err, errMsg)
-		}
-
-		// Starts on Layer 4, recurses to 1.
-
-		newGeneration, err := s.iterate(
-			genSlice[i],
-			chat.LogographyLayer,
-			s.config.procedures.maxExchanges,
-		)
-		if err != nil {
-			return errors.Wrapf(err, "failed to iterate on generation %d", i)
-		}
-
-		s.logger.Infof(
-			"Iteration %d completed in %s", i+1,
-			elapsedTime().Truncate(10*time.Millisecond),
+	select {
+	case <-evolveCtx.Done():
+		return ctx.Err()
+	default:
+		var (
+			err    error
+			errMsg = "failed to evolve generation %d"
 		)
 
-		updates := <-s.dictUpdatesChan
+		timer := utils.Timer(time.Now())
 
-		s.logger.Info("Received dictionary update")
+		for i := range s.config.procedures.maxGenerations {
+			elapsedTime := utils.Timer(time.Now())
 
-		// Update the generation's dictionary based on updates.
+			genSlice, err := s.generations.ToSlice()
+			if err != nil {
+				return errors.Wrap(err, errMsg)
+			}
 
-		currentDict := newGeneration.Dictionary.Copy()
+			// Starts on Layer 4, recurses to 1.
 
-		for _, update := range updates.Entries {
+			newGeneration, err := s.iterate(
+				genSlice[i],
+				chat.LogographyLayer,
+				s.config.procedures.maxExchanges,
+			)
+			if err != nil {
+				return errors.Wrapf(err, "failed to iterate on generation %d", i)
+			}
 
-			if update.Remove {
-				_, ok := currentDict[update.Word]
-				if !ok {
-					s.logger.Warnf(
-						"%s not in dictionary, skipping",
-						update.Word,
-					)
+			s.logger.Infof(
+				"Iteration %d completed in %s", i+1,
+				elapsedTime().Truncate(10*time.Millisecond),
+			)
+
+			updates := <-s.dictUpdatesChan
+
+			s.logger.Info("Received dictionary update")
+
+			// Update the generation's dictionary based on updates.
+
+			currentDict := newGeneration.Dictionary.Copy()
+
+			for _, update := range updates.Entries {
+
+				if update.Remove {
+					_, ok := currentDict[update.Word]
+					if !ok {
+						s.logger.Warnf(
+							"%s not in dictionary, skipping",
+							update.Word,
+						)
+						continue
+					}
+
+					delete(currentDict, update.Word)
 					continue
 				}
 
-				delete(currentDict, update.Word)
-				continue
+				entry := currentDict[update.Word]
+
+				entry.Word = update.Word
+				entry.Definition = update.Definition
+
+				currentDict[update.Word] = entry
 			}
 
-			entry := currentDict[update.Word]
+			newGeneration.Dictionary = currentDict.Copy()
 
-			entry.Word = update.Word
-			entry.Definition = update.Definition
+			w := "suli"
 
-			currentDict[update.Word] = entry
+			svg, err := s.iterateLogogram(newGeneration, w)
+			if err != nil {
+				return err
+			}
+
+			newGeneration.Logography[w] = svg
+
+			s.dictionary = newGeneration.Dictionary.Copy()
+
+			err = s.generations.Enqueue(newGeneration)
+			if err != nil {
+				return errors.Wrapf(
+					err,
+					"failed to enqueue new generation %d", i,
+				)
+			}
+
+			err = s.ws.InitialData.RecentGenerations.Enqueue(newGeneration)
+			if err != nil {
+				return errors.Wrapf(
+					err,
+					"failed to enqueue new generation to initial data %d", i,
+				)
+			}
+
+			s.ws.Broadcasters.Generation.Broadcast(newGeneration)
+
+			time.Sleep(10 * time.Second)
 		}
 
-		newGeneration.Dictionary = currentDict.Copy()
+		s.gs.Listening = false
 
-		w := "suli"
+		t := timer().Truncate(10 * time.Millisecond)
 
-		svg, err := s.iterateLogogram(newGeneration, w)
+		s.logger.Info("EVOLUTION COMPLETE")
+		s.logger.Infof("Evolution took %s", t)
+
+		// Marshal to JSON
+
+		allMsgs, err := s.memory.All()
 		if err != nil {
 			return err
 		}
 
-		newGeneration.Logography[w] = svg
+		fileName := fmt.Sprintf(
+			"./outputs/chats/chat_%s.json",
+			time.Now().Format("20060102150405"),
+		)
 
-		s.dictionary = newGeneration.Dictionary.Copy()
-
-		err = s.generations.Enqueue(newGeneration)
+		err = saveToJson(allMsgs, fileName)
 		if err != nil {
-			return errors.Wrapf(
-				err,
-				"failed to enqueue new generation %d", i,
-			)
+			return errors.Wrap(err, "evolution failed to save JSON")
 		}
 
-		err = s.ws.InitialData.RecentGenerations.Enqueue(newGeneration)
+		s.logger.Infof("Saved chat to %s", fileName)
+
+		fileName = fmt.Sprintf(
+			"./outputs/generations/generations_%s.json",
+			time.Now().Format("20060102150405"),
+		)
+
+		g, err := s.generations.ToSlice()
 		if err != nil {
-			return errors.Wrapf(
-				err,
-				"failed to enqueue new generation to initial data %d", i,
-			)
+			return errors.Wrap(err, "evolution failed to save JSON")
 		}
 
-		s.ws.Broadcasters.Generation.Broadcast(newGeneration)
+		err = saveToJson(g, fileName)
+		if err != nil {
+			return errors.Wrap(err, "evolution failed to save JSON")
+		}
 
-		time.Sleep(10 * time.Second)
+		s.logger.Infof("Saved generations to %s", fileName)
+
+		return nil
 	}
-
-	s.gs.Listening = false
-
-	t := timer().Truncate(10 * time.Millisecond)
-
-	s.logger.Info("EVOLUTION COMPLETE")
-	s.logger.Infof("Evolution took %s", t)
-
-	// Marshal to JSON
-
-	allMsgs, err := s.memory.All()
-	if err != nil {
-		return err
-	}
-
-	fileName := fmt.Sprintf(
-		"./outputs/chats/chat_%s.json",
-		time.Now().Format("20060102150405"),
-	)
-
-	err = saveToJson(allMsgs, fileName)
-	if err != nil {
-		return errors.Wrap(err, "evolution failed to save JSON")
-	}
-
-	s.logger.Infof("Saved chat to %s", fileName)
-
-	fileName = fmt.Sprintf(
-		"./outputs/generations/generations_%s.json",
-		time.Now().Format("20060102150405"),
-	)
-
-	g, err := s.generations.ToSlice()
-	if err != nil {
-		return errors.Wrap(err, "evolution failed to save JSON")
-	}
-
-	err = saveToJson(g, fileName)
-	if err != nil {
-		return errors.Wrap(err, "evolution failed to save JSON")
-	}
-
-	s.logger.Infof("Saved generations to %s", fileName)
-
-	return nil
 }
 
-func (s *ConlangServer) testIterateLogogram(_ context.Context) error {
+func (s *ConlangServer) TestIterateLogogram(_ context.Context) error {
 	g, err := s.generations.ToSlice()
 	if err != nil {
 		return err
@@ -635,7 +657,7 @@ func (s *ConlangServer) testIterateLogogram(_ context.Context) error {
 	return nil
 }
 
-func (s *ConlangServer) selfDestruct(_ context.Context) error {
+func (s *ConlangServer) SelfDestruct(_ context.Context) error {
 	return errors.New("SERVER KILLED FROM SELF-DESTRUCTION")
 }
 
@@ -643,6 +665,7 @@ func (s *ConlangServer) selfDestruct(_ context.Context) error {
 // useful for frontend testing without having to run agent queries
 // over and over again.
 func (s *ConlangServer) outputTestData(
+	ctx context.Context,
 	messages []memory.Message,
 	generations []memory.Generation,
 ) {
@@ -655,19 +678,39 @@ func (s *ConlangServer) outputTestData(
 		t2 = time.NewTicker(3 * time.Second)
 	)
 
+	dataCtx, dataCancel := context.WithCancel(ctx)
+
+	defer dataCancel()
+
 	s.logger.Info("Emitting test output data...")
 
 	go func() {
-		for {
-			<-t1.C
-			s.ws.Broadcasters.TestMessageFeed.Broadcast(messages[i1%l1])
-			i1++
+		ctx, cancel := context.WithCancel(dataCtx)
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			for {
+				<-t2.C
+				s.ws.Broadcasters.TestGenerationsFeed.Broadcast(generations[i2%l2])
+				i2++
+			}
 		}
 	}()
 
-	for {
-		<-t2.C
-		s.ws.Broadcasters.TestGenerationsFeed.Broadcast(generations[i2%l2])
-		i2++
-	}
+	go func() {
+		ctx, cancel := context.WithCancel(dataCtx)
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			for {
+				<-t1.C
+				s.ws.Broadcasters.TestMessageFeed.Broadcast(messages[i1%l1])
+				i1++
+			}
+		}
+	}()
 }

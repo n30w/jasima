@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -173,7 +174,7 @@ func NewConlangServer(
 	return cs, nil
 }
 
-func (s *ConlangServer) Router() {
+func (s *ConlangServer) Router(ctx context.Context) {
 	var (
 		eventsRoute = func(ctx context.Context, pbMsg *chat.Message) error {
 			msg := *memory.NewChatMessage(
@@ -270,13 +271,25 @@ func (s *ConlangServer) Router() {
 		eventsRoute,
 	)
 
-	go routeMessages(s.errs)
-	go s.gs.ListenAndServe()
+	routeCtx, routeCancel := context.WithCancel(ctx)
+
+	defer routeCancel()
+
+	go func() {
+		select {
+		case <-routeCtx.Done():
+			s.logger.Warn("Routing context cancelled")
+		default:
+			routeMessages(s.errs)
+		}
+	}()
+
+	s.gs.ListenAndServe(ctx)
 }
 
-func (s *ConlangServer) WebEvents() {
+func (s *ConlangServer) WebEvents(ctx context.Context) {
 	var (
-		time = func(mux *http.ServeMux) {
+		timeNow = func(mux *http.ServeMux) {
 			go network.BroadcastTime(s.ws.Broadcasters.CurrentTime)
 
 			mux.HandleFunc("/time", s.ws.Broadcasters.CurrentTime.HandleClient)
@@ -329,7 +342,8 @@ func (s *ConlangServer) WebEvents() {
 	)
 
 	s.ws.ListenAndServe(
-		time,
+		ctx,
+		timeNow,
 		chatting,
 		generations,
 		logograms,
@@ -337,18 +351,67 @@ func (s *ConlangServer) WebEvents() {
 	)
 }
 
-func (s *ConlangServer) StartProcedures() {
+func (s *ConlangServer) StartProcedures(ctx context.Context) {
 	jobs, _ := utils.NewFixedQueue[job](100)
 
 	_ = jobs.Enqueue(s.WaitForClients(11))
-	_ = jobs.Enqueue(s.testIterateLogogram)
-	_ = jobs.Enqueue(s.selfDestruct)
+	// _ = jobs.Enqueue(s.testIterateLogogram)
+	// _ = jobs.Enqueue(s.selfDestruct)
 	_ = jobs.Enqueue(s.Evolve)
 
 	s.procedures <- jobs
+}
+
+func (s *ConlangServer) ProcessJobs(ctx context.Context) {
+	jobsCtx, jobsCancel := context.WithCancel(ctx)
+
+	defer jobsCancel()
+
+	select {
+	case <-jobsCtx.Done():
+		s.logger.Warn("Cancelling jobs")
+	default:
+		for jobs := range s.procedures {
+			for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
+				err = j(jobsCtx)
+				if err != nil {
+					s.errs <- err
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.StartProcedures(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		go s.Router(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.WebEvents(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.ProcessJobs(ctx)
+	}()
 
 	if s.config.debugEnabled && s.config.broadcastTestData {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			msgs, err := loadJsonFile[memory.Message]("./outputs/chats/chat_5.json")
 			if err != nil {
 				s.errs <- errors.Wrap(
@@ -381,29 +444,7 @@ func (s *ConlangServer) StartProcedures() {
 			}
 
 			// Output test data to channel.
-			go s.outputTestData(msgs, gens)
+			s.outputTestData(ctx, msgs, gens)
 		}()
 	}
-}
-
-func (s *ConlangServer) ProcessJobs() {
-	for jobs := range s.procedures {
-		for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
-			ctx, cancel := context.WithCancel(context.Background())
-			err = j(ctx)
-			if err != nil {
-				s.errs <- err
-				cancel()
-				return
-			}
-			cancel()
-		}
-	}
-}
-
-func (s *ConlangServer) Run() {
-	s.Router()
-	go s.WebEvents()
-	s.StartProcedures()
-	go s.ProcessJobs()
 }

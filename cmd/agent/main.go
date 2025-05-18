@@ -145,7 +145,14 @@ func main() {
 		c.Layer,
 	)
 
-	signal.Notify(halt, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(
+		halt,
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
 
 	c.Run(ctx)
 

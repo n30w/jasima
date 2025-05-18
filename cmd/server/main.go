@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"codeberg.org/n30w/jasima/pkg/memory"
@@ -115,7 +119,19 @@ func main() {
 		cfg.procedures.dictionaryWordExtractionMethod,
 	)
 
-	errs := make(chan error)
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+
+	defer stop()
+
+	var (
+		errs = make(chan error)
+		halt = make(chan os.Signal, 1)
+		wg   = &sync.WaitGroup{}
+	)
 
 	if *flagLogToFile {
 		logFilePath := fmt.Sprintf(
@@ -138,11 +154,38 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	cs.Run()
+	signal.Notify(
+		halt,
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
 
-	for e := range errs {
-		if e != nil {
-			logger.Fatal(e)
+	cs.Run(ctx, wg)
+
+	wg.Add(1)
+	go func() {
+		gtfo := false
+		for !gtfo {
+			select {
+			case err = <-errs:
+				logger.Error(err)
+				gtfo = true
+			case <-halt:
+				gtfo = true
+			}
 		}
-	}
+		wg.Done()
+		stop()
+	}()
+
+	<-ctx.Done()
+
+	wg.Wait()
+
+	close(errs)
+
+	fmt.Printf("\n mi tawa! \n")
 }

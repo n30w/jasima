@@ -73,7 +73,7 @@ func NewChatServer(
 	}
 }
 
-func (s *ChatServer) ListenAndServe() {
+func (s *ChatServer) ListenAndServe(ctx context.Context) {
 	var (
 		protocol = s.config.protocol
 		address  = s.config.addr
@@ -87,13 +87,34 @@ func (s *ChatServer) ListenAndServe() {
 
 	chat.RegisterChatServiceServer(s.grpcServer, s)
 
-	s.logger.Infof("Starting gRPC service on %s%s", protocol, address)
+	serverCtx, serverCancel := context.WithCancel(ctx)
 
-	err = s.grpcServer.Serve(lis)
+	defer serverCancel()
+
+	go func() {
+		s.logger.Infof("Starting gRPC service on %s %s", protocol, address)
+		err = s.grpcServer.Serve(lis)
+		if err != nil {
+			s.errs <- err
+		}
+		serverCancel()
+	}()
+
+	<-serverCtx.Done()
+
+	err = s.Shutdown()
 	if err != nil {
 		s.errs <- err
-		return
 	}
+}
+
+func (s *ChatServer) Shutdown() error {
+	s.grpcServer.GracefulStop()
+
+	s.logger.Infof("gRPC server shut down successfully")
+	// s.grpcServer.Stop()
+
+	return nil
 }
 
 // Chat is called by the `ChatClient`. The lifetime of this function is for as
@@ -131,43 +152,25 @@ func (s *ChatServer) Chat(stream chat.ChatService_ChatServer) error {
 // from the connected ChatClient.
 func (s *ChatServer) listen(c *ChatClient) error {
 	var (
-		err          error
-		msg          *chat.Message
-		disconnected bool
+		err error
+		msg *chat.Message
 	)
 
-	for !disconnected {
+	streamCtx := c.stream.Context()
 
-		// Wait for a message to come in from the ChatClient. This is a blocking call.
-
-		msg, err = c.stream.Recv()
-		if err != nil {
-			disconnected = true
-			continue
-		}
-
+	for {
 		select {
-		case s.Channel.ToClients <- msg:
+		case <-streamCtx.Done():
+			return streamCtx.Err()
 		default:
-		}
-
-		c.mu.Lock()
-
-		for ch := range c.channels {
-			select {
-			case ch <- msg:
-			default:
+			msg, err = c.stream.Recv()
+			if err != nil {
+				return err
 			}
+
+			s.Channel.ToClients <- msg
 		}
-
-		c.mu.Unlock()
 	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // Broadcast forwards a message `msg` to all clients on a layer, excluding the
