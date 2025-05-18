@@ -70,10 +70,12 @@ func (l *llm[T]) String() string {
 	return l.model.String()
 }
 
-// request checks that a request to an LLM service is ready to be made.
-// It returns a timer which can be used to measure the total time made
-// for a request.
-func (l *llm[T]) request(_ context.Context, messages []memory.Message) (
+// request checks that a request to an LLM service is ready to be made
+// and also applies any rate limiting logic before returning. The return
+// values include a timer which can be used to measure the total time made
+// for a request and an error, which may be an ErrDispatchContextCancelled
+// error the caller may choose to ignore.
+func (l *llm[T]) request(ctx context.Context, messages []memory.Message) (
 	func() time.Duration,
 	error,
 ) {
@@ -87,7 +89,15 @@ func (l *llm[T]) request(_ context.Context, messages []memory.Message) (
 
 	// Sleep for the prescribed time.
 
-	time.Sleep(l.sleepDuration)
+	l.logger.Debugf("Rate limiting for %s...", l.sleepDuration)
+
+	select {
+	case <-ctx.Done():
+		l.logger.Warn("Dispatch context canceled")
+		return nil, ErrDispatchContextCancelled
+	case <-time.After(l.sleepDuration):
+		l.logger.Debug("Dispatching message to LLM")
+	}
 
 	t := utils.Timer(time.Now())
 
@@ -221,6 +231,7 @@ func (l llmError) Error() string {
 }
 
 const (
-	errNoContentsInRequest     llmError = "cannot send request with no content"
-	errNoConfigurationProvided llmError = "no configuration provided"
+	errNoContentsInRequest      llmError = "cannot send request with no content"
+	errNoConfigurationProvided  llmError = "no configuration provided"
+	ErrDispatchContextCancelled llmError = "dispatch context canceled"
 )

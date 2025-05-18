@@ -154,9 +154,8 @@ func main() {
 		for !gtfo {
 			select {
 			case err = <-errs:
-				logger.Error(err)
-				if !errors.Is(err, context.Canceled) {
-					logger.Warn("Context canceled")
+				if !errors.Is(err, llms.ErrDispatchContextCancelled) {
+					logger.Error(err)
 					gtfo = true
 				}
 			case sig := <-halt:
