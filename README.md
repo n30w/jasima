@@ -69,3 +69,9 @@ nix develop .
 
 - <https://protobuf.dev/overview/>
 - <https://github.com/grpc/grpc-go/blob/master/examples/route_guide/routeguide/route_guide.pb.go>
+- [GRPC Graceful Shutdowns on hexagonal architecture](https://medium.com/@pthtantai97/mastering-grpc-server-with-graceful-shutdown-within-golangs-hexagonal-architecture-0bba657b8622)
+
+### Go
+
+- [Graceful HTTP Server Shutdown](https://dev.to/mokiat/proper-http-shutdown-in-go-3fji)
+- [How to stop listen and serve](https://stackoverflow.com/questions/39320025/how-to-stop-http-listenandserve)
