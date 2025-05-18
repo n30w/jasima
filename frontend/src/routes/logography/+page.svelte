@@ -47,13 +47,13 @@
 	<div class="absolute left-10 top-10 w-1/4">
 		<h1 class="pb-2 font-light tracking-widest">GENERATOR</h1>
 		{#key genRes}
-			<p class="text-sm" in:typewriter={{ speed: 20 }}>{genRes}</p>
+			<p class="text-sm" in:typewriter={{ speed: 12 }}>{genRes}</p>
 		{/key}
 	</div>
 	<div class="absolute bottom-10 right-10 w-1/4">
 		<h1 class="pb-2 text-right font-light uppercase tracking-widest">Adversary</h1>
 		{#key advRes}
-			<p class="text-right text-sm" in:typewriter={{ speed: 20 }}>{advRes}</p>
+			<p class="text-right text-sm" in:typewriter={{ speed: 12 }}>{advRes}</p>
 		{/key}
 	</div>
 </div>
