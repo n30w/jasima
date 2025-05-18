@@ -8,10 +8,10 @@ import (
 	"codeberg.org/n30w/jasima/pkg/memory"
 )
 
-func TestFixedQueue_ToSlice(t *testing.T) {
+func TestDynamicFixedQueue_ToSlice(t *testing.T) {
 	type testCase[T any] struct {
 		name    string
-		q       *FixedQueue[T]
+		q       *dynamicFixedQueue[T]
 		want    []T
 		wantErr bool
 	}
@@ -21,7 +21,9 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 		chat.PhoneticsLayer: []memory.Message{{Text: "Hello there!"}},
 	}
 
-	q, _ := NewFixedQueue[memory.Generation](1)
+	uq, _ := newQueue[memory.Generation](1)
+
+	q := &dynamicFixedQueue[memory.Generation]{queue: uq}
 	_ = q.Enqueue(
 		memory.Generation{
 			Transcript: correctTranscript,
@@ -81,6 +83,78 @@ func TestFixedQueue_ToSlice(t *testing.T) {
 							correctTranscript,
 						)
 					}
+				}
+			},
+		)
+	}
+}
+
+func TestDynamicFixedQueue_Enqueue(t *testing.T) {
+	type intTestCase struct {
+		name      string
+		initial   []int
+		capacity  int
+		items     []int
+		wantSlice []int
+		wantErr   bool
+	}
+
+	tests := []intTestCase{
+		{
+			name:      "enqueue single item",
+			initial:   []int{},
+			capacity:  3,
+			items:     []int{1},
+			wantSlice: []int{1},
+			wantErr:   false,
+		},
+		{
+			name:      "enqueue multiple items within capacity",
+			initial:   []int{1},
+			capacity:  3,
+			items:     []int{2, 3},
+			wantSlice: []int{1, 2, 3},
+			wantErr:   false,
+		},
+		{
+			name:      "overwrite when full",
+			initial:   []int{1, 2, 3},
+			capacity:  3,
+			items:     []int{4},
+			wantSlice: []int{2, 3, 4},
+			wantErr:   false,
+		},
+		{
+			name:      "error when items exceed capacity",
+			initial:   []int{1},
+			capacity:  3,
+			items:     []int{2, 3, 4, 5},
+			wantSlice: []int{1},
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(
+			tt.name, func(t *testing.T) {
+				q, err := NewDynamicFixedQueue[int](tt.capacity)
+				if err != nil {
+					t.Fatalf("failed to create queue: %v", err)
+				}
+
+				for _, v := range tt.initial {
+					if err := q.Enqueue(v); err != nil {
+						t.Fatalf("setup Enqueue error: %v", err)
+					}
+				}
+
+				err = q.Enqueue(tt.items...)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("Enqueue() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				got, _ := q.ToSlice()
+				if !reflect.DeepEqual(got, tt.wantSlice) {
+					t.Errorf("contents = %v, want %v", got, tt.wantSlice)
 				}
 			},
 		)

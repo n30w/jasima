@@ -123,7 +123,7 @@ func (b *Broadcaster[T]) Broadcast(msg T) {
 	}
 }
 
-func (b *Broadcaster[T]) InitialData(d *utils.FixedQueue[T]) http.HandlerFunc {
+func (b *Broadcaster[T]) InitialData(d utils.Queue[T]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addEventHeaders(w)
 
@@ -251,20 +251,20 @@ func addEventHeaders(w http.ResponseWriter) {
 // InitialData contains frontend initializing data so that, when connected,
 // data is shown rather than having nothing.
 type InitialData struct {
-	RecentMessages       *utils.FixedQueue[memory.Message]
-	RecentGenerations    *utils.FixedQueue[memory.Generation]
-	RecentLogogram       *utils.FixedQueue[memory.LogogramIteration]
-	RecentSpecifications *utils.FixedQueue[memory.SpecificationGeneration]
-	RecentUsedWords      *utils.FixedQueue[memory.ResponseDictionaryWordsDetection]
+	RecentMessages       utils.Queue[memory.Message]
+	RecentGenerations    utils.Queue[memory.Generation]
+	RecentLogogram       utils.Queue[memory.LogogramIteration]
+	RecentSpecifications utils.Queue[memory.SpecificationGeneration]
+	RecentUsedWords      utils.Queue[memory.ResponseDictionaryWordsDetection]
 }
 
 func NewInitialData() (*InitialData, error) {
-	recentMessagesQueue, err := utils.NewFixedQueue[memory.Message](10)
+	recentMessagesQueue, err := utils.NewDynamicFixedQueue[memory.Message](10)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate recent messages queue")
 	}
 
-	rg, err := utils.NewFixedQueue[memory.Generation](100)
+	rg, err := utils.NewDynamicFixedQueue[memory.Generation](100)
 	if err != nil {
 		return nil, errors.Wrap(
 			err,
@@ -272,7 +272,7 @@ func NewInitialData() (*InitialData, error) {
 		)
 	}
 
-	specs, err := utils.NewFixedQueue[memory.SpecificationGeneration](10)
+	specs, err := utils.NewDynamicFixedQueue[memory.SpecificationGeneration](10)
 	if err != nil {
 		return nil, errors.Wrap(
 			err,
@@ -280,12 +280,12 @@ func NewInitialData() (*InitialData, error) {
 		)
 	}
 
-	usedWords, err := utils.NewFixedQueue[memory.ResponseDictionaryWordsDetection](2)
+	usedWords, err := utils.NewDynamicFixedQueue[memory.ResponseDictionaryWordsDetection](2)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make recent used words queue")
 	}
 
-	rl, err := utils.NewFixedQueue[memory.LogogramIteration](2)
+	rl, err := utils.NewDynamicFixedQueue[memory.LogogramIteration](2)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make recent logogram queue")
 	}

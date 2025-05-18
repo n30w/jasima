@@ -52,9 +52,9 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan memory.ResponseDictionaryEntries
-	procedures      chan *utils.FixedQueue[job]
+	procedures      chan utils.Queue[job]
 	dictionary      memory.DictionaryGeneration
-	generations     *utils.FixedQueue[memory.Generation]
+	generations     utils.Queue[memory.Generation]
 	ws              *network.WebServer
 	errs            chan error
 
@@ -121,7 +121,9 @@ func NewConlangServer(
 		Dictionary:     dictionaryGen1,
 	}
 
-	generations, err := utils.NewFixedQueue[memory.Generation](cfg.procedures.maxGenerations + 1)
+	generations, err := utils.NewStaticFixedQueue[memory.Generation](
+		cfg.procedures.maxGenerations + 1,
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create generation queue")
 	}
@@ -161,7 +163,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
-		procedures:      make(chan *utils.FixedQueue[job], 100),
+		procedures:      make(chan utils.Queue[job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
@@ -352,12 +354,12 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 }
 
 func (s *ConlangServer) StartProcedures(ctx context.Context) {
-	jobs, _ := utils.NewFixedQueue[job](100)
+	jobs, _ := utils.NewStaticFixedQueue[job](100)
 
-	_ = jobs.Enqueue(s.WaitForClients(11))
-	// _ = jobs.Enqueue(s.testIterateLogogram)
-	// _ = jobs.Enqueue(s.selfDestruct)
-	_ = jobs.Enqueue(s.Evolve)
+	_ = jobs.Enqueue(
+		s.WaitForClients(11),
+		s.Evolve,
+	)
 
 	s.procedures <- jobs
 }
