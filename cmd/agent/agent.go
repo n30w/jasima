@@ -292,23 +292,7 @@ func (c *client) action(
 		c.latch = false
 
 	default:
-		// Empty message and NO_COMMAND, do nothing.
-		if msg.Text == "" {
-			break
-		} else {
-			// Send the data to the LLM.
-			if c.latch {
-				c.logger.Debug("Latch is TRUE. Only saving message...")
-				err = c.stm.Save(ctx, c.NewMessageFrom(msg.Receiver, msg.Text))
-				if err != nil {
-					return err
-				}
-			} else {
-				c.logger.Debug("Dispatching message to LLM service...")
-				c.logger.Debugf("In CTX: %d", ctxId)
-				go c.DispatchToLLM(ctx)
-			}
-		}
+		go c.DispatchToLLM(ctx)
 	}
 
 	return nil

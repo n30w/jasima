@@ -28,11 +28,9 @@ func (c *client) DispatchToLLM(ctx context.Context) {
 		return
 	}
 
-	c.logger.Debug("Sending message to LLM now!")
-
 	res, err := c.llm.Request(ctx, a, nil)
 	if err != nil {
-		c.channels.errs <- errors.Wrap(err, "request to llm failed")
+		c.channels.errs <- errors.Wrap(err, "llm request failed")
 		return
 	}
 
@@ -113,16 +111,6 @@ func (c *client) Router() {
 			}
 
 			prevCancel = cancel
-
-			// go func(parentCtx context.Context, ctxId int) {
-			// 	ctx, cancel := context.WithCancelCause(parentCtx)
-			// 	defer cancel(context.Cause(parentCtx))
-			// 	<-ctx.Done()
-			// 	err := context.Cause(ctx)
-			// 	if err != nil {
-			// 		c.logger.Warnf("Cancelled context %d because %s", ctxId, err)
-			// 	}
-			// }(msgCtx, id)
 
 			id++
 
