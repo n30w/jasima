@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -22,7 +23,7 @@ type WebServer struct {
 	InitialData  *InitialData
 	Broadcasters *Broadcasters
 	logger       *log.Logger
-	server       *http.Server
+	listener     net.Listener
 	*ServerBase
 }
 
@@ -40,11 +41,16 @@ func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*config)) (*Web
 		errs:   errs,
 	}
 
+	listener, err := net.Listen("tcp", base.config.addr)
+	if err != nil {
+		return nil, err
+	}
+
 	return &WebServer{
 		InitialData:  i,
 		Broadcasters: b,
 		logger:       l,
-		server:       &http.Server{Addr: cfg.addr},
+		listener:     listener,
 		ServerBase:   base,
 	}, nil
 }
@@ -58,24 +64,19 @@ func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
 		addRoute(handler)
 	}
 
-	s.server.Handler = handler
-
 	s.logger.Infof("Starting web events service on %s", s.config.addr)
 
-	err := s.server.ListenAndServe()
-	if err != nil {
+	err := http.Serve(s.listener, handler)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		s.errs <- errors.Wrap(err, "failed to serve http")
 		return
 	}
 }
 
 func (s WebServer) Shutdown(timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
 	s.logger.Infof("Shutting down web server with timeout of %s", timeout)
 
-	err := s.server.Shutdown(ctx)
+	err := s.listener.Close()
 	if err != nil {
 		return errors.Wrap(err, "failed to shutdown web server")
 	}
