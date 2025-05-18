@@ -44,6 +44,7 @@ type MemoryService interface {
 type job func(ctx context.Context) error
 
 type ConlangServer struct {
+	name            chat.Name
 	logger          *log.Logger
 	memory          MemoryService
 	gs              *network.ChatServer
@@ -134,7 +135,7 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to create web server")
 	}
 
-	grpcServer := network.NewChatServer(l, cfg.name)
+	grpcServer := network.NewChatServer(l, errs)
 
 	err = webServer.InitialData.RecentSpecifications.Enqueue(specificationsGen1)
 	if err != nil {
@@ -150,6 +151,7 @@ func NewConlangServer(
 	}
 
 	cs := &ConlangServer{
+		name:          chat.Name(cfg.name),
 		memory:        m,
 		gs:            grpcServer,
 		ws:            webServer,
@@ -212,7 +214,7 @@ func (s *ConlangServer) Router() {
 			)
 
 			if msg.Layer == chat.SystemLayer && msg.
-				Receiver == s.gs.Name {
+				Receiver == s.name {
 				s.gs.Channel.ToServer <- msg
 				return nil
 			}
@@ -231,7 +233,7 @@ func (s *ConlangServer) Router() {
 				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 			)
 
-			if msg.Sender != s.gs.Name {
+			if msg.Sender != s.name {
 				// This is necessary so the procedure channel does NOT block
 				// the main router loop.
 				select {
@@ -269,7 +271,7 @@ func (s *ConlangServer) Router() {
 	)
 
 	go routeMessages(s.errs)
-	go s.gs.ListenAndServe("tcp", "50051", s.errs)
+	go s.gs.ListenAndServe()
 }
 
 func (s *ConlangServer) WebEvents() {

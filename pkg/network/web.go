@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -19,38 +18,35 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	defaultWebServerPort = ":7070"
-)
-
 type WebServer struct {
 	InitialData  *InitialData
 	Broadcasters *Broadcasters
 	logger       *log.Logger
 	server       *http.Server
-	errs         chan<- error
+	*ServerBase
 }
 
-func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*WebServer)) (*WebServer, error) {
+func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*config)) (*WebServer, error) {
 	b := NewBroadcasters(l)
 	i, err := NewInitialData()
 	if err != nil {
 		return nil, err
 	}
 
-	ws := &WebServer{
+	cfg := newConfigWithOpts(defaultWebServerConfig, opts...)
+
+	base := &ServerBase{
+		config: cfg,
+		errs:   errs,
+	}
+
+	return &WebServer{
 		InitialData:  i,
 		Broadcasters: b,
 		logger:       l,
-		errs:         errs,
-		server:       &http.Server{Addr: defaultWebServerPort},
-	}
-
-	for _, opt := range opts {
-		opt(ws)
-	}
-
-	return ws, nil
+		server:       &http.Server{Addr: cfg.addr},
+		ServerBase:   base,
+	}, nil
 }
 
 // ListenAndServe accepts any arbitrary number of `route` functions that
@@ -64,7 +60,7 @@ func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
 
 	s.server.Handler = handler
 
-	s.logger.Infof("Starting web events service on %s", s.server.Addr)
+	s.logger.Infof("Starting web events service on %s", s.config.addr)
 
 	err := s.server.ListenAndServe()
 	if err != nil {
@@ -73,22 +69,20 @@ func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
 	}
 }
 
-func (s WebServer) Shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (s WebServer) Shutdown(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	s.logger.Infof("Shutting down web server with timeout of %s", timeout)
 
 	err := s.server.Shutdown(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to shutdown web server")
 	}
 
-	return nil
-}
+	s.logger.Info("Web server shut down successfully")
 
-func WithPort(port string) func(*WebServer) {
-	return func(ws *WebServer) {
-		ws.server.Addr = net.JoinHostPort("", port)
-	}
+	return nil
 }
 
 type Broadcaster[T any] struct {

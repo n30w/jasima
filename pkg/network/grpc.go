@@ -29,18 +29,23 @@ type channels struct {
 
 type ChatServer struct {
 	chat.UnimplementedChatServiceServer
-	clients *clientele
-	mu      sync.Mutex
-	Name    chat.Name
-	logger  *log.Logger
-	Channel *channels
+	clients    *clientele
+	mu         sync.Mutex
+	logger     *log.Logger
+	Channel    *channels
+	grpcServer *grpc.Server
+	*ServerBase
 
 	// listening determines whether the server will operate on messages,
 	// whether it be through routing, saving, etc.
 	Listening bool
 }
 
-func NewChatServer(logger *log.Logger, name string) *ChatServer {
+func NewChatServer(
+	logger *log.Logger,
+	errs chan<- error,
+	opts ...func(*config),
+) *ChatServer {
 	clients := &clientele{
 		byNameMap:  make(nameToClientsMap),
 		byLayerMap: make(layerToNamesMap),
@@ -51,36 +56,42 @@ func NewChatServer(logger *log.Logger, name string) *ChatServer {
 		ToServer:  make(memory.MessageChannel),
 	}
 
+	cfg := newConfigWithOpts(defaultChatServerConfig, opts...)
+
+	b := &ServerBase{
+		config: cfg,
+		errs:   errs,
+	}
+
 	return &ChatServer{
-		Name:      chat.Name(name),
-		Listening: true,
-		Channel:   chs,
-		clients:   clients,
-		logger:    logger,
+		Listening:  true,
+		Channel:    chs,
+		clients:    clients,
+		logger:     logger,
+		ServerBase: b,
+		grpcServer: grpc.NewServer(),
 	}
 }
 
-func (s *ChatServer) ListenAndServe(
-	protocol, port string,
-	errs chan<- error,
-) {
-	p := makePortString(port)
+func (s *ChatServer) ListenAndServe() {
+	var (
+		protocol = s.config.protocol
+		address  = s.config.addr
+	)
 
-	lis, err := net.Listen(protocol, p)
+	lis, err := net.Listen(protocol, address)
 	if err != nil {
-		errs <- err
+		s.errs <- err
 		return
 	}
 
-	grpcServer := grpc.NewServer()
+	chat.RegisterChatServiceServer(s.grpcServer, s)
 
-	chat.RegisterChatServiceServer(grpcServer, s)
+	s.logger.Infof("Starting gRPC service on %s%s", protocol, address)
 
-	s.logger.Infof("Starting gRPC service on %s%s", protocol, p)
-
-	err = grpcServer.Serve(lis)
+	err = s.grpcServer.Serve(lis)
 	if err != nil {
-		errs <- err
+		s.errs <- err
 		return
 	}
 }

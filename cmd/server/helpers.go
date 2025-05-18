@@ -101,7 +101,7 @@ func loadSpecificationsFromFile(p string) (
 
 	ls[chat.PhoneticsLayer] = chat.Content(b)
 
-	ls[chat.SystemLayer] = chat.Content("")
+	ls[chat.SystemLayer] = ""
 
 	return ls, nil
 }
@@ -181,7 +181,7 @@ func (s *ConlangServer) messageToSystemAgent(
 	msg string,
 ) *chat.Message {
 	return chat.NewPbMessage(
-		s.gs.Name,
+		s.name,
 		name,
 		chat.Content(msg),
 		chat.SystemLayer,
