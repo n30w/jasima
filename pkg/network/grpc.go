@@ -96,10 +96,11 @@ func (s *ChatServer) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *ChatServer) Shutdown() error {
-	s.grpcServer.GracefulStop()
+	// s.grpcServer.GracefulStop()
+
+	s.grpcServer.Stop()
 
 	s.logger.Infof("gRPC server shut down successfully")
-	// s.grpcServer.Stop()
 
 	return nil
 }
