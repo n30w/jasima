@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -18,25 +19,76 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	defaultWebServerPort = ":7070"
+)
+
 type WebServer struct {
 	InitialData  *InitialData
 	Broadcasters *Broadcasters
 	logger       *log.Logger
+	server       *http.Server
 	errs         chan<- error
 }
 
-func NewWebServer(l *log.Logger, errs chan<- error) (*WebServer, error) {
+func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*WebServer)) (*WebServer, error) {
 	b := NewBroadcasters(l)
 	i, err := NewInitialData()
 	if err != nil {
 		return nil, err
 	}
-	return &WebServer{
+
+	ws := &WebServer{
 		InitialData:  i,
 		Broadcasters: b,
 		logger:       l,
 		errs:         errs,
-	}, nil
+		server:       &http.Server{Addr: defaultWebServerPort},
+	}
+
+	for _, opt := range opts {
+		opt(ws)
+	}
+
+	return ws, nil
+}
+
+// ListenAndServe accepts any arbitrary number of `route` functions that
+// register an API route with the HTTP serve mux.
+func (s WebServer) ListenAndServe(routes ...func(*http.ServeMux)) {
+	handler := http.NewServeMux()
+
+	for _, addRoute := range routes {
+		addRoute(handler)
+	}
+
+	s.server.Handler = handler
+
+	s.logger.Infof("Starting web events service on %s", s.server.Addr)
+
+	err := s.server.ListenAndServe()
+	if err != nil {
+		s.errs <- errors.Wrap(err, "failed to serve http")
+		return
+	}
+}
+
+func (s WebServer) Shutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := s.server.Shutdown(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to shutdown web server")
+	}
+
+	return nil
+}
+
+func WithPort(port string) func(*WebServer) {
+	return func(ws *WebServer) {
+		ws.server.Addr = net.JoinHostPort("", port)
+	}
 }
 
 type Broadcaster[T any] struct {
@@ -170,26 +222,6 @@ func NewBroadcasters(l *log.Logger) *Broadcasters {
 		CurrentTime:               NewBroadcaster[string](l),
 		TestMessageFeed:           NewBroadcaster[memory.Message](l),
 		TestGenerationsFeed:       NewBroadcaster[memory.Generation](l),
-	}
-}
-
-// ListenAndServe accepts any arbitrary number of `route` functions that
-// register an API route with the HTTP serve mux.
-func (s WebServer) ListenAndServe(port string, routes ...func(*http.ServeMux)) {
-	p := makePortString(port)
-
-	handler := http.NewServeMux()
-
-	for _, addRoute := range routes {
-		addRoute(handler)
-	}
-
-	s.logger.Infof("Starting web events service on %s", p)
-
-	err := http.ListenAndServe(p, handler)
-	if err != nil {
-		s.errs <- errors.Wrap(err, "failed to serve http")
-		return
 	}
 }
 

@@ -129,7 +129,7 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to enqueue initial generation")
 	}
 
-	webServer, err := network.NewWebServer(l, errs)
+	webServer, err := network.NewWebServer(l, errs, network.WithPort("7070"))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create web server")
 	}
@@ -327,7 +327,6 @@ func (s *ConlangServer) WebEvents() {
 	)
 
 	s.ws.ListenAndServe(
-		"7070",
 		time,
 		chatting,
 		generations,
