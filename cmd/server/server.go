@@ -215,10 +215,13 @@ func (s *ConlangServer) Router(ctx context.Context) {
 				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
 			)
 
-			if msg.Layer == chat.SystemLayer && msg.
-				Receiver == s.name {
-				s.gs.Channel.ToServer <- msg
-				return nil
+			if msg.Layer == chat.SystemLayer && msg.Receiver == s.name {
+				select {
+				case <-ctx.Done():
+					return nil
+				case s.gs.Channel.ToServer <- msg:
+					return nil
+				}
 			}
 
 			err := s.gs.Broadcast(&msg)
@@ -236,12 +239,12 @@ func (s *ConlangServer) Router(ctx context.Context) {
 			)
 
 			if msg.Sender != s.name {
-				// This is necessary so the procedure channel does NOT block
-				// the main router loop.
 				select {
+				case <-ctx.Done():
+					return nil
 				case s.procedureChan <- msg:
 					s.logger.Debug("Dispatching message to procedure channel")
-				default:
+					return nil
 				}
 			}
 
@@ -263,10 +266,6 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		}
 	)
 
-	routerCtx, routerCancel := context.WithCancel(ctx)
-
-	defer routerCancel()
-
 	routeMessages := chat.BuildRouter[*chat.Message](
 		s.gs.Channel.ToClients,
 		printConsoleData,
@@ -276,7 +275,7 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		eventsRoute,
 	)
 
-	err := routeMessages(routerCtx)
+	err := routeMessages(ctx)
 	if err != nil {
 		s.logger.Errorf("failed to route messages: %v", err)
 	}
@@ -350,16 +349,14 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 }
 
 func (s *ConlangServer) ProcessJobs(ctx context.Context) {
-	jCtx, jCancel := context.WithCancel(ctx)
-	defer jCancel()
 	for jobs := range s.procedures {
 		for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
 			select {
-			case <-jCtx.Done():
+			case <-ctx.Done():
 				s.logger.Warn("Processing context cancelled")
 				return
 			default:
-				err = j(jCtx)
+				err = j(ctx)
 				if err != nil {
 					s.errs <- err
 					return
@@ -388,48 +385,62 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		s.Router(ctx)
 	}()
 
-	wg.Add(1)
+	// wg.Add(1)
 	go func() {
-		defer wg.Done()
+		// defer wg.Done()
 		t := utils.Timer(time.Now())
 
-		ng := &memory.Generation{}
-		i := 0
+		var (
+			err error
 
-		evo, _ := utils.NewStaticFixedQueue[job](7)
-		_ = evo.Enqueue(
-			s.iterateSpecs(i, ng),
-			s.iterateDictionary(i, ng),
-			s.iterateLogograms(i, ng),
-			s.updateGenerations(i, ng),
-			s.wait(10*time.Second),
+			// ng is the new generation that will be used throughout batches
+			// of jobs to evolve the language.
+			ng = &memory.Generation{}
+
+			// i keeps track of the current generation.
+			i = 0
+
+			initializeJobs = []job{
+				s.WaitForClients(11),
+			}
+
+			evolveJobs = []job{
+				s.iterateSpecs(i, ng),
+				s.iterateDictionary(i, ng),
+				s.iterateLogograms(i, ng),
+				s.updateGenerations(i, ng),
+				s.wait(10 * time.Second),
+			}
+
+			exportJobs = []job{
+				s.exportData(t),
+			}
 		)
 
-		export, _ := utils.NewStaticFixedQueue[job](1)
-		_ = export.Enqueue(s.exportData(t))
+		evolution, _ := newJobBatch(evolveJobs)
+		export, _ := newJobBatch(exportJobs)
+		init, _ := newJobBatch(initializeJobs)
 
-		jobs, _ := utils.NewStaticFixedQueue[job](2)
-		_ = jobs.Enqueue(
-			s.WaitForClients(11),
-			// s.Evolve,
-		)
-
-		select {
-		case <-ctx.Done():
+		err = utils.SendWithContext(ctx, s.procedures, init)
+		if err != nil {
+			s.errs <- err
 			return
-		case s.procedures <- jobs:
 		}
 
-		select {
-		case <-ctx.Done():
-			return
-		case s.procedures <- evo:
+		// Add the configured number of generation iterations to the queue.
+
+		for range s.config.procedures.maxGenerations {
+			err = utils.SendWithContext(ctx, s.procedures, evolution)
+			if err != nil {
+				s.errs <- err
+				return
+			}
 		}
 
-		select {
-		case <-ctx.Done():
+		err = utils.SendWithContext(ctx, s.procedures, export)
+		if err != nil {
+			s.errs <- err
 			return
-		case s.procedures <- export:
 		}
 
 		s.ProcessJobs(ctx)

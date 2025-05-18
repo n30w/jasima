@@ -204,8 +204,8 @@ func (q *staticFixedQueue[T]) Enqueue(items ...T) error {
 	return q.queue.Enqueue(items...)
 }
 
-// QueueFromSlice generates a queue from a slice.
-func QueueFromSlice[T any](s []T) (Queue[T], error) {
+// NewQueueFromSlice generates a static fixed queue from a slice.
+func NewQueueFromSlice[T any](s []T) (Queue[T], error) {
 	errMsg := "failed to create slice from queue"
 	l := len(s)
 	q, err := NewStaticFixedQueue[T](l)

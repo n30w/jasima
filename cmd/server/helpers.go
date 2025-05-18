@@ -16,6 +16,7 @@ import (
 	"codeberg.org/n30w/jasima/pkg/chat"
 	"codeberg.org/n30w/jasima/pkg/memory"
 	"codeberg.org/n30w/jasima/pkg/network"
+	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 func newTranscriptGeneration() memory.TranscriptGeneration {
@@ -193,10 +194,15 @@ func saveMessageTo(
 	mem MemoryService,
 	msg memory.Message,
 ) error {
-	msg.Role = memory.UserRole
-	err := mem.Save(ctx, msg)
-	if err != nil {
-		return errors.Wrap(err, "failed to save message")
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		msg.Role = memory.UserRole
+		err := mem.Save(ctx, msg)
+		if err != nil {
+			return errors.Wrap(err, "failed to save message")
+		}
 	}
 
 	return nil
@@ -205,6 +211,7 @@ func saveMessageTo(
 // extractUsedWords extracts words used in a text and then enqueues them into
 // initial data.
 func (s *ConlangServer) extractUsedWords(
+	ctx context.Context,
 	dict memory.DictionaryGeneration,
 	text string,
 ) (memory.ResponseDictionaryWordsDetection, error) {
@@ -213,7 +220,7 @@ func (s *ConlangServer) extractUsedWords(
 		err       error
 	)
 
-	usedWords, err = s.findUsedWords(dict, text)
+	usedWords, err = s.findUsedWords(ctx, dict, text)
 	if err != nil {
 		return usedWords, err
 	}
@@ -230,6 +237,7 @@ func (s *ConlangServer) extractUsedWords(
 }
 
 func (s *ConlangServer) findUsedWords(
+	ctx context.Context,
 	dict memory.DictionaryGeneration,
 	text string,
 ) (memory.ResponseDictionaryWordsDetection, error) {
@@ -240,7 +248,7 @@ func (s *ConlangServer) findUsedWords(
 
 	switch s.config.procedures.dictionaryWordExtractionMethod {
 	case extractWithAgent:
-		usedWords, err = s.findUsedWordsAgent(dict, text)
+		usedWords, err = s.findUsedWordsAgent(ctx, dict, text)
 		if err != nil {
 			return usedWords, errors.Wrap(
 				err,
@@ -282,14 +290,18 @@ func (s *ConlangServer) findUsedWordsRegex(
 }
 
 func (s *ConlangServer) findUsedWordsAgent(
+	ctx context.Context,
 	dict memory.DictionaryGeneration,
 	text string,
 ) (memory.ResponseDictionaryWordsDetection, error) {
-	var dictionaryWords memory.ResponseDictionaryWordsDetection
+	var (
+		dictionaryWords memory.ResponseDictionaryWordsDetection
+		emptyDictionary memory.ResponseDictionaryWordsDetection
+	)
 
 	sysAgentDictExtractor, err := s.gs.GetClientByName("SYSTEM_AGENT_C")
 	if err != nil {
-		return dictionaryWords, errors.Wrap(
+		return emptyDictionary, errors.Wrap(
 			err,
 			"failed to retrieve client by name",
 		)
@@ -299,57 +311,75 @@ func (s *ConlangServer) findUsedWordsAgent(
 
 	sb.WriteString(dict.String())
 
-	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(agent.AppendInstructions, sb.String())(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(
-		agent.RequestDictionaryWordDetection,
-		text,
-	)(sysAgentDictExtractor)
-
-	words := <-s.gs.Channel.ToServer
-
-	err = json.Unmarshal([]byte(words.Text), &dictionaryWords)
+	err = s.swc(ctx, s.cmd(agent.Latch)(sysAgentDictExtractor))
 	if err != nil {
-		return dictionaryWords, errors.Wrap(
-			err,
-			"failed to unmarshal dictionary words",
-		)
+		return emptyDictionary, err
 	}
 
-	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(agent.ClearMemory)(sysAgentDictExtractor)
-	s.gs.Channel.ToClients <- s.cmd(agent.ResetInstructions)(sysAgentDictExtractor)
+	err = s.swc(ctx, s.cmd(agent.AppendInstructions, sb.String())(sysAgentDictExtractor))
+	if err != nil {
+		return emptyDictionary, err
+	}
 
-	return dictionaryWords, nil
+	err = s.swc(ctx, s.cmd(agent.Unlatch)(sysAgentDictExtractor))
+	if err != nil {
+		return emptyDictionary, err
+	}
+
+	err = s.swc(ctx, s.cmd(agent.RequestDictionaryWordDetection, text)(sysAgentDictExtractor))
+	if err != nil {
+		return emptyDictionary, err
+	}
+
+	select {
+	case <-ctx.Done():
+		return emptyDictionary, ctx.Err()
+	case words := <-s.gs.Channel.ToServer:
+		err = json.Unmarshal([]byte(words.Text), &dictionaryWords)
+		if err != nil {
+			return emptyDictionary, errors.Wrap(
+				err,
+				"failed to unmarshal dictionary words",
+			)
+		}
+
+		s.resetAgent(ctx, sysAgentDictExtractor)
+
+		return dictionaryWords, nil
+	}
 }
 
 // resetAgents resets agents to their initial state. First it latches them,
 // then it clears their memory, then it resets their instructions.
-func (s *ConlangServer) resetAgents(sender network.CommandsSender, clients []*network.ChatClient) {
-	sender(
-		clients,
-		s.cmd(agent.Latch),
-		s.cmd(agent.ClearMemory),
-		s.cmd(agent.ResetInstructions),
-	)
+func (s *ConlangServer) resetAgents(ctx context.Context, clients []*network.ChatClient) {
+	for _, client := range clients {
+		s.resetAgent(ctx, client)
+	}
 }
 
 func (s *ConlangServer) resetAgent(ctx context.Context, c *network.ChatClient) {
-	select {
-	case <-ctx.Done():
-		return
-	case s.gs.Channel.ToClients <- s.cmd(agent.Latch)(c):
-	}
-	select {
-	case <-ctx.Done():
-		return
-	case s.gs.Channel.ToClients <- s.cmd(agent.ClearMemory)(c):
-	}
-	select {
-	case <-ctx.Done():
-		return
+	var err error
 
-	case s.gs.Channel.ToClients <- s.cmd(agent.ResetInstructions)(c):
+	err = s.swc(ctx, s.cmd(agent.Latch)(c))
+	if err != nil {
+		return
 	}
+
+	err = s.swc(ctx, s.cmd(agent.ClearMemory)(c))
+	if err != nil {
+		return
+	}
+
+	err = s.swc(ctx, s.cmd(agent.ResetInstructions)(c))
+	if err != nil {
+		return
+	}
+}
+
+func (s *ConlangServer) swc(ctx context.Context, msg *chat.Message) error {
+	return utils.SendWithContext(ctx, s.gs.Channel.ToClients, msg)
+}
+
+func newJobBatch[T any](b []T) (utils.Queue[T], error) {
+	return utils.NewQueueFromSlice[T](b)
 }
