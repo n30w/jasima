@@ -114,7 +114,10 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
+		os.Interrupt,
+		syscall.SIGHUP,
 		syscall.SIGINT,
+		syscall.SIGQUIT,
 		syscall.SIGTERM,
 	)
 
