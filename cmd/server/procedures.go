@@ -201,13 +201,9 @@ func (s *ConlangServer) iterate(
 
 	sb.Reset()
 
-	s.resetAgents(clients)
+	s.resetAgent(sysClient)
 
-	s.logger.Infof(
-		"%s took %s to complete",
-		initialLayer,
-		timer().Truncate(time.Millisecond),
-	)
+	s.logger.Infof("%s took %s to complete", initialLayer, timer())
 
 	// End of side effects.
 
@@ -595,6 +591,7 @@ func (s *ConlangServer) Evolve(_ context.Context) error {
 		"./outputs/chats/chat_%s.json",
 		time.Now().Format("20060102150405"),
 	)
+
 	err = saveToJson(allMsgs, fileName)
 	if err != nil {
 		return errors.Wrap(err, "evolution failed to save JSON")

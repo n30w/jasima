@@ -334,3 +334,9 @@ func (s *ConlangServer) resetAgents(clients []*network.ChatClient) {
 		s.cmd(agent.ResetInstructions),
 	)
 }
+
+func (s *ConlangServer) resetAgent(c *network.ChatClient) {
+	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(c)
+	s.gs.Channel.ToClients <- s.cmd(agent.ClearMemory)(c)
+	s.gs.Channel.ToClients <- s.cmd(agent.ResetInstructions)(c)
+}
