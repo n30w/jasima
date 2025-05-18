@@ -63,11 +63,11 @@ func (s WebServer) ListenAndServe(ctx context.Context, routes ...func(*http.Serv
 	s.logger.Infof("Starting web events service on %s", s.config.addr)
 
 	go func() {
+		defer serverCancel()
 		err := http.Serve(s.listener, handler)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.errs <- errors.Wrap(err, "failed to serve http")
 		}
-		serverCancel()
 	}()
 
 	<-serverCtx.Done()
