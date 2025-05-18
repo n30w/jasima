@@ -44,14 +44,14 @@
 			{/key}
 		</div>
 	</div>
-	<div class="absolute left-10 top-10 w-1/2">
+	<div class="absolute left-10 top-10 w-1/4">
 		<h1 class="pb-2 font-light tracking-widest">GENERATOR</h1>
 		{#key genRes}
 			<p class="text-sm" in:typewriter={{ speed: 20 }}>{genRes}</p>
 		{/key}
 	</div>
-	<div class="absolute bottom-10 right-10 w-1/2">
-		<h1 class="w-full text-right font-light tracking-widest">ADVERSARY</h1>
+	<div class="absolute bottom-10 right-10 w-1/4">
+		<h1 class="pb-2 text-right font-light uppercase tracking-widest">Adversary</h1>
 		{#key advRes}
 			<p class="text-right text-sm" in:typewriter={{ speed: 20 }}>{advRes}</p>
 		{/key}
