@@ -166,23 +166,19 @@ func main() {
 		syscall.SIGTERM,
 	)
 
-	cs.Run(ctx, wg)
-
 	wg.Add(1)
 	go func() {
-		gtfo := false
-		for !gtfo {
-			select {
-			case err = <-errs:
-				logger.Error(err)
-				gtfo = true
-			case <-halt:
-				gtfo = true
-			}
-		}
-		wg.Done()
-		stop()
+		defer wg.Done()
+		cs.Run(ctx, wg)
 	}()
+
+	select {
+	case err = <-errs:
+		logger.Error(err)
+		stop()
+	case <-halt:
+		stop()
+	}
 
 	<-ctx.Done()
 

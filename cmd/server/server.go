@@ -352,27 +352,15 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 	)
 }
 
-func (s *ConlangServer) StartProcedures(ctx context.Context) {
-	jobs, _ := utils.NewStaticFixedQueue[job](100)
-
-	_ = jobs.Enqueue(
-		s.WaitForClients(11),
-		s.Evolve,
-	)
-
-	s.procedures <- jobs
-}
-
 func (s *ConlangServer) ProcessJobs(ctx context.Context) {
-	jobsCtx, jobsCancel := context.WithCancel(ctx)
+	jobsCtx := context.WithoutCancel(ctx)
 
-	defer jobsCancel()
-
-	select {
-	case <-jobsCtx.Done():
-		s.logger.Warn("Cancelling jobs")
-	default:
-		for jobs := range s.procedures {
+	for {
+		select {
+		case <-jobsCtx.Done():
+			s.logger.Warn("Cancelling jobs")
+			return
+		case jobs := <-s.procedures:
 			for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
 				err = j(jobsCtx)
 				if err != nil {
@@ -385,6 +373,8 @@ func (s *ConlangServer) ProcessJobs(ctx context.Context) {
 }
 
 func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
+	jobs, _ := utils.NewStaticFixedQueue[job](100)
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -393,12 +383,6 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 			s.errs <- err
 			return
 		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		s.StartProcedures(ctx)
 	}()
 
 	wg.Add(1)
@@ -413,9 +397,17 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		s.WebEvents(ctx)
 	}()
 
-	wg.Add(1)
+	// wg.Add(1)
 	go func() {
-		defer wg.Done()
+		// defer wg.Done()
+
+		_ = jobs.Enqueue(
+			s.WaitForClients(11),
+			s.Evolve,
+		)
+
+		s.procedures <- jobs
+
 		s.ProcessJobs(ctx)
 	}()
 
