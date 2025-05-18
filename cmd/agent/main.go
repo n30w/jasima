@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
+	"github.com/pkg/errors"
 
 	"codeberg.org/n30w/jasima/pkg/llms"
 	"codeberg.org/n30w/jasima/pkg/memory"
@@ -149,11 +150,19 @@ func main() {
 	c.Run(ctx)
 
 	go func() {
-		select {
-		case err = <-errs:
-			logger.Error(err)
-		case sig := <-halt:
-			logger.Warnf("Received %s, shutting down...", sig)
+		gtfo := false
+		for !gtfo {
+			select {
+			case err = <-errs:
+				logger.Error(err)
+				if !errors.Is(err, context.Canceled) {
+					logger.Warn("Context canceled")
+					gtfo = true
+				}
+			case sig := <-halt:
+				logger.Warnf("Received %s, shutting down...", sig)
+				gtfo = true
+			}
 		}
 		stop()
 	}()
