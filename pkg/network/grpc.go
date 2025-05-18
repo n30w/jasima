@@ -26,6 +26,15 @@ type channels struct {
 	ToServer memory.MessageChannel
 }
 
+func (c channels) Teardown() {
+	if c.ToClients != nil {
+		close(c.ToClients)
+	}
+	if c.ToServer != nil {
+		close(c.ToServer)
+	}
+}
+
 type ChatServer struct {
 	chat.UnimplementedChatServiceServer
 	clients    *clientele
@@ -51,8 +60,8 @@ func NewChatServer(
 	}
 
 	chs := &channels{
-		ToClients: make(chan *chat.Message),
-		ToServer:  make(memory.MessageChannel),
+		ToClients: make(chan *chat.Message, 100),
+		ToServer:  make(memory.MessageChannel, 100),
 	}
 
 	cfg := newConfigWithOpts(defaultChatServerConfig, opts...)
@@ -76,7 +85,7 @@ func NewChatServer(
 	return cs, nil
 }
 
-func (s *ChatServer) ListenAndServe(ctx context.Context) error {
+func (s *ChatServer) ListenAndServe(ctx context.Context) {
 	serverCtx, serverCancel := context.WithCancel(ctx)
 
 	defer serverCancel()
@@ -92,11 +101,16 @@ func (s *ChatServer) ListenAndServe(ctx context.Context) error {
 
 	<-serverCtx.Done()
 
-	return s.Shutdown()
+	err := s.Shutdown()
+	if err != nil {
+		s.errs <- err
+	}
 }
 
 func (s *ChatServer) Shutdown() error {
 	// s.grpcServer.GracefulStop()
+
+	s.Channel.Teardown()
 
 	s.grpcServer.Stop()
 
@@ -489,9 +503,6 @@ func (c *ChatClientService) listen() error {
 	)
 
 	for !disconnected {
-
-		// Wait for message to come in from server. This is a blocking call.
-
 		msg, err = c.conn.Recv()
 		switch {
 		case err == io.EOF:
@@ -517,6 +528,8 @@ func (c *ChatClientService) Close() error {
 	if err != nil {
 		return err
 	}
+
+	defer c.channel.Teardown()
 
 	return c.grpcClient.Close()
 }

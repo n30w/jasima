@@ -154,13 +154,18 @@ func (b *Broadcaster[T]) InitialData(d utils.Queue[T]) http.HandlerFunc {
 		}
 
 		for i := range len(q) {
-			c.send <- q[i]
+			select {
+			case <-ctx.Done():
+				return
+			case c.send <- q[i]:
+			}
 		}
 
 		// Then serve. This function loops until the ChatClient disconnects.
 
 		err = c.serve()
 		if err != nil {
+			b.logger.Errorf("failed serving client: %v", err)
 			c.cancel()
 		}
 	}
@@ -195,6 +200,7 @@ func (b *Broadcaster[T]) HandleClient(w http.ResponseWriter, r *http.Request) {
 
 	err := c.serve()
 	if err != nil {
+		b.logger.Errorf("failed serving client: %v", err)
 		c.cancel()
 	}
 }
@@ -300,10 +306,7 @@ type WebClient[T any] struct {
 }
 
 func (c *WebClient[T]) serve() error {
-	errMsg := "failed serving ChatClient"
-
 	rc := http.NewResponseController(c.conn)
-
 	for {
 		select {
 		case msg, ok := <-c.send:
@@ -313,14 +316,14 @@ func (c *WebClient[T]) serve() error {
 
 			j, err := json.Marshal(msg)
 			if err != nil {
-				return errors.Wrap(err, errMsg)
+				return err
 			}
 
 			d := string(j)
 
 			_, err = fmt.Fprintf(c.conn, "data: %s\n\n", d)
 			if err != nil {
-				return errors.Wrap(err, errMsg)
+				return err
 			}
 
 			_ = rc.Flush()

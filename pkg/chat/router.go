@@ -12,16 +12,23 @@ import (
 func BuildRouter[T any](
 	ch chan T,
 	routes ...func(context.Context, T) error,
-) func(errs chan<- error) {
-	return func(errs chan<- error) {
+) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		mCtx, mCancel := context.WithCancel(ctx)
+		defer mCancel()
 		for msg := range ch {
-			ctx := context.Background()
-			for _, f := range routes {
-				err := f(ctx, msg)
-				if err != nil {
-					errs <- err
+			select {
+			case <-mCtx.Done():
+				return nil
+			default:
+				for _, f := range routes {
+					err := f(mCtx, msg)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
+		return nil
 	}
 }

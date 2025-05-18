@@ -184,6 +184,8 @@ func main() {
 
 	wg.Wait()
 
+	cs.Teardown()
+
 	close(errs)
 
 	fmt.Printf("\n mi tawa! \n")

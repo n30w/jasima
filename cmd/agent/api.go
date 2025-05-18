@@ -70,7 +70,7 @@ func (c *client) ReceiveMessages() {
 	}
 }
 
-func (c *client) Router() {
+func (c *client) Router(ctx context.Context) {
 	var (
 		printConsoleData = func(ctx context.Context, pbMsg *chat.Message) error {
 			msg := memory.NewChatMessage(
@@ -141,11 +141,14 @@ func (c *client) Router() {
 		messageRouter,
 	)
 
-	go routeMessage(c.channels.errs)
+	err := routeMessage(ctx)
+	if err != nil {
+		c.channels.errs <- err
+	}
 }
 
 func (c *client) Run(ctx context.Context) {
-	c.Router()
+	go c.Router(ctx)
 
 	go c.SendMessages()
 

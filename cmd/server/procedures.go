@@ -20,10 +20,14 @@ import (
 // total number of back and forth rounds are complete. Layer control and message
 // routing are decoupled.
 func (s *ConlangServer) iterate(
+	ctx context.Context,
 	initialGeneration memory.Generation,
 	initialLayer chat.Layer,
 	exchanges int,
 ) (memory.Generation, error) {
+	iCtx, iCancel := context.WithCancel(ctx)
+	defer iCancel()
+
 	// The maps and slices need to be copied, since in Go, maps and slices are
 	// pass by reference always.
 
@@ -42,6 +46,7 @@ func (s *ConlangServer) iterate(
 	s.logger.Infof("%d: Recursing on %s", initialLayer, initialLayer)
 
 	prevGeneration, err := s.iterate(
+		iCtx,
 		initialGeneration,
 		initialLayer-1,
 		exchanges,
@@ -115,6 +120,8 @@ func (s *ConlangServer) iterate(
 		sb strings.Builder
 	)
 
+	sendCommands := network.SendCommandBuilder(iCtx, s.gs.Channel.ToClients)
+
 	newGeneration.Transcript = prevGeneration.Transcript.Copy()
 	newGeneration.Specifications = prevGeneration.Specifications.Copy()
 	newGeneration.Dictionary = prevGeneration.Dictionary.Copy()
@@ -141,7 +148,7 @@ func (s *ConlangServer) iterate(
 	sb.WriteString("Here is the complete grammar of the language:\n")
 	sb.WriteString(string(newGeneration.Specifications[chat.GrammarLayer]))
 
-	s.sendCommands(
+	sendCommands(
 		clients,
 		s.cmd(agent.AppendInstructions, sb.String()),
 		s.cmd(agent.Unlatch),
@@ -149,82 +156,105 @@ func (s *ConlangServer) iterate(
 
 	s.logger.Infof("Sending %s to %s", agent.Unlatch, initialLayer)
 
-	s.gs.Channel.ToClients <- kickoff
-
-	for i := range exchanges {
-
-		m := <-s.procedureChan
-
-		newGeneration.Transcript[initialLayer] = append(
-			newGeneration.Transcript[initialLayer],
-			m,
-		)
-
-		// Retrieve the extracted words.
-
-		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
-		if err != nil {
-			return newGeneration, errors.Wrap(err, "failed finding used words")
-		}
-
-		// Broadcast the sent message.
-
-		s.ws.Broadcasters.Messages.Broadcast(m)
-
-		// Broadcast the extracted words from the sent message.
-
-		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
-
-		s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
+	select {
+	case <-iCtx.Done():
+		return newGeneration, nil
+	case s.gs.Channel.ToClients <- kickoff:
 	}
 
-	s.resetAgents(clients)
+	for i := range exchanges {
+		select {
+		case <-iCtx.Done():
+			return newGeneration, nil
+		case m := <-s.procedureChan:
+			newGeneration.Transcript[initialLayer] = append(
+				newGeneration.Transcript[initialLayer],
+				m,
+			)
+
+			// Retrieve the extracted words.
+
+			usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
+			if err != nil {
+				return newGeneration, errors.Wrap(err, "failed finding used words")
+			}
+
+			// Broadcast the sent message.
+
+			s.ws.Broadcasters.Messages.Broadcast(m)
+
+			// Broadcast the extracted words from the sent message.
+
+			s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
+
+			s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
+		}
+	}
+
+	s.resetAgents(sendCommands, clients)
 
 	sb.Reset()
 
 	// The system agent will ONLY summarize the chat log, and not read the
 	// other Specifications for other layers (for now at least).
 
-	s.gs.Channel.ToClients <- addSysAgentInstructions
-	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(sysClient)
+	select {
+	case <-iCtx.Done():
+		return newGeneration, nil
+	case s.gs.Channel.ToClients <- addSysAgentInstructions:
+	}
+
+	select {
+	case <-iCtx.Done():
+		return newGeneration, nil
+	case s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(sysClient):
+	}
 
 	msg := s.messageToSystemAgent(
 		sysClient.Name,
 		transcriptToString(newGeneration.Transcript[initialLayer]),
 	)
 
-	s.gs.Channel.ToClients <- msg
+	select {
+	case <-iCtx.Done():
+		return newGeneration, nil
+	case s.gs.Channel.ToClients <- msg:
+	}
 
 	s.logger.Infof("Waiting for system agent response...")
 
-	specPrime := <-s.gs.Channel.ToServer
+	select {
+	case <-iCtx.Done():
+		return newGeneration, nil
+	case specPrime := <-s.gs.Channel.ToServer:
+		sb.Reset()
 
-	sb.Reset()
+		s.resetAgent(iCtx, sysClient)
 
-	s.resetAgent(sysClient)
+		s.logger.Infof("%s took %s to complete", initialLayer, timer())
 
-	s.logger.Infof("%s took %s to complete", initialLayer, timer())
+		// End of side effects.
 
-	// End of side effects.
+		newGeneration.Specifications[initialLayer] = specPrime.Text
 
-	newGeneration.Specifications[initialLayer] = specPrime.Text
+		// JK some more.
 
-	// JK some more.
+		s.ws.Broadcasters.Specification.Broadcast(newGeneration.Specifications)
 
-	s.ws.Broadcasters.Specification.Broadcast(newGeneration.Specifications)
+		if initialLayer == chat.DictionaryLayer {
+			// Update the dictionary.
 
-	if initialLayer == chat.DictionaryLayer {
-		// Update the dictionary.
-
-		s.iterateUpdateDictionary(newGeneration)
+			s.iterateUpdateDictionary(iCtx, newGeneration)
+		}
+		return newGeneration, nil
 	}
-
-	return newGeneration, nil
 }
 
 func (s *ConlangServer) iterateUpdateDictionary(
+	ctx context.Context,
 	newGeneration memory.Generation,
 ) {
+	sendCommands := network.SendCommandBuilder(ctx, s.gs.Channel.ToClients)
 	s.logger.Info("Initiating dictionary updates...")
 
 	dictSysAgent, err := s.gs.GetClientByName("SYSTEM_AGENT_B")
@@ -241,44 +271,73 @@ func (s *ConlangServer) iterateUpdateDictionary(
 		return
 	}
 
-	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(dictSysAgent)
-	s.gs.Channel.ToClients <- s.cmd(
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(agent.Latch)(dictSysAgent):
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(
 		agent.AppendInstructions,
 		fmt.Sprintf(
 			"This is the current dictionary\n%s",
 			string(genDict),
 		),
-	)(dictSysAgent)
+	)(dictSysAgent):
+	}
 
 	// Send results to dictionary LLM.
 
-	s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(dictSysAgent)
-	s.gs.Channel.ToClients <- s.cmd(
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(agent.Unlatch)(dictSysAgent):
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(
 		agent.RequestJsonDictionaryUpdate,
 		transcriptToString(newGeneration.Transcript[chat.DictionaryLayer]),
-	)(dictSysAgent)
+	)(dictSysAgent):
+	}
 
 	var updates memory.ResponseDictionaryEntries
 
-	dictUpdates := <-s.gs.Channel.ToServer
-
-	err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
-	if err != nil {
-		s.errs <- errors.Wrap(
-			err,
-			"failed to unmarshal dictionary updates",
-		)
+	select {
+	case <-ctx.Done():
 		return
+	case dictUpdates := <-s.gs.Channel.ToServer:
+		err = json.Unmarshal([]byte(dictUpdates.Text), &updates)
+		if err != nil {
+			s.errs <- errors.Wrap(
+				err,
+				"failed to unmarshal dictionary updates",
+			)
+			return
+		}
 	}
 
-	s.dictUpdatesChan <- updates
+	select {
+	case <-ctx.Done():
+		return
+	case s.dictUpdatesChan <- updates:
+	}
 
 	s.logger.Info("Updates sent to dictionary channel")
 
-	s.resetAgents(clients)
+	s.resetAgents(sendCommands, clients)
 }
 
-func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word string) (
+func (s *ConlangServer) iterateLogogram(
+	ctx context.Context,
+	newGeneration memory.Generation,
+	word string,
+) (
 	string,
 	error,
 ) {
@@ -312,14 +371,24 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 		adversaryOk = false
 	)
 
+	sendCommands := network.SendCommandBuilder(ctx, s.gs.Channel.ToClients)
+
 	// Fresh slate.
 
-	s.sendCommands(clients, s.cmd(agent.Latch), s.cmd(agent.ClearMemory))
+	sendCommands(clients, s.cmd(agent.Latch), s.cmd(agent.ClearMemory))
 
-	s.gs.Channel.ToClients <- generatorInstructions
-	s.gs.Channel.ToClients <- adversaryInstructions
+	select {
+	case <-ctx.Done():
+		return "", nil
+	case s.gs.Channel.ToClients <- generatorInstructions:
+	}
+	select {
+	case <-ctx.Done():
+		return "", nil
+	case s.gs.Channel.ToClients <- adversaryInstructions:
+	}
 
-	s.sendCommands(clients, s.cmd(agent.Unlatch))
+	sendCommands(clients, s.cmd(agent.Unlatch))
 
 	// Send the initial message.
 
@@ -355,106 +424,114 @@ func (s *ConlangServer) iterateLogogram(newGeneration memory.Generation, word st
 	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`
 
 	for (!adversaryOk || !generatorOk) && i <= DefaultMaxExchanges {
-		m := <-s.gs.Channel.ToServer
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case m := <-s.gs.Channel.ToServer:
+			var msg *chat.Message
 
-		var msg *chat.Message
-
-		logoIter = memory.LogogramIteration{
-			Generator: logoIter.Generator,
-			Adversary: logoIter.Adversary,
-		}
-
-		// Switch the message to the recipient based on the sender. If the
-		// sender is the generator, rewrite the response into one for
-		// the adversary. If the sender is the adversary, rewrite the message
-		// for the generator.
-
-		switch m.Sender {
-		case generator.Name:
-
-			// Make a message for the adversary.
-
-			var res memory.ResponseLogogramIteration
-
-			err := json.Unmarshal([]byte(m.Text), &res)
-			if err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal agent logogram iteration")
+			logoIter = memory.LogogramIteration{
+				Generator: logoIter.Generator,
+				Adversary: logoIter.Adversary,
 			}
 
-			logoIter.Generator = res
+			// Switch the message to the recipient based on the sender. If the
+			// sender is the generator, rewrite the response into one for
+			// the adversary. If the sender is the adversary, rewrite the message
+			// for the generator.
 
-			currentSvg = res.Svg
+			switch m.Sender {
+			case generator.Name:
 
-			generatorOk = res.Stop
+				// Make a message for the adversary.
 
-			msg = s.cmd(
-				agent.RequestLogogramCritique,
-				res.Name+"\n"+res.Svg+"\n\n"+res.Response,
-			)(adversary)
+				var res memory.ResponseLogogramIteration
 
-			// Validate SVG, send to sys agent for correction.
+				err := json.Unmarshal([]byte(m.Text), &res)
+				if err != nil {
+					return "", errors.Wrap(err, "failed to unmarshal agent logogram iteration")
+				}
 
-		case adversary.Name:
+				logoIter.Generator = res
 
-			// Make a message for the generator.
+				currentSvg = res.Svg
 
-			var res memory.ResponseLogogramCritique
+				generatorOk = res.Stop
 
-			err := json.Unmarshal([]byte(m.Text), &res)
-			if err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal generator logogram critique")
+				msg = s.cmd(
+					agent.RequestLogogramCritique,
+					res.Name+"\n"+res.Svg+"\n\n"+res.Response,
+				)(adversary)
+
+				// Validate SVG, send to sys agent for correction.
+
+			case adversary.Name:
+
+				// Make a message for the generator.
+
+				var res memory.ResponseLogogramCritique
+
+				err := json.Unmarshal([]byte(m.Text), &res)
+				if err != nil {
+					return "", errors.Wrap(err, "failed to unmarshal generator logogram critique")
+				}
+
+				logoIter.Adversary = res
+
+				adversaryOk = res.Stop
+
+				msg = s.cmd(agent.RequestLogogramIteration, res.Response)(generator)
 			}
 
-			logoIter.Adversary = res
+			usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
+			if err != nil {
+				return "", errors.Wrap(err, "failed finding used words")
+			}
 
-			adversaryOk = res.Stop
+			// Broadcast the sent message.
 
-			msg = s.cmd(agent.RequestLogogramIteration, res.Response)(generator)
+			s.ws.Broadcasters.Messages.Broadcast(m)
+
+			// Broadcast the extracted words from the sent message.
+
+			s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
+
+			err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
+			if err != nil {
+				return "", err
+			}
+
+			s.ws.Broadcasters.LogogramDisplay.Broadcast(logoIter)
+
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Second * 10):
+			}
+
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case s.gs.Channel.ToClients <- msg:
+				// `i` is incremented here because an exchange is only when a message
+				// traverses the boundary of one agent to another.
+
+				i++
+
+				s.logger.Debugf("Exchanges: %d", i)
+			}
 		}
-
-		usedWords, err := s.extractUsedWords(newGeneration.Dictionary, m.Text.String())
-		if err != nil {
-			return "", errors.Wrap(err, "failed finding used words")
-		}
-
-		// Broadcast the sent message.
-
-		s.ws.Broadcasters.Messages.Broadcast(m)
-
-		// Broadcast the extracted words from the sent message.
-
-		s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
-
-		err = s.ws.InitialData.RecentLogogram.Enqueue(logoIter)
-		if err != nil {
-			return "", err
-		}
-
-		s.ws.Broadcasters.LogogramDisplay.Broadcast(logoIter)
-
-		time.Sleep(10 * time.Second)
-
-		s.gs.Channel.ToClients <- msg
-
-		// `i` is incremented here because an exchange is only when a message
-		// traverses the boundary of one agent to another.
-
-		i++
-
-		s.logger.Debugf("Exchanges: %d", i)
 	}
 
 	// Put everything back.
 
-	s.resetAgents(clients)
+	s.resetAgents(sendCommands, clients)
 
 	return currentSvg, nil
 }
 
 func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		s.logger.Info("Waiting for clients to join...")
-
 		var err error
 
 		joinCtx, joinCtxCancel := context.WithCancel(ctx)
@@ -463,6 +540,7 @@ func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) erro
 
 		go func() {
 			defer joinCtxCancel()
+			s.logger.Info("Waiting for clients to join...")
 			for {
 				select {
 				case <-joinCtx.Done():
@@ -487,51 +565,95 @@ func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) erro
 	}
 }
 
-// Evolve manages the entire evolutionary function loop.
-func (s *ConlangServer) Evolve(ctx context.Context) error {
-	evolveCtx, evolveCtxCancel := context.WithCancel(ctx)
+func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		var err error
 
-	defer evolveCtxCancel()
+		genSlice, err := s.generations.ToSlice()
+		if err != nil {
+			return errors.Wrap(err, "failed to iterate specs")
+		}
 
-	select {
-	case <-evolveCtx.Done():
-		return ctx.Err()
-	default:
-		var (
-			err    error
-			errMsg = "failed to evolve generation %d"
+		// Starts on Layer 4, recurses to 1.
+
+		*g, err = s.iterate(
+			ctx,
+			genSlice[i],
+			chat.LogographyLayer,
+			s.config.procedures.maxExchanges,
 		)
+		if err != nil {
+			return errors.Wrapf(err, "failed to iterate on generation %d", i)
+		}
 
-		timer := utils.Timer(time.Now())
+		s.logger.Infof("Generation %d specs completed ", i+1)
 
-		for i := range s.config.procedures.maxGenerations {
-			elapsedTime := utils.Timer(time.Now())
+		return nil
+	}
+}
 
-			genSlice, err := s.generations.ToSlice()
-			if err != nil {
-				return errors.Wrap(err, errMsg)
-			}
+func (s *ConlangServer) iterateLogograms(
+	i int,
+	g *memory.Generation,
+) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		w := "suli"
 
-			// Starts on Layer 4, recurses to 1.
+		svg, err := s.iterateLogogram(ctx, *g, w)
+		if err != nil {
+			return errors.Wrapf(err, "failed to iterate logograms on iteration %d", i)
+		}
 
-			newGeneration, err := s.iterate(
-				genSlice[i],
-				chat.LogographyLayer,
-				s.config.procedures.maxExchanges,
+		g.Logography[w] = svg
+
+		s.dictionary = g.Dictionary.Copy()
+
+		return nil
+	}
+}
+
+func (s *ConlangServer) updateGenerations(
+	i int,
+	g *memory.Generation,
+) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		err := s.generations.Enqueue(*g)
+		if err != nil {
+			return errors.Wrapf(
+				err,
+				"failed to enqueue new generation %d", i,
 			)
-			if err != nil {
-				return errors.Wrapf(err, "failed to iterate on generation %d", i)
-			}
+		}
 
-			s.logger.Infof("Iteration %d completed in %s", i+1, elapsedTime())
+		err = s.ws.InitialData.RecentGenerations.Enqueue(*g)
+		if err != nil {
+			return errors.Wrapf(
+				err,
+				"failed to enqueue new generation to initial data %d", i,
+			)
+		}
 
-			updates := <-s.dictUpdatesChan
+		s.ws.Broadcasters.Generation.Broadcast(*g)
+
+		return nil
+	}
+}
+
+func (s *ConlangServer) iterateDictionary(
+	i int,
+	g *memory.Generation,
+) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case updates := <-s.dictUpdatesChan:
 
 			s.logger.Info("Received dictionary update")
 
 			// Update the generation's dictionary based on updates.
 
-			currentDict := newGeneration.Dictionary.Copy()
+			currentDict := g.Dictionary.Copy()
 
 			for _, update := range updates.Entries {
 
@@ -557,44 +679,32 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 				currentDict[update.Word] = entry
 			}
 
-			newGeneration.Dictionary = currentDict.Copy()
-
-			w := "suli"
-
-			svg, err := s.iterateLogogram(newGeneration, w)
-			if err != nil {
-				return err
-			}
-
-			newGeneration.Logography[w] = svg
-
-			s.dictionary = newGeneration.Dictionary.Copy()
-
-			err = s.generations.Enqueue(newGeneration)
-			if err != nil {
-				return errors.Wrapf(
-					err,
-					"failed to enqueue new generation %d", i,
-				)
-			}
-
-			err = s.ws.InitialData.RecentGenerations.Enqueue(newGeneration)
-			if err != nil {
-				return errors.Wrapf(
-					err,
-					"failed to enqueue new generation to initial data %d", i,
-				)
-			}
-
-			s.ws.Broadcasters.Generation.Broadcast(newGeneration)
-
-			time.Sleep(10 * time.Second)
+			g.Dictionary = currentDict.Copy()
 		}
 
+		return nil
+	}
+}
+
+func (s *ConlangServer) wait(t time.Duration) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		s.logger.Infof("Waiting for %s...", t)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(t):
+		}
+
+		return nil
+	}
+}
+
+func (s *ConlangServer) exportData(t func() time.Duration) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
 		s.gs.Listening = false
 
 		s.logger.Info("EVOLUTION COMPLETE")
-		s.logger.Infof("Evolution took %s", timer())
+		s.logger.Infof("Evolution took %s", t())
 
 		// Marshal to JSON
 
@@ -636,13 +746,13 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 	}
 }
 
-func (s *ConlangServer) TestIterateLogogram(_ context.Context) error {
+func (s *ConlangServer) TestIterateLogogram(ctx context.Context) error {
 	g, err := s.generations.ToSlice()
 	if err != nil {
 		return err
 	}
 
-	svg, err := s.iterateLogogram(g[0], "suli")
+	svg, err := s.iterateLogogram(ctx, g[0], "suli")
 	if err != nil {
 		return err
 	}

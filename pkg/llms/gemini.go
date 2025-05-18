@@ -148,7 +148,11 @@ func (c GoogleGemini) request(
 				done = true
 			}
 
-			time.Sleep(retry)
+			select {
+			case <-ctx.Done():
+				return result, nil
+			case <-time.After(retry):
+			}
 
 			continue
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
@@ -60,9 +61,6 @@ type ConlangServer struct {
 
 	// cmd builds commands that can be sent to an agent.
 	cmd network.CommandForAgent
-
-	// sendCommands sends commands to agents.
-	sendCommands network.CommandsSender
 }
 
 func NewConlangServer(
@@ -162,7 +160,7 @@ func NewConlangServer(
 		gs:            grpcServer,
 		ws:            webServer,
 		generations:   generations,
-		procedureChan: make(chan memory.Message),
+		procedureChan: make(chan memory.Message, 100),
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
@@ -173,8 +171,6 @@ func NewConlangServer(
 		cmd:             network.BuildCommand(cfg.name),
 		errs:            errs,
 	}
-
-	cs.sendCommands = network.SendCommandBuilder(cs.gs.Channel.ToClients)
 
 	return cs, nil
 }
@@ -267,6 +263,10 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		}
 	)
 
+	routerCtx, routerCancel := context.WithCancel(ctx)
+
+	defer routerCancel()
+
 	routeMessages := chat.BuildRouter[*chat.Message](
 		s.gs.Channel.ToClients,
 		printConsoleData,
@@ -276,15 +276,9 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		eventsRoute,
 	)
 
-	routeCtx, routeCancel := context.WithCancel(ctx)
-
-	defer routeCancel()
-
-	select {
-	case <-routeCtx.Done():
-		s.logger.Warn("Routing context cancelled")
-	default:
-		routeMessages(s.errs)
+	err := routeMessages(routerCtx)
+	if err != nil {
+		s.logger.Errorf("failed to route messages: %v", err)
 	}
 }
 
@@ -342,8 +336,11 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 		}
 	)
 
+	webCtx, webCancel := context.WithCancel(ctx)
+	defer webCancel()
+
 	s.ws.ListenAndServe(
-		ctx,
+		webCtx,
 		timeNow,
 		chatting,
 		generations,
@@ -353,16 +350,16 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 }
 
 func (s *ConlangServer) ProcessJobs(ctx context.Context) {
-	jobsCtx := context.WithoutCancel(ctx)
-
-	for {
-		select {
-		case <-jobsCtx.Done():
-			s.logger.Warn("Cancelling jobs")
-			return
-		case jobs := <-s.procedures:
-			for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
-				err = j(jobsCtx)
+	jCtx, jCancel := context.WithCancel(ctx)
+	defer jCancel()
+	for jobs := range s.procedures {
+		for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
+			select {
+			case <-jCtx.Done():
+				s.logger.Warn("Processing context cancelled")
+				return
+			default:
+				err = j(jCtx)
 				if err != nil {
 					s.errs <- err
 					return
@@ -373,22 +370,10 @@ func (s *ConlangServer) ProcessJobs(ctx context.Context) {
 }
 
 func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
-	jobs, _ := utils.NewStaticFixedQueue[job](100)
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := s.gs.ListenAndServe(ctx)
-		if err != nil {
-			s.errs <- err
-			return
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		go s.Router(ctx)
+		s.gs.ListenAndServe(ctx)
 	}()
 
 	wg.Add(1)
@@ -397,16 +382,55 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		s.WebEvents(ctx)
 	}()
 
-	// wg.Add(1)
+	wg.Add(1)
 	go func() {
-		// defer wg.Done()
+		defer wg.Done()
+		s.Router(ctx)
+	}()
 
-		_ = jobs.Enqueue(
-			s.WaitForClients(11),
-			s.Evolve,
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := utils.Timer(time.Now())
+
+		ng := &memory.Generation{}
+		i := 0
+
+		evo, _ := utils.NewStaticFixedQueue[job](7)
+		_ = evo.Enqueue(
+			s.iterateSpecs(i, ng),
+			s.iterateDictionary(i, ng),
+			s.iterateLogograms(i, ng),
+			s.updateGenerations(i, ng),
+			s.wait(10*time.Second),
 		)
 
-		s.procedures <- jobs
+		export, _ := utils.NewStaticFixedQueue[job](1)
+		_ = export.Enqueue(s.exportData(t))
+
+		jobs, _ := utils.NewStaticFixedQueue[job](2)
+		_ = jobs.Enqueue(
+			s.WaitForClients(11),
+			// s.Evolve,
+		)
+
+		select {
+		case <-ctx.Done():
+			return
+		case s.procedures <- jobs:
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case s.procedures <- evo:
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case s.procedures <- export:
+		}
 
 		s.ProcessJobs(ctx)
 	}()
@@ -451,4 +475,10 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 			s.outputTestData(ctx, msgs, gens)
 		}()
 	}
+}
+
+func (s *ConlangServer) Teardown() {
+	close(s.procedureChan)
+	close(s.dictUpdatesChan)
+	close(s.procedures)
 }

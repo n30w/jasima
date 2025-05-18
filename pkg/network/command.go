@@ -1,6 +1,8 @@
 package network
 
 import (
+	"context"
+
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
 )
@@ -35,12 +37,22 @@ func BuildCommand(sender string) CommandForAgent {
 }
 
 func SendCommandBuilder(
+	ctx context.Context,
 	pool chan<- *chat.Message,
-) func([]*ChatClient, ...MessageFor) {
+) func(
+	[]*ChatClient,
+	...MessageFor,
+) {
 	return func(clients []*ChatClient, commands ...MessageFor) {
+		sCtx, sCancel := context.WithCancel(ctx)
+		defer sCancel()
 		for _, c := range clients {
 			for _, cmd := range commands {
-				pool <- cmd(c)
+				select {
+				case <-sCtx.Done():
+					return
+				case pool <- cmd(c):
+				}
 			}
 		}
 	}

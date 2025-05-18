@@ -326,8 +326,8 @@ func (s *ConlangServer) findUsedWordsAgent(
 
 // resetAgents resets agents to their initial state. First it latches them,
 // then it clears their memory, then it resets their instructions.
-func (s *ConlangServer) resetAgents(clients []*network.ChatClient) {
-	s.sendCommands(
+func (s *ConlangServer) resetAgents(sender network.CommandsSender, clients []*network.ChatClient) {
+	sender(
 		clients,
 		s.cmd(agent.Latch),
 		s.cmd(agent.ClearMemory),
@@ -335,8 +335,21 @@ func (s *ConlangServer) resetAgents(clients []*network.ChatClient) {
 	)
 }
 
-func (s *ConlangServer) resetAgent(c *network.ChatClient) {
-	s.gs.Channel.ToClients <- s.cmd(agent.Latch)(c)
-	s.gs.Channel.ToClients <- s.cmd(agent.ClearMemory)(c)
-	s.gs.Channel.ToClients <- s.cmd(agent.ResetInstructions)(c)
+func (s *ConlangServer) resetAgent(ctx context.Context, c *network.ChatClient) {
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(agent.Latch)(c):
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case s.gs.Channel.ToClients <- s.cmd(agent.ClearMemory)(c):
+	}
+	select {
+	case <-ctx.Done():
+		return
+
+	case s.gs.Channel.ToClients <- s.cmd(agent.ResetInstructions)(c):
+	}
 }
