@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -23,12 +22,11 @@ type WebServer struct {
 	InitialData  *InitialData
 	Broadcasters *Broadcasters
 	logger       *log.Logger
-	listener     net.Listener
 	*ServerBase
 }
 
 func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*config)) (*WebServer, error) {
-	b := NewBroadcasters(l)
+	broadcasters := NewBroadcasters(l)
 	i, err := NewInitialData()
 	if err != nil {
 		return nil, err
@@ -36,22 +34,16 @@ func NewWebServer(l *log.Logger, errs chan<- error, opts ...func(*config)) (*Web
 
 	cfg := newConfigWithOpts(defaultWebServerConfig, opts...)
 
-	base := &ServerBase{
-		config: cfg,
-		errs:   errs,
-	}
-
-	listener, err := net.Listen("tcp", base.config.addr)
+	b, err := newServerBase(cfg, errs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to initialize web server")
 	}
 
 	return &WebServer{
 		InitialData:  i,
-		Broadcasters: b,
+		Broadcasters: broadcasters,
 		logger:       l,
-		listener:     listener,
-		ServerBase:   base,
+		ServerBase:   b,
 	}, nil
 }
 

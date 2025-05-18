@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,7 +44,7 @@ func NewChatServer(
 	logger *log.Logger,
 	errs chan<- error,
 	opts ...func(*config),
-) *ChatServer {
+) (*ChatServer, error) {
 	clients := &clientele{
 		byNameMap:  make(nameToClientsMap),
 		byLayerMap: make(layerToNamesMap),
@@ -58,12 +57,12 @@ func NewChatServer(
 
 	cfg := newConfigWithOpts(defaultChatServerConfig, opts...)
 
-	b := &ServerBase{
-		config: cfg,
-		errs:   errs,
+	b, err := newServerBase(cfg, errs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize grpc server")
 	}
 
-	return &ChatServer{
+	cs := &ChatServer{
 		Listening:  true,
 		Channel:    chs,
 		clients:    clients,
@@ -71,41 +70,29 @@ func NewChatServer(
 		ServerBase: b,
 		grpcServer: grpc.NewServer(),
 	}
+
+	chat.RegisterChatServiceServer(cs.grpcServer, cs)
+
+	return cs, nil
 }
 
-func (s *ChatServer) ListenAndServe(ctx context.Context) {
-	var (
-		protocol = s.config.protocol
-		address  = s.config.addr
-	)
-
-	lis, err := net.Listen(protocol, address)
-	if err != nil {
-		s.errs <- err
-		return
-	}
-
-	chat.RegisterChatServiceServer(s.grpcServer, s)
-
+func (s *ChatServer) ListenAndServe(ctx context.Context) error {
 	serverCtx, serverCancel := context.WithCancel(ctx)
 
 	defer serverCancel()
 
 	go func() {
-		s.logger.Infof("Starting gRPC service on %s %s", protocol, address)
-		err = s.grpcServer.Serve(lis)
+		defer serverCancel()
+		s.logger.Infof("Starting gRPC service on %s %s", s.config.protocol, s.config.addr)
+		err := s.grpcServer.Serve(s.listener)
 		if err != nil {
 			s.errs <- err
 		}
-		serverCancel()
 	}()
 
 	<-serverCtx.Done()
 
-	err = s.Shutdown()
-	if err != nil {
-		s.errs <- err
-	}
+	return s.Shutdown()
 }
 
 func (s *ChatServer) Shutdown() error {

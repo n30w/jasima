@@ -5,12 +5,29 @@ import (
 )
 
 type ServerBase struct {
-	config *config
-	errs   chan<- error
+	config   *config
+	errs     chan<- error
+	listener net.Listener
+}
+
+func newServerBase(cfg *config, errs chan<- error) (*ServerBase, error) {
+	lis, err := net.Listen(cfg.protocol, cfg.addr)
+	if err != nil {
+		return nil, err
+	}
+
+	b := &ServerBase{
+		config:   cfg,
+		errs:     errs,
+		listener: lis,
+	}
+
+	return b, nil
 }
 
 const (
 	defaultServerHost    = "localhost"
+	defaultProtocol      = "tcp"
 	defaultGRPCProtocol  = "tcp"
 	defaultGRPCPort      = "50051"
 	defaultWebServerPort = "7070"
@@ -24,8 +41,9 @@ var (
 	}
 
 	defaultWebServerConfig = &config{
-		host: defaultServerHost,
-		port: defaultWebServerPort,
+		host:     defaultServerHost,
+		port:     defaultWebServerPort,
+		protocol: defaultProtocol,
 	}
 )
 

@@ -523,10 +523,7 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 				return errors.Wrapf(err, "failed to iterate on generation %d", i)
 			}
 
-			s.logger.Infof(
-				"Iteration %d completed in %s", i+1,
-				elapsedTime().Truncate(10*time.Millisecond),
-			)
+			s.logger.Infof("Iteration %d completed in %s", i+1, elapsedTime())
 
 			updates := <-s.dictUpdatesChan
 
@@ -596,10 +593,8 @@ func (s *ConlangServer) Evolve(ctx context.Context) error {
 
 		s.gs.Listening = false
 
-		t := timer().Truncate(10 * time.Millisecond)
-
 		s.logger.Info("EVOLUTION COMPLETE")
-		s.logger.Infof("Evolution took %s", t)
+		s.logger.Infof("Evolution took %s", timer())
 
 		// Marshal to JSON
 

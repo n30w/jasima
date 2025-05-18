@@ -138,7 +138,10 @@ func NewConlangServer(
 		return nil, errors.Wrap(err, "failed to create web server")
 	}
 
-	grpcServer := network.NewChatServer(l, errs)
+	grpcServer, err := network.NewChatServer(l, errs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create grpc server")
+	}
 
 	err = webServer.InitialData.RecentSpecifications.Enqueue(specificationsGen1)
 	if err != nil {
@@ -277,16 +280,12 @@ func (s *ConlangServer) Router(ctx context.Context) {
 
 	defer routeCancel()
 
-	go func() {
-		select {
-		case <-routeCtx.Done():
-			s.logger.Warn("Routing context cancelled")
-		default:
-			routeMessages(s.errs)
-		}
-	}()
-
-	s.gs.ListenAndServe(ctx)
+	select {
+	case <-routeCtx.Done():
+		s.logger.Warn("Routing context cancelled")
+	default:
+		routeMessages(s.errs)
+	}
 }
 
 func (s *ConlangServer) WebEvents(ctx context.Context) {
@@ -389,9 +388,20 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		err := s.gs.ListenAndServe(ctx)
+		if err != nil {
+			s.errs <- err
+			return
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		s.StartProcedures(ctx)
 	}()
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		go s.Router(ctx)
