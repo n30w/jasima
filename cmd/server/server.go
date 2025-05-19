@@ -164,7 +164,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
-		procedures:      make(chan utils.Queue[Job], 100),
+		procedures:      make(chan utils.Queue[Job], 1),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
