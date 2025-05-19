@@ -35,19 +35,23 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	error,
 ) {
 	var err error
-
-	ollm := &Ollama{}
+	var u *url.URL
 
 	if mc.Url == "" {
-		ollm.apiUrl, err = url.Parse(defaultOllamaUrl)
+		u, err = url.Parse(defaultOllamaUrl)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		u, err = url.Parse(mc.Url)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ollm.apiUrl.Path = "/api/chat"
+	u.Path = "/api/chat"
 
-	hc, err := network.NewHttpRequestClient[ol.ChatResponse](ollm.apiUrl, l)
+	hc, err := network.NewHttpRequestClient[ol.ChatResponse](u, l)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create http request client")
 	}
@@ -63,6 +67,7 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	}
 
 	nl.sleepDuration = defaultOllamaSleepDuration
+	nl.apiUrl = u
 
 	return &Ollama{
 		llm:    nl,

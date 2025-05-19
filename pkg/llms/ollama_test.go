@@ -34,6 +34,7 @@ func buildTestOllama(t *testing.T) (*Ollama, error) {
 		Provider:      ProviderOllama,
 		Instructions:  "instructions are added later in test cases.",
 		RequestConfig: *defaultOllamaConfig,
+		Url:           "http://10.209.70.53:11434",
 	}
 
 	l := log.New(os.Stdout)
