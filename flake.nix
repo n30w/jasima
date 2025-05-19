@@ -71,6 +71,7 @@
 
             go-task
             fish
+            mprocs
           ];
 
           buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
