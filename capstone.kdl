@@ -1,16 +1,11 @@
 layout {
-    cwd "/home/neo/jasima"
+    cwd "./"
     tab name="run" hide_floating_panes=true {
         pane size=1 borderless=true {
             plugin location="zellij:tab-bar"
         }
-        pane split_direction="vertical" {
-            pane cwd="/home/neo/jasima" size="50%"
-            pane size="50%" {
-                pane cwd="/home/neo/jasima" size="50%"
-                pane cwd="/home/neo/jasima" size="50%"
-            }
-        }
+        pane cwd="./" size="65%"
+        pane cwd="./" size="35%"
         pane size=1 borderless=true {
             plugin location="zellij:status-bar"
         }
@@ -19,7 +14,7 @@ layout {
         pane size=1 borderless=true {
             plugin location="zellij:tab-bar"
         }
-        pane command="lazygit" cwd="/home/neo/jasima" {
+        pane command="lazygit" cwd="./" {
             start_suspended true
         }
         pane size=1 borderless=true {
@@ -30,7 +25,19 @@ layout {
         pane size=1 borderless=true {
             plugin location="zellij:tab-bar"
         }
-        pane cwd="/home/neo/jasima"
+        pane cwd="./"
+        pane size=1 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+    tab name="web" hide_floating_panes=true {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        pane command="task" {
+            args "run-web"
+            start_suspended true
+        }
         pane size=1 borderless=true {
             plugin location="zellij:status-bar"
         }
@@ -39,7 +46,7 @@ layout {
         pane size=1 borderless=true {
             plugin location="zellij:tab-bar"
         }
-        pane cwd="/home/neo/jasima"
+        pane cwd="./"
         pane size=1 borderless=true {
             plugin location="zellij:status-bar"
         }
@@ -196,61 +203,61 @@ layout {
     }
     swap_floating_layout name="enlarged" {
         floating_panes max_panes=10 {
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 1
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 2
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 3
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 4
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 5
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 6
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 7
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 8
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x "5%"
                 y 9
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "90%"
                 width "90%"
                 x 10
@@ -260,60 +267,60 @@ layout {
     }
     swap_floating_layout name="spread" {
         floating_panes max_panes=1 {
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 x "50%"
                 y "50%"
             }
         }
         floating_panes max_panes=2 {
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 width "45%"
                 x "1%"
                 y "25%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 width "45%"
                 x "50%"
                 y "25%"
             }
         }
         floating_panes max_panes=3 {
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "45%"
                 width "45%"
                 y "55%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 width "45%"
                 x "1%"
                 y "1%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 width "45%"
                 x "50%"
                 y "1%"
             }
         }
         floating_panes max_panes=4 {
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "45%"
                 width "45%"
                 x "1%"
                 y "55%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "45%"
                 width "45%"
                 x "50%"
                 y "55%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "45%"
                 width "45%"
                 x "1%"
                 y "1%"
             }
-            pane cwd="/home/neo/jasima" {
+            pane cwd="./" {
                 height "45%"
                 width "45%"
                 x "50%"
