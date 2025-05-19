@@ -44,18 +44,15 @@ func SendCommandBuilder(
 	...MessageFor,
 ) {
 	return func(clients []*ChatClient, commands ...MessageFor) {
-		sCtx, sCancel := context.WithCancel(ctx)
-		defer sCancel()
 		if pool == nil {
 			return
 		}
 		for _, c := range clients {
 			for _, cmd := range commands {
 				select {
-				case <-sCtx.Done():
+				case <-ctx.Done():
 					return
 				case pool <- cmd(c):
-				default:
 				}
 			}
 		}
