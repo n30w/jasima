@@ -111,8 +111,6 @@ func (c GoogleGemini) request(
 
 	contents := c.prepare(messages)
 
-	// Before doing anything, mediate rate of request for rate limits.
-
 	var (
 		done   bool
 		tries  int
