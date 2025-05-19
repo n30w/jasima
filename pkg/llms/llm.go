@@ -2,6 +2,8 @@ package llms
 
 import (
 	"context"
+	"math"
+	"math/rand"
 	"net/url"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 
 const (
 	maxRequestRetries    = 3
-	retryInterval        = 180 * time.Second
+	defaultRetryInterval = 180 * time.Second
 	defaultSleepDuration = 10 * time.Second
 )
 
@@ -101,13 +103,15 @@ func (l *llm[T]) request(ctx context.Context, messages []memory.Message) (
 
 	// Sleep for the prescribed time.
 
-	l.logger.Debugf("Rate limiting for %s...", l.sleepDuration)
+	sleep := getWaitTime(l.sleepDuration)
+
+	l.logger.Debugf("Rate limiting for %s...", sleep)
 
 	select {
 	case <-ctx.Done():
 		l.logger.Warn("Dispatch context canceled")
 		return nil, ErrDispatchContextCancelled
-	case <-time.After(l.sleepDuration):
+	case <-time.After(sleep):
 		l.logger.Debug("Dispatching message to LLM")
 	}
 
@@ -248,3 +252,23 @@ const (
 	errNoConfigurationProvided  llmError = "no configuration provided"
 	ErrDispatchContextCancelled llmError = "dispatch context canceled"
 )
+
+const (
+	boundFraction = 0.16
+)
+
+// getWaitTime uses an upper bound ub and random seed to create
+// a time.Duration. This can be used to set request wait
+// times for API hits.
+func getWaitTime(ub time.Duration) time.Duration {
+	src := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(src)
+
+	boundMax := int64(math.Floor(float64(ub) * boundFraction))
+
+	rd := rng.Int63n(boundMax)
+
+	t := int64(ub) - rd
+
+	return time.Duration(t).Abs().Truncate(time.Millisecond)
+}

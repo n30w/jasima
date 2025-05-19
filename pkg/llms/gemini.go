@@ -123,24 +123,38 @@ func (c GoogleGemini) request(
 	)
 
 	for !done {
+		// Generate a retry time in case of a request failure.
+		sleep := getWaitTime(defaultRetryInterval)
+
+		// Make a new request context for every retry.
+
+		rCtx, rCancel := context.WithCancelCause(ctx)
+		defer rCancel(ErrDispatchContextCancelled)
+
 		if tries >= maxRequestRetries {
 			done = true
 			continue
 		}
 
-		res, err = c.client.Models.GenerateContent(
-			ctx,
-			c.model.String(),
-			contents,
-			c.config,
-		)
+		select {
+		case <-rCtx.Done():
+			return "", rCtx.Err()
+		default:
+			res, err = c.client.Models.GenerateContent(
+				rCtx,
+				c.model.String(),
+				contents,
+				c.config,
+			)
+		}
+
 		if err != nil {
 			ok := errors.As(err, &apiErr)
 			if ok {
 				if apiErr.Code == 500 || apiErr.Code == 503 {
 					c.logger.Warnf("API error: %d %s", apiErr.Code, apiErr.Message)
-					c.logger.Debugf("Retrying in %s", retryInterval)
-					retry = retryInterval
+					c.logger.Debugf("Retrying in %s", sleep)
+					retry = sleep
 				}
 			}
 
@@ -149,9 +163,10 @@ func (c GoogleGemini) request(
 			}
 
 			select {
-			case <-ctx.Done():
-				return result, nil
+			case <-rCtx.Done():
+				return "", rCtx.Err()
 			case <-time.After(retry):
+				rCancel(ErrDispatchContextCancelled)
 			}
 
 			continue
@@ -163,7 +178,10 @@ func (c GoogleGemini) request(
 		tries++
 	}
 
-	if err != nil {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "", ErrDispatchContextCancelled
+	case err != nil:
 		return "", err
 	}
 
@@ -233,7 +251,7 @@ func RequestTypedGoogleGemini[T any](
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to make google gemini request")
+		return "", errors.Wrap(err, "failed to make typed google gemini request")
 	}
 
 	return result, nil
