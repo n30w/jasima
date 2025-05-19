@@ -58,6 +58,11 @@ func main() {
 			DefaultLayer,
 			"agent's functional layer",
 		)
+		flagApiUrl = flag.String(
+			"apiUrl",
+			DefaultApiUrl,
+			"llm api url",
+		)
 	)
 
 	flag.Parse()
@@ -111,6 +116,8 @@ func main() {
 	if userConf.Layer < 0 {
 		logger.Fatal("`layer` parameter must be greater than or equal to 0")
 	}
+
+	userConf.Model.Url = *flagApiUrl
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),

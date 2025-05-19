@@ -145,7 +145,7 @@ func newClient(
 
 	case llms.ProviderOllama:
 		ls.ollama, err = llms.NewOllama(
-			nil,
+			"",
 			cfg.ModelConfig,
 			logger,
 		)

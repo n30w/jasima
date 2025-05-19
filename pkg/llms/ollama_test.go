@@ -38,7 +38,7 @@ func buildTestOllama(t *testing.T) (*Ollama, error) {
 
 	l := log.New(os.Stdout)
 
-	llm, err := NewOllama(nil, mc, l)
+	llm, err := NewOllama("", mc, l)
 	if err != nil {
 		t.Fatal(err)
 	}

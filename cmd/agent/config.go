@@ -11,6 +11,7 @@ const (
 	// not the path where the binary exists.
 	DefaultAgentConfigPath        = "./cmd/configs/default_agent.toml"
 	DefaultServerAddress          = "localhost:50051"
+	DefaultApiUrl                 = ""
 	DefaultPeers                  = ""
 	DefaultInitializationFilePath = ""
 	DefaultTemperatureFloat       = 1.5

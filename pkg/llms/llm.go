@@ -2,6 +2,7 @@ package llms
 
 import (
 	"context"
+	"net/url"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -33,9 +34,14 @@ type llm[T any] struct {
 	// config is the configuration used for each request of the LLM.
 	config *T
 
-	// sleepDuration is the total time the LLM will wait before making
-	// a request to the service. This duration differs based on model,
-	// but for these purposes use the fastest time possible.
+	// apiUrl is the URL to use for API requests. If nil, a default
+	// is used.
+	apiUrl *url.URL
+
+	// sleepDuration defines an upper bound for the total time
+	// the LLM will wait before making a request to the service.
+	// This duration differs based on model, but for these
+	// purposes use the fastest time possible.
 	sleepDuration time.Duration
 
 	// logger is for logging data to the console.
@@ -49,10 +55,16 @@ func newLLM[T any](mc ModelConfig, l *log.Logger) (*llm[T], error) {
 		return nil, errors.Wrap(err, "invalid model config")
 	}
 
+	u, err := url.Parse(mc.Url)
+	if err != nil {
+		return nil, err
+	}
+
 	return &llm[T]{
 		model:         mc.Provider,
 		instructions:  mc.Instructions,
 		defaultConfig: &mc.RequestConfig,
+		apiUrl:        u,
 		logger:        l,
 		sleepDuration: defaultSleepDuration,
 	}, nil
@@ -164,6 +176,7 @@ func (l LLMProvider) String() string {
 type ModelConfig struct {
 	Provider     LLMProvider
 	Instructions string
+	Url          string
 	RequestConfig
 }
 

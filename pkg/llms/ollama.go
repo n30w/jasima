@@ -26,27 +26,28 @@ type Ollama struct {
 	*llm[ol.ChatRequest]
 	logger *log.Logger
 	hc     *network.HttpRequestClient[ol.ChatResponse]
-	u      *url.URL
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
 // hosting the Ollama instance. If URL is nil, the default instance URL is used.
-func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
+func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	*Ollama,
 	error,
 ) {
 	var err error
 
-	if u == nil {
-		u, err = url.Parse(defaultOllamaUrl)
+	ollm := &Ollama{}
+
+	if mc.Url == "" {
+		ollm.apiUrl, err = url.Parse(defaultOllamaUrl)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	u.Path = "/api/chat"
+	ollm.apiUrl.Path = "/api/chat"
 
-	hc, err := network.NewHttpRequestClient[ol.ChatResponse](u, l)
+	hc, err := network.NewHttpRequestClient[ol.ChatResponse](ollm.apiUrl, l)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create http request client")
 	}
@@ -67,7 +68,6 @@ func NewOllama(u *url.URL, mc ModelConfig, l *log.Logger) (
 		llm:    nl,
 		logger: l,
 		hc:     hc,
-		u:      u,
 	}, nil
 }
 
