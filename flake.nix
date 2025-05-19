@@ -72,6 +72,8 @@
             go-task
             fish
             mprocs
+            git
+            zellij
           ];
 
           buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
