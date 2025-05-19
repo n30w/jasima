@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"time"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
@@ -41,6 +42,10 @@ type Message struct {
 	Receiver   chat.Name     `json:"receiver,omitempty"`
 	Layer      chat.Layer    `json:"layer,omitempty"`
 	Command    agent.Command `json:"command"`
+}
+
+func GetMessageString(m Message) string {
+	return fmt.Sprintf("%s: %s\n", m.Sender, m.Text)
 }
 
 func NewChatMessage(

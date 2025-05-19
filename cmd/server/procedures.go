@@ -163,32 +163,37 @@ func (s *ConlangServer) iterate(
 		return newGeneration, err
 	}
 
-	for i := range exchanges {
-		select {
-		case <-ctx.Done():
-			return newGeneration, nil
-		case m := <-s.procedureChan:
-			newGeneration.Transcript[initialLayer] = append(
-				newGeneration.Transcript[initialLayer],
-				m,
-			)
+	select {
+	case <-ctx.Done():
+		return newGeneration, ctx.Err()
+	default:
+		for i := range exchanges {
+			select {
+			case <-ctx.Done():
+				return newGeneration, nil
+			case m := <-s.procedureChan:
+				newGeneration.Transcript[initialLayer] = append(
+					newGeneration.Transcript[initialLayer],
+					m,
+				)
 
-			// Retrieve the extracted words.
+				// Retrieve the extracted words.
 
-			usedWords, err := s.extractUsedWords(ctx, newGeneration.Dictionary, m.Text.String())
-			if err != nil {
-				return newGeneration, errors.Wrap(err, "failed finding used words")
+				usedWords, err := s.extractUsedWords(ctx, newGeneration.Dictionary, m.Text.String())
+				if err != nil {
+					return newGeneration, errors.Wrap(err, "failed finding used words")
+				}
+
+				// Broadcast the sent message.
+
+				s.ws.Broadcasters.Messages.Broadcast(m)
+
+				// Broadcast the extracted words from the sent message.
+
+				s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
+
+				s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 			}
-
-			// Broadcast the sent message.
-
-			s.ws.Broadcasters.Messages.Broadcast(m)
-
-			// Broadcast the extracted words from the sent message.
-
-			s.ws.Broadcasters.MessageWordDictExtraction.Broadcast(usedWords)
-
-			s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 		}
 	}
 
@@ -525,7 +530,7 @@ func (s *ConlangServer) iterateLogogram(
 	return currentSvg, nil
 }
 
-func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) error {
+func (s *ConlangServer) WaitForClients(total int) Job {
 	return func(ctx context.Context) error {
 		var err error
 
@@ -560,7 +565,7 @@ func (s *ConlangServer) WaitForClients(total int) func(ctx context.Context) erro
 	}
 }
 
-func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) func(ctx context.Context) error {
+func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) Job {
 	return func(ctx context.Context) error {
 		var err error
 
@@ -587,30 +592,50 @@ func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) func(ctx conte
 	}
 }
 
-func (s *ConlangServer) iterateLogograms(
-	i int,
-	g *memory.Generation,
-) func(ctx context.Context) error {
+func (s *ConlangServer) iterateLogograms(i int, g *memory.Generation) Job {
 	return func(ctx context.Context) error {
-		w := "suli"
+		// Get the transcript of the logography layer.
+		t := g.Transcript[chat.LogographyLayer]
 
-		svg, err := s.iterateLogogram(ctx, *g, w)
+		// Extract logogram names from logography transcript.
+		res, err := s.findUsedWords(ctx, g.Dictionary.Copy(), t.String())
 		if err != nil {
-			return errors.Wrapf(err, "failed to iterate logograms on iteration %d", i)
+			return err
 		}
 
-		g.Logography[w] = svg
+		// For each used word, iterate it.
 
-		s.dictionary = g.Dictionary.Copy()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 
-		return nil
+			// It can be made so that agents do not clear their memory on each
+			// iteration of a word to keep a long-running context window, but
+			// I currently do not have the money or compute for that, and I
+			// don't know if I ever will.
+
+			for _, word := range res.Words {
+				svg, err := s.iterateLogogram(ctx, *g, word)
+				if err != nil {
+					return errors.Wrapf(err, "failed to iterate logograms on iteration %d", i)
+				}
+
+				// This will automatically update the svg, so in the next iteration
+				// the agents will have access to their previous developed
+				// logograms.
+
+				g.Logography[word] = svg
+			}
+
+			s.dictionary = g.Dictionary.Copy()
+
+			return nil
+		}
 	}
 }
 
-func (s *ConlangServer) updateGenerations(
-	i int,
-	g *memory.Generation,
-) func(ctx context.Context) error {
+func (s *ConlangServer) updateGenerations(i int, g *memory.Generation) Job {
 	return func(ctx context.Context) error {
 		err := s.generations.Enqueue(*g)
 		if err != nil {
@@ -634,10 +659,7 @@ func (s *ConlangServer) updateGenerations(
 	}
 }
 
-func (s *ConlangServer) iterateDictionary(
-	i int,
-	g *memory.Generation,
-) func(ctx context.Context) error {
+func (s *ConlangServer) iterateDictionary(i int, g *memory.Generation) Job {
 	return func(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
@@ -681,7 +703,7 @@ func (s *ConlangServer) iterateDictionary(
 	}
 }
 
-func (s *ConlangServer) wait(t time.Duration) func(ctx context.Context) error {
+func (s *ConlangServer) wait(t time.Duration) Job {
 	return func(ctx context.Context) error {
 		s.logger.Infof("Waiting for %s...", t)
 		select {
@@ -694,7 +716,7 @@ func (s *ConlangServer) wait(t time.Duration) func(ctx context.Context) error {
 	}
 }
 
-func (s *ConlangServer) exportData(t func() time.Duration) func(ctx context.Context) error {
+func (s *ConlangServer) exportData(t func() time.Duration) Job {
 	return func(ctx context.Context) error {
 		s.gs.Listening = false
 

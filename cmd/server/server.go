@@ -43,7 +43,7 @@ type MemoryService interface {
 	fmt.Stringer
 }
 
-type job func(ctx context.Context) error
+type Job func(ctx context.Context) error
 
 type ConlangServer struct {
 	name            chat.Name
@@ -53,7 +53,7 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan memory.ResponseDictionaryEntries
-	procedures      chan utils.Queue[job]
+	procedures      chan utils.Queue[Job]
 	dictionary      memory.DictionaryGeneration
 	generations     utils.Queue[memory.Generation]
 	ws              *network.WebServer
@@ -164,7 +164,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
-		procedures:      make(chan utils.Queue[job], 100),
+		procedures:      make(chan utils.Queue[Job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
@@ -400,11 +400,11 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 			// i keeps track of the current generation.
 			i = 0
 
-			initializeJobs = []job{
+			initializeJobs = []Job{
 				s.WaitForClients(11),
 			}
 
-			evolveJobs = []job{
+			evolveJobs = []Job{
 				s.iterateSpecs(i, ng),
 				s.iterateDictionary(i, ng),
 				s.iterateLogograms(i, ng),
@@ -412,7 +412,7 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 				s.wait(10 * time.Second),
 			}
 
-			exportJobs = []job{
+			exportJobs = []Job{
 				s.exportData(t),
 			}
 		)

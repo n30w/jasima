@@ -9,7 +9,19 @@ import (
 	"codeberg.org/n30w/jasima/pkg/chat"
 )
 
-type TranscriptGeneration map[chat.Layer][]Message
+type TranscriptMessages []Message
+
+func (t TranscriptMessages) String() string {
+	var sb strings.Builder
+
+	for _, v := range t {
+		sb.WriteString(GetMessageString(v))
+	}
+
+	return sb.String()
+}
+
+type TranscriptGeneration map[chat.Layer]TranscriptMessages
 
 func (t TranscriptGeneration) Copy() TranscriptGeneration {
 	newMap := make(TranscriptGeneration)
