@@ -2,6 +2,7 @@ package llms
 
 import (
 	"context"
+	"time"
 
 	"codeberg.org/n30w/jasima/pkg/memory"
 
@@ -97,17 +98,78 @@ func (c openAIClient) request(
 
 	c.config.Messages = c.prepare(messages)
 
-	result, err := c.client.Chat.Completions.New(ctx, *c.config)
-	if err != nil {
-		return "", errors.Wrap(
-			err,
-			"openai client failed to send request to llm",
-		)
+	var (
+		done   bool
+		tries  int
+		apiErr openai.ErrorObject
+		res    *openai.ChatCompletion
+		result string
+		retry  time.Duration = 0
+	)
+
+	for !done {
+		// Generate a retry time in case of a request failure.
+
+		sleep := getWaitTime(defaultRetryInterval)
+
+		// Make a new request context for every retry.
+
+		rCtx, rCancel := context.WithCancelCause(ctx)
+
+		defer rCancel(ErrDispatchContextCancelled)
+
+		if tries >= maxRequestRetries {
+			done = true
+			continue
+		}
+
+		select {
+		case <-rCtx.Done():
+			return "", rCtx.Err()
+		default:
+			res, err = c.client.Chat.Completions.New(ctx, *c.config)
+			if err != nil {
+				ok := errors.As(err, &apiErr)
+				if ok {
+					if apiErr.Code == "500" || apiErr.Code == "503" {
+						c.logger.Warnf("API error: %s %s", apiErr.Code, apiErr.Message)
+						c.logger.Debugf("Retrying in %s", sleep)
+						retry = sleep
+					}
+				}
+
+				if retry == 0 {
+					done = true
+				}
+
+				select {
+				case <-rCtx.Done():
+					return "", rCtx.Err()
+				case <-time.After(retry):
+					rCancel(ErrDispatchContextCancelled)
+				}
+
+				continue
+			}
+		}
+
+		result = res.Choices[0].Message.Content
+
+		done = true
+
+		tries++
+	}
+
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "", ErrDispatchContextCancelled
+	case err != nil:
+		return "", err
 	}
 
 	c.logTime(t())
 
-	return result.Choices[0].Message.Content, nil
+	return result, nil
 }
 
 func (c openAIClient) prepare(
