@@ -68,6 +68,11 @@ func main() {
 			DefaultBroadcastTestData,
 			"broadcast test data for web events",
 		)
+		flagExportData = flag.Bool(
+			"exportData",
+			DefaultExportData,
+			"export data after a job queue is complete",
+		)
 	)
 
 	flag.Parse()
@@ -115,6 +120,8 @@ func main() {
 		cfg.name,
 		"broadcastTestData",
 		cfg.broadcastTestData,
+		"exportData",
+		flagExportData,
 		"dictionaryExtractionMethod",
 		cfg.procedures.dictionaryWordExtractionMethod,
 	)

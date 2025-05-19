@@ -626,6 +626,7 @@ func (s *ConlangServer) iterateLogograms(i int, g *memory.Generation) Job {
 				// logograms.
 
 				g.Logography[word] = svg
+				s.ws.Broadcasters.Generation.Broadcast(*g)
 			}
 
 			s.dictionary = g.Dictionary.Copy()
@@ -659,7 +660,7 @@ func (s *ConlangServer) updateGenerations(i int, g *memory.Generation) Job {
 	}
 }
 
-func (s *ConlangServer) iterateDictionary(i int, g *memory.Generation) Job {
+func (s *ConlangServer) iterateDictionary(_ int, g *memory.Generation) Job {
 	return func(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
@@ -718,6 +719,11 @@ func (s *ConlangServer) wait(t time.Duration) Job {
 
 func (s *ConlangServer) exportData(t func() time.Duration) Job {
 	return func(ctx context.Context) error {
+		if !s.config.procedures.exportData {
+			s.logger.Infof("exportData is %t, not exporting data", s.config.procedures.exportData)
+			return nil
+		}
+
 		s.gs.Listening = false
 
 		s.logger.Info("EVOLUTION COMPLETE")

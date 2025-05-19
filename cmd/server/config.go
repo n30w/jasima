@@ -11,6 +11,7 @@ const (
 	DefaultMaxGenerations             = 1
 	DefaultDictionaryExtractionMethod = 0
 	DefaultLogToFileToggle            = false
+	DefaultExportData                 = false
 	DefaultServerName                 = "SERVER"
 )
 
@@ -27,6 +28,10 @@ type procedureConfig struct {
 	// for extracting dictionary words from a text. Two options exist:
 	// `0` for regex-based and `1` for agent based.
 	dictionaryWordExtractionMethod dictExtractMethod
+
+	// exportGenerationData determines if a batch of jobs will export their
+	// resulting data.
+	exportData bool
 }
 
 type filePathConfig struct {
