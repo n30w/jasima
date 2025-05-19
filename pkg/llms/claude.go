@@ -27,7 +27,7 @@ func NewClaude(
 	}
 
 	newConf := mc
-	g := defaultClaudeConfig
+	g := defaultClauseRequestConfig
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 

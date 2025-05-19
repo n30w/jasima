@@ -57,7 +57,7 @@ func newLLM[T any](mc ModelConfig, l *log.Logger) (*llm[T], error) {
 		return nil, errors.Wrap(err, "invalid model config")
 	}
 
-	u, err := url.Parse(mc.Url)
+	u, err := url.Parse(mc.ApiUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -177,11 +177,16 @@ func (l LLMProvider) String() string {
 	return s
 }
 
+type ModelConfigs struct {
+	OllamaModelConfig
+}
+
 type ModelConfig struct {
 	Provider     LLMProvider
 	Instructions string
-	Url          string
+	ApiUrl       string
 	RequestConfig
+	Configs ModelConfigs
 }
 
 func (cfg *ModelConfig) validate() error {

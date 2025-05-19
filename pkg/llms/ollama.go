@@ -3,6 +3,7 @@ package llms
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -22,19 +23,42 @@ const (
 	defaultOllamaSleepDuration = time.Second * 2
 )
 
-type ollamaRequestClient int
+type ollamaRequestClientType int
+
+func newOllamaRequestClientType(i int) (ollamaRequestClientType, error) {
+	o := ollamaRequestClientType(i)
+	err := o.validate()
+	return invalidRequestClientType, err
+}
+
+func (oc ollamaRequestClientType) validate() error {
+	if oc > 1 || oc < 0 {
+		return errors.Errorf("invalid Ollama client type %d", oc)
+	}
+
+	return nil
+}
 
 const (
-	useHttpClientRequest ollamaRequestClient = iota
+	invalidRequestClientType                         = -1
+	useHttpClientRequest     ollamaRequestClientType = iota
 	useOllamaClientRequest
 )
 
+type ollamaUseStreaming bool
+
+type OllamaModelConfig struct {
+	OllamaClientMode   int
+	OllamaUseStreaming bool
+}
+
 type Ollama struct {
 	*llm[ol.ChatRequest]
-	logger     *log.Logger
-	hc         *network.HttpRequestClient[ol.ChatResponse]
-	Client     *ol.Client
-	clientMode ollamaRequestClient
+	logger       *log.Logger
+	hc           *network.HttpRequestClient[ol.ChatResponse]
+	olClient     *ol.Client
+	clientMode   ollamaRequestClientType
+	useStreaming ollamaUseStreaming
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
@@ -43,20 +67,25 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	*Ollama,
 	error,
 ) {
+	// TODO make this look better and more readable.
+
 	var err error
 	var u *url.URL
 
-	if mc.Url == "" {
+	if mc.ApiUrl == "" {
 		u, err = url.Parse(defaultOllamaUrl)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		u, err = url.Parse(mc.Url)
+		u, err = url.Parse(mc.ApiUrl)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	u2 := *u
+	olc := ol.NewClient(&u2, &http.Client{})
 
 	u.Path = "/api/chat"
 
@@ -66,7 +95,7 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	}
 
 	newConf := mc
-	g := defaultOllamaConfig
+	g := defaultOllamaRequestConfig
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
@@ -78,10 +107,20 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	nl.sleepDuration = defaultOllamaSleepDuration
 	nl.apiUrl = u
 
+	cm, err := newOllamaRequestClientType(mc.Configs.OllamaClientMode)
+	if err != nil {
+		return nil, err
+	}
+
+	us := ollamaUseStreaming(mc.Configs.OllamaUseStreaming)
+
 	return &Ollama{
-		llm:    nl,
-		logger: l,
-		hc:     hc,
+		llm:          nl,
+		logger:       l,
+		hc:           hc,
+		olClient:     olc,
+		clientMode:   cm,
+		useStreaming: us,
 	}, nil
 }
 
@@ -116,9 +155,11 @@ func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
 		return nil, errors.Wrap(err, "failed to convert struct to map")
 	}
 
+	b := bool(c.useStreaming)
+
 	return &ol.ChatRequest{
 		Model:     c.model.String(),
-		Stream:    new(bool),
+		Stream:    &b,
 		Options:   m,
 		KeepAlive: &ol.Duration{Duration: 1 * time.Minute},
 	}, nil
@@ -153,19 +194,55 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
-	var result string
-
 	t, err := c.llm.request(ctx, messages)
 	if err != nil {
 		return "", err
 	}
 
+	defer c.logTime(t())
+
 	c.config.Messages = c.prepare(messages)
 
-	if c.clientMode == useHttpClientRequest {
-
+	if c.clientMode == useOllamaClientRequest || c.useStreaming {
+		return c.olClientRequest(ctx)
 	}
 
+	return c.httpRequest(ctx)
+}
+
+func (c Ollama) olClientRequest(ctx context.Context) (string, error) {
+	var result strings.Builder
+
+	respFunc := func(resp ol.ChatResponse) error {
+		select {
+		case <-ctx.Done():
+			return ErrDispatchContextCancelled
+		default:
+			result.WriteString(resp.Message.Content)
+		}
+
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return "", ErrDispatchContextCancelled
+	default:
+		select {
+		case <-ctx.Done():
+			return "", ErrDispatchContextCancelled
+		default:
+			err := c.olClient.Chat(ctx, c.config, respFunc)
+			if err != nil {
+				return "", err
+			}
+
+			return result.String(), nil
+		}
+	}
+}
+
+func (c Ollama) httpRequest(ctx context.Context) (string, error) {
 	request, err := c.hc.PreparePost(c.config)
 	if err != nil {
 		return "", err
@@ -180,11 +257,7 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 			return "", err
 		}
 
-		c.logTime(t())
-
-		result = res.Message.Content
-
-		return result, nil
+		return res.Message.Content, nil
 	}
 }
 

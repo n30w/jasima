@@ -1,6 +1,6 @@
 package llms
 
-var defaultDeepseekConfig = &RequestConfig{
+var defaultDeepseekRequestConfig = &RequestConfig{
 	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,
@@ -9,7 +9,7 @@ var defaultDeepseekConfig = &RequestConfig{
 	PresencePenalty:  1.2,
 }
 
-var defaultClaudeConfig = &RequestConfig{
+var defaultClauseRequestConfig = &RequestConfig{
 	Temperature:      0.75,
 	Seed:             1,
 	TopP:             1,
@@ -18,7 +18,7 @@ var defaultClaudeConfig = &RequestConfig{
 	PresencePenalty:  1.3,
 }
 
-var defaultChatGPTConfig = &RequestConfig{
+var defaultChatGPTRequestConfig = &RequestConfig{
 	Temperature:      0.75,
 	Seed:             1,
 	TopP:             1,
@@ -27,7 +27,7 @@ var defaultChatGPTConfig = &RequestConfig{
 	PresencePenalty:  1.2,
 }
 
-var defaultGeminiConfig = &RequestConfig{
+var defaultGeminiRequestConfig = &RequestConfig{
 	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,
@@ -36,7 +36,7 @@ var defaultGeminiConfig = &RequestConfig{
 	PresencePenalty:  1.2,
 }
 
-var defaultOllamaConfig = &RequestConfig{
+var defaultOllamaRequestConfig = &RequestConfig{
 	Temperature:      0.8,
 	Seed:             1,
 	TopP:             1,

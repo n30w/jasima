@@ -21,7 +21,7 @@ func NewOpenAIChatGPT(
 	logger *log.Logger,
 ) (*OpenAIChatGPT, error) {
 	newConf := mc
-	g := defaultChatGPTConfig
+	g := defaultChatGPTRequestConfig
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 

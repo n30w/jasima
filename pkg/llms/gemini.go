@@ -35,7 +35,7 @@ func NewGoogleGemini(
 	}
 
 	newConf := mc
-	g := defaultGeminiConfig
+	g := defaultGeminiRequestConfig
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 

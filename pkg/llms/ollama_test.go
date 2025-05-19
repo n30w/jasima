@@ -22,6 +22,20 @@ type args struct {
 	llm      *Ollama
 }
 
+type ollamaTest struct {
+	name         string
+	args         args
+	want         string
+	wantErr      bool
+	instructions string
+}
+
+type ollamaConfigTest struct {
+	name   string
+	tests  []ollamaTest
+	config func()
+}
+
 var testSchemas *schemaRegistry
 
 func init() {
@@ -33,8 +47,8 @@ func buildTestOllama(t *testing.T) (*Ollama, error) {
 	mc := ModelConfig{
 		Provider:      ProviderOllama,
 		Instructions:  "instructions are added later in test cases.",
-		RequestConfig: *defaultOllamaConfig,
-		Url:           "http://10.209.70.53:11434",
+		RequestConfig: *defaultOllamaRequestConfig,
+		ApiUrl:        "",
 	}
 
 	l := log.New(os.Stdout)
@@ -53,13 +67,7 @@ func TestRequestTypedOllama(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tests := []struct {
-		name         string
-		args         args
-		want         string
-		wantErr      bool
-		instructions string
-	}{
+	tests := []ollamaTest{
 		{
 			name: "receive default response",
 			args: args{
@@ -116,13 +124,18 @@ func TestRequestOllama(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tests := []struct {
-		name         string
-		args         args
-		want         string
-		wantErr      bool
-		instructions string
-	}{
+	configTesting := func(t *testing.T, ct []ollamaConfigTest) {
+		for _, tc := range ct {
+			t.Run(
+				tc.name, func(t *testing.T) {
+					tc.config()
+					ollamaRequestFlow(t, tc, llm)
+				},
+			)
+		}
+	}
+
+	tests := []ollamaTest{
 		{
 			name: "receive hello response",
 			args: args{
@@ -141,7 +154,71 @@ func TestRequestOllama(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	clientToUse := []ollamaConfigTest{
+		{
+			name:  "use HTTP client",
+			tests: tests,
+			config: func() {
+				llm.clientMode = useHttpClientRequest
+			},
+		},
+		{
+			name:  "use Ollama client",
+			tests: tests,
+			config: func() {
+				llm.clientMode = useOllamaClientRequest
+			},
+		},
+	}
+
+	t.Run(
+		"clients", func(t *testing.T) {
+			configTesting(t, clientToUse)
+		},
+	)
+
+	streamingOptions := []ollamaConfigTest{
+		{
+			name:  "uses streaming when true",
+			tests: tests,
+			config: func() {
+				llm.useStreaming = true
+			},
+		},
+		{
+			name:  "doesn't use streaming when false",
+			tests: tests,
+			config: func() {
+				llm.useStreaming = false
+			},
+		},
+		{
+			name:  "streams with ollama client and true",
+			tests: tests,
+			config: func() {
+				llm.useStreaming = true
+				llm.clientMode = useOllamaClientRequest
+			},
+		},
+		{
+			name:  "streams even with http client and true",
+			tests: tests,
+			config: func() {
+				llm.useStreaming = true
+				llm.clientMode = useHttpClientRequest
+			},
+		},
+	}
+
+	t.Run(
+		"streaming", func(t *testing.T) {
+			configTesting(t, streamingOptions)
+		},
+	)
+}
+
+func ollamaRequestFlow(t *testing.T, tc ollamaConfigTest, llm *Ollama) {
+	for _, tt := range tc.tests {
 		t.Run(
 			tt.name, func(t *testing.T) {
 				tt.args.llm.instructions = tt.instructions

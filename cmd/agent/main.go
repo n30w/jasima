@@ -63,6 +63,16 @@ func main() {
 			DefaultApiUrl,
 			"llm api url",
 		)
+		flagOllamaClientMode = flag.Int(
+			"ollamaClientMode",
+			DefaultOllamaClientMode,
+			"client mode for Ollama",
+		)
+		flagOllamaUseStreaming = flag.Bool(
+			"ollamaUseStreaming",
+			DefaultOllamaUseStreaming,
+			"use streaming mode for Ollama",
+		)
 	)
 
 	flag.Parse()
@@ -112,12 +122,20 @@ func main() {
 		userConf.Layer = int32(*flagLayer)
 	}
 
+	if *flagOllamaClientMode != DefaultOllamaClientMode {
+		userConf.Model.Configs.OllamaClientMode = *flagOllamaClientMode
+	}
+
+	if *flagOllamaUseStreaming {
+		userConf.Model.Configs.OllamaUseStreaming = *flagOllamaUseStreaming
+	}
+
 	// system agents exist on layer 0.
 	if userConf.Layer < 0 {
 		logger.Fatal("`layer` parameter must be greater than or equal to 0")
 	}
 
-	userConf.Model.Url = *flagApiUrl
+	userConf.Model.ApiUrl = *flagApiUrl
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),

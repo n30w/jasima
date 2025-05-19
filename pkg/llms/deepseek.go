@@ -19,7 +19,7 @@ func NewDeepseek(apiKey string, mc ModelConfig, l *log.Logger) (
 	error,
 ) {
 	newConf := mc
-	g := defaultDeepseekConfig
+	g := defaultDeepseekRequestConfig
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
