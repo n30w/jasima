@@ -101,6 +101,7 @@ func main() {
 			maxExchanges:                   *flagExchanges,
 			maxGenerations:                 *flagGenerations,
 			dictionaryWordExtractionMethod: dictExtractMethod(*flagDictExtractMethod),
+			exportData:                     *flagExportData,
 		},
 	}
 
@@ -121,7 +122,7 @@ func main() {
 		"broadcastTestData",
 		cfg.broadcastTestData,
 		"exportData",
-		flagExportData,
+		cfg.procedures.exportData,
 		"dictionaryExtractionMethod",
 		cfg.procedures.dictionaryWordExtractionMethod,
 	)

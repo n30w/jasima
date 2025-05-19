@@ -610,12 +610,20 @@ func (s *ConlangServer) iterateLogograms(i int, g *memory.Generation) Job {
 			return ctx.Err()
 		default:
 
+			// For now, do this rudimentary word selection:
+
+			words := res.Words[:3]
+
 			// It can be made so that agents do not clear their memory on each
 			// iteration of a word to keep a long-running context window, but
 			// I currently do not have the money or compute for that, and I
 			// don't know if I ever will.
 
-			for _, word := range res.Words {
+			for _, word := range words {
+				if word == "" {
+					continue
+				}
+
 				svg, err := s.iterateLogogram(ctx, *g, word)
 				if err != nil {
 					return errors.Wrapf(err, "failed to iterate logograms on iteration %d", i)
@@ -626,10 +634,13 @@ func (s *ConlangServer) iterateLogograms(i int, g *memory.Generation) Job {
 				// logograms.
 
 				g.Logography[word] = svg
+
+				s.ws.Broadcasters.Generation.Broadcast(*g)
+
+				s.dictionary = g.Dictionary.Copy()
+
 				s.ws.Broadcasters.Generation.Broadcast(*g)
 			}
-
-			s.dictionary = g.Dictionary.Copy()
 
 			return nil
 		}
