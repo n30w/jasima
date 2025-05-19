@@ -722,9 +722,8 @@ func (s *ConlangServer) wait(t time.Duration) Job {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(t):
+			return nil
 		}
-
-		return nil
 	}
 }
 
