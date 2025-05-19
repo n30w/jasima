@@ -22,10 +22,19 @@ const (
 	defaultOllamaSleepDuration = time.Second * 2
 )
 
+type ollamaRequestClient int
+
+const (
+	useHttpClientRequest ollamaRequestClient = iota
+	useOllamaClientRequest
+)
+
 type Ollama struct {
 	*llm[ol.ChatRequest]
-	logger *log.Logger
-	hc     *network.HttpRequestClient[ol.ChatResponse]
+	logger     *log.Logger
+	hc         *network.HttpRequestClient[ol.ChatResponse]
+	Client     *ol.Client
+	clientMode ollamaRequestClient
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
@@ -144,6 +153,8 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
+	var result string
+
 	t, err := c.llm.request(ctx, messages)
 	if err != nil {
 		return "", err
@@ -151,19 +162,30 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 
 	c.config.Messages = c.prepare(messages)
 
+	if c.clientMode == useHttpClientRequest {
+
+	}
+
 	request, err := c.hc.PreparePost(c.config)
 	if err != nil {
 		return "", err
 	}
 
-	result, err := request(ctx)
-	if err != nil {
-		return "", err
+	select {
+	case <-ctx.Done():
+		return "", ErrDispatchContextCancelled
+	default:
+		res, err := request(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		c.logTime(t())
+
+		result = res.Message.Content
+
+		return result, nil
 	}
-
-	c.logTime(t())
-
-	return result.Message.Content, nil
 }
 
 func (c Ollama) prepare(messages []memory.Message) []ol.Message {
