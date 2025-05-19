@@ -15,6 +15,8 @@ const (
 
 	ServiceFixJSONInstructions = `Please fix this JSON for formatting errors. If there are no errors, simply return the same JSON. If there are errors, please correct the JSON and send back the corrected version. Response with a JSON object of this schema: { 'corrected': string }. Please do not prettify the JSON.`
 
+	ServiceChooseInterestingWordsFromText = `From these batch of Toki Pona words, please send back a response containing a list of up to five interesting words and no less than one.`
+
 	stopClause = `Should you feel satisfied with the conversation or if the matters have been resolved, please set 'stop' in your JSON response object to true. Also, please indicate that you'd like to stop the conversation in your response. The other agent(s) must agree to also cease the conversation. Else, the discussion must continue. You can make sure everyone is on the same page. This is a conversation, after all.`
 
 	langExchange = `Because you are bilingual in English and Toki Pona, you can converse with your interlocutors in both. They have the same specifications as you do. There is no need to translate what you are saying as they should understand you. However, if they make a mistake in the language, you can correct them. `
