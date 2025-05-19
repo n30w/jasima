@@ -44,6 +44,8 @@ func (c Deepseek) Request(
 ) (string, error) {
 	c.config = c.buildRequestParams(rc)
 
+	// TODO Add request error checking for JSON.
+
 	v, err := c.request(ctx, messages)
 	if err != nil {
 		return "", err
