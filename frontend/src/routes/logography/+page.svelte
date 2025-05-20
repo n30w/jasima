@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fade, fly } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
 	import type { PageProps } from './$types';
 	import { quintOut } from 'svelte/easing';
 	import { typewriter } from '$lib/typewriter';

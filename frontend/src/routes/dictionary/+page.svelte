@@ -32,7 +32,7 @@
 
 		es.onerror = (err) => {
 			console.error('SSE error:', err);
-			// es.close(); // Optional: close on error
+			es.close(); // Optional: close on error
 		};
 
 		return () => es.close(); // Clean up when component unmounts
@@ -52,19 +52,28 @@
 
 		es2.onerror = (err) => {
 			console.error('SSE error:', err);
+			es2.close();
 		};
 
 		return () => es2.close();
 	});
 
 	const isCurrUsed = (v: string): boolean => currUsed.includes(v);
+	const getStagger = (): string => {
+		let offset = Math.random();
+		if (offset < 0.4) {
+			offset = 0.4;
+		}
+
+		return ``;
+	};
 </script>
 
 <div class="flex flex-wrap gap-1 p-2">
 	{#each currDict as [key, value] (key)}
 		<div
 			class={[
-				'h-fit max-w-1/3 border-1 p-2 transition-all duration-150 ease-in',
+				'max-w-1/3 border-1 h-fit p-2 transition-all duration-150 ease-in',
 				isCurrUsed(value.word) && 'bg-green-300'
 			]}
 		>
