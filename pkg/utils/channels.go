@@ -6,8 +6,14 @@ import (
 )
 
 // SendWithContext wraps a select and panic recover function that sends a value
-// to a channel while also respecting context.
-func SendWithContext[T any](ctx context.Context, ch chan<- T, val T) (err error) {
+// to a channel while also respecting context. Optional callbacks can be added
+// as well.
+func SendWithContext[T any](
+	ctx context.Context,
+	ch chan<- T,
+	val T,
+	callbacks ...func(),
+) (err error) {
 	// Ignores error not checked.
 	//nolint:errcheck
 	defer func() error {
@@ -25,6 +31,11 @@ func SendWithContext[T any](ctx context.Context, ch chan<- T, val T) (err error)
 	case <-ctx.Done():
 		return ctx.Err()
 	case ch <- val:
+		if len(callbacks) > 0 {
+			for _, f := range callbacks {
+				f()
+			}
+		}
 		return nil
 	}
 }
