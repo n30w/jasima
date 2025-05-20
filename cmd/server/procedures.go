@@ -421,7 +421,7 @@ func (s *ConlangServer) iterateLogogram(
 
 	s.ws.Broadcasters.LogogramDisplay.Broadcast(logoIter)
 
-	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`
+	// In case the agents go out of control, cap `i` at `DefaultMaxExchanges`.
 
 	for (!adversaryOk || !generatorOk) && i <= DefaultMaxExchanges {
 		select {

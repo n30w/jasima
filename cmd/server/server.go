@@ -53,7 +53,7 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan memory.ResponseDictionaryEntries
-	procedures      chan utils.Queue[jobs]
+	jobsChan        chan utils.Queue[jobs]
 	dictionary      memory.DictionaryGeneration
 	generations     utils.Queue[memory.Generation]
 	ws              *network.WebServer
@@ -164,7 +164,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
-		procedures:      make(chan utils.Queue[[]job], 100),
+		jobsChan:        make(chan utils.Queue[[]job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
@@ -340,7 +340,7 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 }
 
 func (s *ConlangServer) ProcessJobs(ctx context.Context) {
-	for procs := range s.procedures {
+	for procs := range s.jobsChan {
 		for p, err := procs.Dequeue(); err == nil; p, err = procs.Dequeue() {
 			select {
 			case <-ctx.Done():
@@ -456,7 +456,7 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 
 		_ = q.Enqueue(initializeProcs)
 
-		err = utils.SendWithContext(ctx, s.procedures, q)
+		err = utils.SendWithContext(ctx, s.jobsChan, q)
 		if err != nil {
 			s.errs <- err
 			return
@@ -469,7 +469,7 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		for range s.config.procedures.maxGenerations {
 			_ = gq.Enqueue(evolveProcs)
 
-			err = utils.SendWithContext(ctx, s.procedures, gq)
+			err = utils.SendWithContext(ctx, s.jobsChan, gq)
 			if err != nil {
 				s.errs <- err
 				return
@@ -480,7 +480,7 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 
 		_ = eq.Enqueue(exportProcs)
 
-		err = utils.SendWithContext(ctx, s.procedures, eq)
+		err = utils.SendWithContext(ctx, s.jobsChan, eq)
 		if err != nil {
 			s.errs <- err
 			return
@@ -534,5 +534,5 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 func (s *ConlangServer) Teardown() {
 	close(s.procedureChan)
 	close(s.dictUpdatesChan)
-	close(s.procedures)
+	close(s.jobsChan)
 }
