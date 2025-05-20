@@ -358,7 +358,7 @@ func (s *ConlangServer) ProcessJobs(ctx context.Context) {
 							s.errs <- err
 							return
 						}
-						s.logger.Info("Job complete", "time", j.time())
+						s.logger.Infof("job complete: %s", j)
 					}
 				}
 			}

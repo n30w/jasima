@@ -569,7 +569,7 @@ type jobs = []job
 
 type job interface {
 	do(ctx context.Context) error
-	time() string
+	String() string
 }
 
 type procedure struct {
@@ -586,8 +586,8 @@ func (j *procedure) do(ctx context.Context) error {
 	return j.exec(ctx)
 }
 
-func (j *procedure) time() string {
-	return j.elapsed.String()
+func (j *procedure) String() string {
+	return fmt.Sprintf("%s %s", j.name, j.elapsed)
 }
 
 func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) Job {
