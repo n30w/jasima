@@ -18,6 +18,7 @@ type GoogleGemini struct {
 	client *genai.Client
 }
 
+// TODO gemini temp mult by 2
 func NewGoogleGemini(
 	apiKey string,
 	mc ModelConfig,
@@ -52,11 +53,11 @@ func NewGoogleGemini(
 
 func (c GoogleGemini) buildRequestParams(rc *RequestConfig) *genai.GenerateContentConfig {
 	params := &genai.GenerateContentConfig{
-		Temperature:     genai.Ptr(float32(c.setTemperature(c.defaultConfig.Temperature))),
-		MaxOutputTokens: int32(c.defaultConfig.MaxTokens),
-		Seed:            genai.Ptr(int32(c.defaultConfig.Seed)),
-		// PresencePenalty:  genai.Ptr(float32(c.defaultConfig.PresencePenalty)),
-		// FrequencyPenalty: genai.Ptr(float32(c.defaultConfig.FrequencyPenalty)),
+		Temperature:     genai.Ptr(float32(c.setTemperature(c.defaultRequestConfig.Temperature))),
+		MaxOutputTokens: int32(c.defaultRequestConfig.MaxTokens),
+		Seed:            genai.Ptr(int32(c.defaultRequestConfig.Seed)),
+		// PresencePenalty:  genai.Ptr(float32(c.defaultRequestConfig.PresencePenalty)),
+		// FrequencyPenalty: genai.Ptr(float32(c.defaultRequestConfig.FrequencyPenalty)),
 	}
 
 	if rc != nil {
@@ -88,7 +89,7 @@ func (c GoogleGemini) Request(
 	messages []memory.Message,
 	rc *RequestConfig,
 ) (string, error) {
-	c.config = c.buildRequestParams(rc)
+	c.requestConfig = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
@@ -142,7 +143,7 @@ func (c GoogleGemini) request(
 				rCtx,
 				c.model.String(),
 				contents,
-				c.config,
+				c.requestConfig,
 			)
 		}
 
@@ -242,10 +243,10 @@ func RequestTypedGoogleGemini[T any](
 		return "", errors.Wrap(err, "failed to retrieve schema for gemini")
 	}
 
-	llm.config = llm.buildRequestParams(rc)
+	llm.requestConfig = llm.buildRequestParams(rc)
 
-	llm.config.ResponseMIMEType = "application/json"
-	llm.config.ResponseSchema = s.gemini
+	llm.requestConfig.ResponseMIMEType = "application/json"
+	llm.requestConfig.ResponseSchema = s.gemini
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {

@@ -57,7 +57,7 @@ tasks:
       - go run ./cmd/agent -configFile="./cmd/configs/sys_agent_logogram.toml" -debug=true -model=1 -name="SYSTEM_AGENT_E" -temperature=0.75
   run-server:
     cmds:
-      - go run ./cmd/server -debug=true -logToFile=false -exchanges=7 -generations=2 -broadcastTestData=false
+      - go run ./cmd/server -debug=false -logToFile=false -exchanges=15 -generations=4 -broadcastTestData=false
   run-web:
     cmds:
       - cd frontend && pnpm dev

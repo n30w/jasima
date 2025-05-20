@@ -14,6 +14,7 @@ type Deepseek struct {
 	*openAIClient
 }
 
+// TODO deepseek temp mult by 2
 func NewDeepseek(apiKey string, mc ModelConfig, l *log.Logger) (
 	*Deepseek,
 	error,
@@ -42,7 +43,7 @@ func (c Deepseek) Request(
 	messages []memory.Message,
 	rc *RequestConfig,
 ) (string, error) {
-	c.config = c.buildRequestParams(rc)
+	c.requestConfig = c.buildRequestParams(rc)
 
 	// TODO Add request error checking for JSON.
 

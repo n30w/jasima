@@ -20,25 +20,63 @@ const (
 	defaultSleepDuration = 10 * time.Second
 )
 
-// llm is a base type for a Large Language Model. The generic `T` is the type
-// for the request configuration, passed to the model specific library
-// request method.
-type llm[T any] struct {
+type llmRequester[T any] interface {
+	buildRequestParams(...func(*T) error) error
+	request(context.Context, []memory.Message) (string, error)
+}
+
+type llmBase struct {
 	// model is the llm service provider.
 	model LLMProvider
 
 	// instructions are the system instructions for the model.
 	instructions string
 
-	// defaultConfig is the default configuration for a given model.
-	defaultConfig *RequestConfig
+	// logger is for logging data to the console.
+	logger *log.Logger
+}
 
-	// config is the configuration used for each request of the LLM.
-	config *T
+func (l *llmBase) SetInstructions(s string) {
+	l.instructions = s
+}
 
-	// apiUrl is the URL to use for API requests. If nil, a default
-	// is used.
-	apiUrl *url.URL
+func (l *llmBase) AppendInstructions(s string) {
+	l.instructions = buildString(l.instructions, s)
+}
+
+func (l *llmBase) String() string {
+	return l.model.String()
+}
+
+const (
+	waitTimeBoundFraction = 0.16
+)
+
+// getWaitTime uses an upper bound ub and random seed to create
+// a time.Duration. This can be used to set request wait
+// times for API hits.
+func getWaitTime(ub time.Duration) time.Duration {
+	src := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(src)
+
+	boundMax := int64(math.Floor(float64(ub) * waitTimeBoundFraction))
+
+	rd := rng.Int63n(boundMax)
+
+	t := int64(ub) - rd
+
+	return time.Duration(t).Abs().Truncate(time.Millisecond)
+}
+
+// llm is a base type for a Large Language Model. The generic `T` is the type
+// for the request configuration, passed to the model specific library
+// request method.
+type llmRequestService[T any] struct {
+	// defaultTypedRequestConfig is the default configuration for a given model.
+	defaultTypedRequestConfig *T
+
+	// requestTypedConfig is the configuration used for each request of the LLM.
+	requestTypedConfig *T
 
 	// sleepDuration defines an upper bound for the total time
 	// the LLM will wait before making a request to the service.
@@ -46,42 +84,11 @@ type llm[T any] struct {
 	// purposes use the fastest time possible.
 	sleepDuration time.Duration
 
-	// logger is for logging data to the console.
+	// apiUrl is the URL to use for API requests. If nil, a default
+	// is used.
+	apiUrl *url.URL
+
 	logger *log.Logger
-}
-
-// newLLM creates a new llm base.
-func newLLM[T any](mc ModelConfig, l *log.Logger) (*llm[T], error) {
-	err := mc.validate()
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid model config")
-	}
-
-	u, err := url.Parse(mc.ApiUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	return &llm[T]{
-		model:         mc.Provider,
-		instructions:  mc.Instructions,
-		defaultConfig: &mc.RequestConfig,
-		apiUrl:        u,
-		logger:        l,
-		sleepDuration: defaultSleepDuration,
-	}, nil
-}
-
-func (l *llm[T]) SetInstructions(s string) {
-	l.instructions = s
-}
-
-func (l *llm[T]) AppendInstructions(s string) {
-	l.instructions = buildString(l.instructions, s)
-}
-
-func (l *llm[T]) String() string {
-	return l.model.String()
 }
 
 // request checks that a request to an LLM service is ready to be made
@@ -89,14 +96,10 @@ func (l *llm[T]) String() string {
 // values include a timer which can be used to measure the total time made
 // for a request and an error, which may be an ErrDispatchContextCancelled
 // error the caller may choose to ignore.
-func (l *llm[T]) request(ctx context.Context, messages []memory.Message) (
+func (l *llmRequestService[T]) initRequest(ctx context.Context, messages []memory.Message) (
 	func() time.Duration,
 	error,
 ) {
-	if l.config == nil {
-		return nil, errNoConfigurationProvided
-	}
-
 	if len(messages) == 0 {
 		return nil, errNoContentsInRequest
 	}
@@ -120,26 +123,19 @@ func (l *llm[T]) request(ctx context.Context, messages []memory.Message) (
 	return t, nil
 }
 
-// setTemperature remaps a temperature value, such as 0.5, to a model specific
-// value. GoogleGemini and Deepseek use a scale from 0.0 to 2.0, rather than the
-// typical 0.0 to 1.0. This function lets config parameters maintain a
-// consistent input mapping of 0.0 to 1.0 rather than having two
-// different mappings.
-func (l *llm[T]) setTemperature(t float64) float64 {
-	switch l.model {
-	case ProviderGoogleGemini_2_0_Flash:
-		fallthrough
-	case ProviderGoogleGemini_2_5_Flash:
-		fallthrough
-	case ProviderDeepseek:
-		return t * 2
-	default:
-		return t
-	}
+func (l *llmRequestService[T]) logTime(t time.Duration) {
+	l.logger.Debugf("LLM request roundtrip took %s", t)
 }
 
-func (l *llm[T]) logTime(t time.Duration) {
-	l.logger.Debugf("LLM request roundtrip took %s", t)
+func (l *llmRequestService[T]) buildParams(opts ...func(*T) error) error {
+	for _, opt := range opts {
+		err := opt(l.requestTypedConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type LLMProvider int
@@ -257,23 +253,3 @@ const (
 	errNoConfigurationProvided  llmError = "no configuration provided"
 	ErrDispatchContextCancelled llmError = "dispatch context canceled"
 )
-
-const (
-	boundFraction = 0.16
-)
-
-// getWaitTime uses an upper bound ub and random seed to create
-// a time.Duration. This can be used to set request wait
-// times for API hits.
-func getWaitTime(ub time.Duration) time.Duration {
-	src := rand.NewSource(time.Now().UnixNano())
-	rng := rand.New(src)
-
-	boundMax := int64(math.Floor(float64(ub) * boundFraction))
-
-	rd := rng.Int63n(boundMax)
-
-	t := int64(ub) - rd
-
-	return time.Duration(t).Abs().Truncate(time.Millisecond)
-}

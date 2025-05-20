@@ -19,8 +19,9 @@ const defaultChatGPTUrl = ""
 // openAIClient wraps the openai library. Use to create custom OpenAI
 // API compatible LLM services.
 type openAIClient struct {
-	*llm[openai.ChatCompletionNewParams]
-	client *openai.Client
+	*llmBase
+	chatService llmRequester[openai.ChatCompletionNewParams]
+	client      *openai.Client
 }
 
 // newOpenAIClient makes a new OpenAI API compatible client. It returns
@@ -55,36 +56,122 @@ func newOpenAIClient(
 	}
 }
 
-func (c openAIClient) buildRequestParams(rc *RequestConfig) *openai.
-	ChatCompletionNewParams {
+func makeOpenAIChatParams(rc *RequestConfig, d *RequestConfig) *openai.ChatCompletionNewParams {
 	p := &openai.ChatCompletionNewParams{
-		Seed:                openai.Int(c.defaultConfig.Seed),
-		MaxCompletionTokens: openai.Int(c.defaultConfig.MaxTokens),
-		Temperature: openai.Float(
-			c.setTemperature(
-				c.defaultConfig.
-					Temperature,
-			),
-		),
-		PresencePenalty:  openai.Float(c.defaultConfig.PresencePenalty),
-		FrequencyPenalty: openai.Float(c.defaultConfig.FrequencyPenalty),
-		Model:            c.model.String(),
+		Seed:                openai.Int(d.Seed),
+		MaxCompletionTokens: openai.Int(d.MaxTokens),
+		Temperature:         openai.Float(d.Temperature),
+		PresencePenalty:     openai.Float(d.PresencePenalty),
+		FrequencyPenalty:    openai.Float(d.FrequencyPenalty),
 	}
 
-	// If a config is provided, use it.
+	// If a requestTypedConfig is provided, use it.
 
 	if rc != nil {
 		p = &openai.ChatCompletionNewParams{
 			Seed:                openai.Int(rc.Seed),
 			MaxCompletionTokens: openai.Int(rc.MaxTokens),
-			Temperature:         openai.Float(c.setTemperature(rc.Temperature)),
+			Temperature:         openai.Float(rc.Temperature),
 			PresencePenalty:     openai.Float(rc.PresencePenalty),
 			FrequencyPenalty:    openai.Float(rc.FrequencyPenalty),
-			Model:               c.model.String(),
 		}
 	}
 
 	return p
+}
+
+// withOpenAIModel sets the model name on the OpenAI chat params.
+func withOpenAIModel(model string) func(*openai.ChatCompletionNewParams) error {
+	return func(p *openai.ChatCompletionNewParams) error {
+		p.Model = model
+		return nil
+	}
+}
+
+// withOpenAIRequestOptions applies request configuration values (temperature, penalties, etc.)
+// to the OpenAI chat params, using rc if non-nil or falling back to defaultConfig.
+func withOpenAIRequestOptions(
+	rc *RequestConfig,
+	defaultConfig *RequestConfig,
+) func(*openai.ChatCompletionNewParams) error {
+	return func(p *openai.ChatCompletionNewParams) error {
+		base := makeOpenAIChatParams(defaultConfig, defaultConfig)
+		override := makeOpenAIChatParams(rc, defaultConfig)
+		// copy settings from override if rc is non-nil, else use base
+		if rc != nil {
+			p.Temperature = override.Temperature
+			p.PresencePenalty = override.PresencePenalty
+			p.FrequencyPenalty = override.FrequencyPenalty
+			p.Seed = override.Seed
+			p.MaxCompletionTokens = override.MaxCompletionTokens
+			// copy other fields as needed
+		} else {
+			p.Temperature = base.Temperature
+			p.PresencePenalty = base.PresencePenalty
+			p.FrequencyPenalty = base.FrequencyPenalty
+			p.Seed = base.Seed
+			p.MaxCompletionTokens = base.MaxCompletionTokens
+		}
+		return nil
+	}
+}
+
+// withOpenAIMessages populates the chat params with system + user/assistant messages.
+func withOpenAIMessages(
+	messages []memory.Message,
+	instructions string,
+) func(*openai.ChatCompletionNewParams) error {
+	return func(p *openai.ChatCompletionNewParams) error {
+		// start with system instruction
+		p.Messages = []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(instructions),
+		}
+		// append each message
+		for _, msg := range messages {
+			text := msg.Text.String()
+			if msg.Role == memory.ModelRole {
+				p.Messages = append(p.Messages, openai.AssistantMessage(text))
+			} else {
+				p.Messages = append(p.Messages, openai.UserMessage(text))
+			}
+		}
+
+		return nil
+	}
+}
+
+type openAIChatService[T openai.ChatCompletionNewParams] struct {
+	defaultRequestConfig *RequestConfig
+	*llmRequestService[openai.ChatCompletionNewParams]
+	openaiClient *openai.Client
+}
+
+func (o *openAIChatService[T]) buildRequestParams(opts ...func(*openai.ChatCompletionNewParams) error) error {
+	return o.buildParams(opts...)
+}
+
+// request sends a chat completion request to OpenAI and returns the generated text.
+func (o *openAIChatService[T]) request(
+	ctx context.Context,
+	messages []memory.Message,
+) (string, error) {
+	// rate limiting / preparation
+	t, err := o.initRequest(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	defer o.logTime(t())
+
+	// execute non-streaming request
+	resp, err := o.openaiClient.Chat.Completions.New(ctx, *o.requestTypedConfig)
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", errors.Errorf("openai returned no choices")
+	}
+
+	return resp.Choices[0].Message.Content, nil
 }
 
 func (c openAIClient) request(
@@ -96,7 +183,7 @@ func (c openAIClient) request(
 		return "", err
 	}
 
-	c.config.Messages = c.prepare(messages)
+	c.requestConfig.Messages = c.prepare(messages)
 
 	var (
 		done   bool
@@ -127,7 +214,7 @@ func (c openAIClient) request(
 		case <-rCtx.Done():
 			return "", rCtx.Err()
 		default:
-			res, err = c.client.Chat.Completions.New(ctx, *c.config)
+			res, err = c.client.Chat.Completions.New(ctx, *c.requestConfig)
 			if err != nil {
 				ok := errors.As(err, &apiErr)
 				if ok {
@@ -199,4 +286,8 @@ func (c openAIClient) prepare(
 	}
 
 	return contents
+}
+
+func (c openAIClient) setTemperature(t float64) float64 {
+	return t
 }

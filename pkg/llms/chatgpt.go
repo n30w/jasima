@@ -44,7 +44,7 @@ func (c OpenAIChatGPT) Request(
 	messages []memory.Message,
 	rc *RequestConfig,
 ) (string, error) {
-	c.config = c.buildRequestParams(rc)
+	c.requestConfig = c.buildRequestParams(rc)
 
 	v, err := c.request(ctx, messages)
 	if err != nil {
@@ -74,8 +74,8 @@ func RequestTypedChatGPT[T any](
 		return "", errors.Wrap(err, "failed to retrieve schema for ChatGPT")
 	}
 
-	llm.config = llm.buildRequestParams(rc)
-	llm.config.ResponseFormat = openai.
+	llm.requestConfig = llm.buildRequestParams(rc)
+	llm.requestConfig.ResponseFormat = openai.
 		ChatCompletionNewParamsResponseFormatUnion{
 		OfJSONSchema: &openai.
 			ResponseFormatJSONSchemaParam{

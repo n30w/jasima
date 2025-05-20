@@ -47,18 +47,22 @@ const (
 
 type ollamaUseStreaming bool
 
+type ollamaUseGenerate bool
+
 type OllamaModelConfig struct {
 	OllamaClientMode   int
 	OllamaUseStreaming bool
+	OllamaUseGenerate  bool
 }
 
 type Ollama struct {
-	*llm[ol.ChatRequest]
-	logger       *log.Logger
-	hc           *network.HttpRequestClient[ol.ChatResponse]
-	olClient     *ol.Client
-	clientMode   ollamaRequestClientType
-	useStreaming ollamaUseStreaming
+	*llmBase
+	chatService     llmRequester[ol.ChatRequest]
+	generateService llmRequester[ol.GenerateRequest]
+	logger          *log.Logger
+	clientMode      ollamaRequestClientType
+	useStreaming    ollamaUseStreaming
+	useGenerate     ollamaUseGenerate
 }
 
 // NewOllama creates a new Ollama LLM service. `url` is the URL of the server
@@ -99,14 +103,6 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	g.Temperature = mc.Temperature
 	newConf.RequestConfig = *g
 
-	nl, err := newLLM[ol.ChatRequest](newConf, l)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create ollama client")
-	}
-
-	nl.sleepDuration = defaultOllamaSleepDuration
-	nl.apiUrl = u
-
 	cm, err := newOllamaRequestClientType(mc.Configs.OllamaClientMode)
 	if err != nil {
 		return nil, err
@@ -115,28 +111,39 @@ func NewOllama(_ string, mc ModelConfig, l *log.Logger) (
 	us := ollamaUseStreaming(mc.Configs.OllamaUseStreaming)
 
 	return &Ollama{
-		llm:          nl,
+		chatService: &ollamaChatService[ol.ChatRequest]{
+			olClient:             olc,
+			httpClient:           hc,
+			clientType:           cm,
+			defaultRequestConfig: defaultOllamaRequestConfig,
+			llmRequestService: &llmRequestService[ol.ChatRequest]{
+				requestTypedConfig: &ol.ChatRequest{},
+				sleepDuration:      defaultOllamaSleepDuration,
+				apiUrl:             u,
+			},
+		},
+		generateService: &ollamaGenerateService[ol.GenerateRequest]{
+			defaultRequestConfig: defaultOllamaRequestConfig,
+			llmRequestService: &llmRequestService[ol.GenerateRequest]{
+				requestTypedConfig: &ol.GenerateRequest{},
+				sleepDuration:      defaultOllamaSleepDuration,
+				apiUrl:             u,
+			},
+		},
 		logger:       l,
-		hc:           hc,
-		olClient:     olc,
 		clientMode:   cm,
 		useStreaming: us,
 	}, nil
 }
 
-func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
+func makeOllamaOptions(rc *RequestConfig, d *RequestConfig) (map[string]any, error) {
 	p := &ol.Options{
-		Seed: int(c.defaultConfig.Seed),
-		TopK: int(c.defaultConfig.TopK),
-		TopP: float32(c.defaultConfig.TopP),
-		Temperature: float32(
-			c.setTemperature(
-				c.defaultConfig.
-					Temperature,
-			),
-		),
-		PresencePenalty:  float32(c.defaultConfig.PresencePenalty),
-		FrequencyPenalty: float32(c.defaultConfig.FrequencyPenalty),
+		Seed:             int(d.Seed),
+		TopK:             int(d.TopK),
+		TopP:             float32(d.TopP),
+		Temperature:      float32(d.Temperature),
+		PresencePenalty:  float32(d.PresencePenalty),
+		FrequencyPenalty: float32(d.FrequencyPenalty),
 	}
 
 	if rc != nil {
@@ -144,7 +151,7 @@ func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
 			Seed:             int(rc.Seed),
 			TopK:             int(rc.TopK),
 			TopP:             float32(rc.TopP),
-			Temperature:      float32(c.setTemperature(rc.Temperature)),
+			Temperature:      float32(rc.Temperature),
 			PresencePenalty:  float32(rc.PresencePenalty),
 			FrequencyPenalty: float32(rc.FrequencyPenalty),
 		}
@@ -155,14 +162,180 @@ func (c Ollama) buildRequestParams(rc *RequestConfig) (*ol.ChatRequest, error) {
 		return nil, errors.Wrap(err, "failed to convert struct to map")
 	}
 
-	b := bool(c.useStreaming)
+	return m, nil
+}
 
-	return &ol.ChatRequest{
-		Model:     c.model.String(),
-		Stream:    &b,
-		Options:   m,
-		KeepAlive: &ol.Duration{Duration: 1 * time.Minute},
-	}, nil
+func withOllamaFormat[T any]() func(*ol.ChatRequest) error {
+	return func(c *ol.ChatRequest) error {
+		_, err := lookupType[T]()
+		if err != nil {
+			return errors.Wrap(err, "failed to lookup type")
+		}
+
+		b, err := utils.GenerateJsonSchema[T]()
+		if err != nil {
+			return errors.Wrap(err, "failed to generate json schema")
+		}
+
+		c.Format = b
+		return nil
+	}
+}
+
+func withOllamaMessages(
+	messages []memory.Message,
+	instructions string,
+) func(*ol.ChatRequest) error {
+	return func(c *ol.ChatRequest) error {
+		// Add 1 for system instructions.
+		l := len(messages) + 1
+
+		contents := make([]ol.Message, l)
+
+		contents[0] = ol.Message{
+			Role:    "system",
+			Content: instructions,
+		}
+
+		for _, v := range messages {
+			r := "user"
+			if v.Role == memory.ModelRole {
+				r = "assistant"
+			}
+
+			content := ol.Message{
+				Role:    r,
+				Content: v.Text.String(),
+			}
+
+			contents = append(contents, content)
+		}
+
+		c.Messages = contents
+
+		return nil
+	}
+}
+
+func withOllamaStreaming(s ollamaUseStreaming) func(*ol.ChatRequest) error {
+	return func(c *ol.ChatRequest) error {
+		b := bool(s)
+		c.Stream = &b
+		return nil
+	}
+}
+
+func withOllamaRequestOptions(
+	rc *RequestConfig,
+	d *RequestConfig,
+) func(*ol.ChatRequest) error {
+	return func(req *ol.ChatRequest) error {
+		m, err := makeOllamaOptions(rc, d)
+		if err != nil {
+			return err
+		}
+
+		req.Options = m
+
+		return nil
+	}
+}
+
+func withOllamaModel(m string) func(*ol.ChatRequest) error {
+	return func(req *ol.ChatRequest) error {
+		req.Model = m
+		return nil
+	}
+}
+
+type ollamaChatService[T ol.ChatRequest] struct {
+	defaultRequestConfig *RequestConfig
+	*llmRequestService[ol.ChatRequest]
+	httpClient *network.HttpRequestClient[ol.ChatResponse]
+	olClient   *ol.Client
+	clientType ollamaRequestClientType
+}
+
+func (o *ollamaChatService[T]) buildRequestParams(opts ...func(*ol.ChatRequest) error) error {
+	return o.buildParams(opts...)
+}
+
+func (o *ollamaChatService[T]) request(
+	ctx context.Context,
+	messages []memory.Message,
+) (string, error) {
+	t, err := o.initRequest(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+
+	defer o.logTime(t())
+
+	select {
+	case <-ctx.Done():
+		return "", ErrDispatchContextCancelled
+	default:
+		var result strings.Builder
+
+		respFunc := func(resp ol.ChatResponse) error {
+			select {
+			case <-ctx.Done():
+				return ErrDispatchContextCancelled
+			default:
+				result.WriteString(resp.Message.Content)
+			}
+
+			return nil
+		}
+
+		if *o.requestTypedConfig.Stream || o.clientType == useOllamaClientRequest {
+			select {
+			case <-ctx.Done():
+				return "", ErrDispatchContextCancelled
+			default:
+				err = o.olClient.Chat(ctx, o.requestTypedConfig, respFunc)
+				if err != nil {
+					return "", err
+				}
+			}
+
+			return result.String(), nil
+		}
+
+		request, err := o.httpClient.PreparePost(o.requestTypedConfig)
+		if err != nil {
+			return "", err
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ErrDispatchContextCancelled
+		default:
+			res, err := request(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			return res.Message.Content, nil
+		}
+	}
+}
+
+type ollamaGenerateService[T ol.GenerateRequest] struct {
+	defaultRequestConfig *RequestConfig
+	*llmRequestService[ol.GenerateRequest]
+}
+
+func (o *ollamaGenerateService[T]) buildRequestParams(opts ...func(*ol.GenerateRequest) error) error {
+	return o.buildParams(opts...)
+}
+
+func (o *ollamaGenerateService[T]) request(ctx context.Context, messages []memory.Message) (
+	string,
+	error,
+) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (c Ollama) Request(
@@ -173,11 +346,14 @@ func (c Ollama) Request(
 	string,
 	error,
 ) {
-	var err error
-
-	c.config, err = c.buildRequestParams(rc)
+	err := c.chatService.buildRequestParams(
+		withOllamaModel(c.model.String()),
+		withOllamaStreaming(c.useStreaming),
+		withOllamaRequestOptions(rc, defaultOllamaRequestConfig),
+		withOllamaMessages(messages, c.instructions),
+	)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to build request params")
+		return "", err
 	}
 
 	v, err := c.request(ctx, messages)
@@ -194,102 +370,27 @@ func (c Ollama) request(ctx context.Context, messages []memory.Message) (
 	string,
 	error,
 ) {
-	t, err := c.llm.request(ctx, messages)
-	if err != nil {
-		return "", err
-	}
+	var s string
+	var err error
 
-	defer c.logTime(t())
-
-	c.config.Messages = c.prepare(messages)
-
-	if c.clientMode == useOllamaClientRequest || c.useStreaming {
-		return c.olClientRequest(ctx)
-	}
-
-	return c.httpRequest(ctx)
-}
-
-func (c Ollama) olClientRequest(ctx context.Context) (string, error) {
-	var result strings.Builder
-
-	respFunc := func(resp ol.ChatResponse) error {
-		select {
-		case <-ctx.Done():
-			return ErrDispatchContextCancelled
-		default:
-			result.WriteString(resp.Message.Content)
-		}
-
-		return nil
-	}
-
-	select {
-	case <-ctx.Done():
-		return "", ErrDispatchContextCancelled
-	default:
-		select {
-		case <-ctx.Done():
-			return "", ErrDispatchContextCancelled
-		default:
-			err := c.olClient.Chat(ctx, c.config, respFunc)
-			if err != nil {
-				return "", err
-			}
-
-			return result.String(), nil
-		}
-	}
-}
-
-func (c Ollama) httpRequest(ctx context.Context) (string, error) {
-	request, err := c.hc.PreparePost(c.config)
-	if err != nil {
-		return "", err
-	}
-
-	select {
-	case <-ctx.Done():
-		return "", ErrDispatchContextCancelled
-	default:
-		res, err := request(ctx)
+	if c.useGenerate {
+		s, err = c.generateService.request(ctx, messages)
 		if err != nil {
 			return "", err
 		}
-
-		return res.Message.Content, nil
-	}
-}
-
-func (c Ollama) prepare(messages []memory.Message) []ol.Message {
-	// Add 1 for system instructions.
-	l := len(messages) + 1
-
-	contents := make([]ol.Message, l)
-
-	contents[0] = ol.Message{
-		Role:    "system",
-		Content: c.instructions,
+	} else {
+		s, err = c.chatService.request(ctx, messages)
 	}
 
-	for _, v := range messages {
-		r := "user"
-		if v.Role == memory.ModelRole {
-			r = "assistant"
-		}
-		content := ol.Message{
-			Role:    r,
-			Content: v.Text.String(),
-		}
-
-		contents = append(contents, content)
-	}
-
-	return contents
+	return s, err
 }
 
 func (c Ollama) String() string {
 	return fmt.Sprintf("Ollama %s", c.model)
+}
+
+func (c Ollama) setTemperature(t float64) float64 {
+	return t
 }
 
 func RequestTypedOllama[T any](
@@ -303,22 +404,16 @@ func RequestTypedOllama[T any](
 		result string
 	)
 
-	_, err = lookupType[T]()
+	err = llm.chatService.buildRequestParams(
+		withOllamaModel(llm.model.String()),
+		withOllamaStreaming(llm.useStreaming),
+		withOllamaRequestOptions(rc, defaultOllamaRequestConfig),
+		withOllamaFormat[T](),
+		withOllamaMessages(messages, llm.instructions),
+	)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to lookup type")
+		return "", err
 	}
-
-	llm.config, err = llm.buildRequestParams(rc)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to build request params")
-	}
-
-	s, err := utils.GenerateJsonSchema[T]()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to generate json schema")
-	}
-
-	llm.config.Format = s
 
 	result, err = llm.request(ctx, messages)
 	if err != nil {
