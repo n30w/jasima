@@ -195,55 +195,55 @@ func (s *ConlangServer) iterate(
 				s.logger.Infof("Exchange Total: %d/%d", i+1, exchanges)
 			}
 		}
-	}
 
-	s.resetAgents(ctx, clients)
+		s.resetAgents(ctx, clients)
 
-	sb.Reset()
-
-	// The system agent will ONLY summarize the chat log, and not read the
-	// other Specifications for other layers (for now at least).
-
-	err = s.swc(ctx, addSysAgentInstructions)
-	if err != nil {
-		return newGeneration, err
-	}
-
-	err = s.swc(ctx, s.cmd(agent.Unlatch)(sysClient))
-	if err != nil {
-		return newGeneration, err
-	}
-
-	msg := s.messageToSystemAgent(
-		sysClient.Name,
-		transcriptToString(newGeneration.Transcript[initialLayer]),
-	)
-
-	err = s.swc(ctx, msg)
-	if err != nil {
-		return newGeneration, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return newGeneration, nil
-	case specPrime := <-s.gs.Channel.ToServer:
 		sb.Reset()
 
-		s.resetAgent(ctx, sysClient)
+		// The system agent will ONLY summarize the chat log, and not read the
+		// other Specifications for other layers (for now at least).
 
-		s.logger.Infof("%s took %s to complete", initialLayer, timer())
-
-		newGeneration.Specifications[initialLayer] = specPrime.Text
-		s.ws.Broadcasters.Specification.Broadcast(newGeneration.Specifications)
-
-		// End of side effects.
-
-		if initialLayer == chat.DictionaryLayer {
-			s.iterateUpdateDictionary(ctx, newGeneration)
+		err = s.swc(ctx, addSysAgentInstructions)
+		if err != nil {
+			return newGeneration, err
 		}
 
-		return newGeneration, nil
+		err = s.swc(ctx, s.cmd(agent.Unlatch)(sysClient))
+		if err != nil {
+			return newGeneration, err
+		}
+
+		msg := s.messageToSystemAgent(
+			sysClient.Name,
+			transcriptToString(newGeneration.Transcript[initialLayer]),
+		)
+
+		err = s.swc(ctx, msg)
+		if err != nil {
+			return newGeneration, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return newGeneration, nil
+		case specPrime := <-s.gs.Channel.ToServer:
+			sb.Reset()
+
+			s.resetAgent(ctx, sysClient)
+
+			s.logger.Infof("%s took %s to complete", initialLayer, timer())
+
+			newGeneration.Specifications[initialLayer] = specPrime.Text
+			s.ws.Broadcasters.Specification.Broadcast(newGeneration.Specifications)
+
+			// End of side effects.
+
+			if initialLayer == chat.DictionaryLayer {
+				s.iterateUpdateDictionary(ctx, newGeneration)
+			}
+
+			return newGeneration, nil
+		}
 	}
 }
 
@@ -563,6 +563,31 @@ func (s *ConlangServer) WaitForClients(total int) Job {
 
 		return nil
 	}
+}
+
+type jobs = []job
+
+type job interface {
+	do(ctx context.Context) error
+	time() string
+}
+
+type procedure struct {
+	name    string
+	exec    Job
+	elapsed time.Duration
+}
+
+func (j *procedure) do(ctx context.Context) error {
+	t := utils.Timer(time.Now())
+	defer func() {
+		j.elapsed = t()
+	}()
+	return j.exec(ctx)
+}
+
+func (j *procedure) time() string {
+	return j.elapsed.String()
 }
 
 func (s *ConlangServer) iterateSpecs(i int, g *memory.Generation) Job {

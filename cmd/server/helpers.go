@@ -379,7 +379,3 @@ func (s *ConlangServer) resetAgent(ctx context.Context, c *network.ChatClient) {
 func (s *ConlangServer) swc(ctx context.Context, msg *chat.Message) error {
 	return utils.SendWithContext(ctx, s.gs.Channel.ToClients, msg)
 }
-
-func newJobBatch[T any](b []T) (utils.Queue[T], error) {
-	return utils.NewQueueFromSlice[T](b)
-}

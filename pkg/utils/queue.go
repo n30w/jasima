@@ -214,7 +214,7 @@ func NewQueueFromSlice[T any](s []T) (Queue[T], error) {
 	}
 
 	for _, v := range s {
-		err := q.Enqueue(v)
+		err = q.Enqueue(v)
 		if err != nil {
 			return nil, errors.Wrap(err, errMsg)
 		}

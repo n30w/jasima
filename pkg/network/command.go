@@ -49,17 +49,21 @@ func SendCommandBuilder(
 		for _, c := range clients {
 			var wg sync.WaitGroup
 			wg.Add(1)
-			go func() {
+			go func(c *ChatClient) {
 				defer wg.Done()
+				var wg2 sync.WaitGroup
 				select {
 				case <-ctx.Done():
 					return
 				default:
 					for _, cmd := range commands {
+						wg2.Add(1)
 						_ = utils.SendWithContext(ctx, pool, cmd(c))
+						wg2.Done()
 					}
 				}
-			}()
+				wg2.Wait()
+			}(c)
 			wg.Wait()
 		}
 	}
