@@ -26,7 +26,7 @@
 
 		es.onerror = (err) => {
 			console.error('SSE error:', err);
-			// es.close(); // Optional: close on error
+			es.close(); // Optional: close on error
 		};
 
 		return () => es.close(); // Clean up when component unmounts

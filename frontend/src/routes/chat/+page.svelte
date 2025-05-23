@@ -7,7 +7,8 @@
 	const { data }: PageProps = $props();
 
 	// const src = 'http://127.0.0.1:7070/chat';
-	const src = data.chatSrc;
+	// const src = data.chatSrc;
+	const src = '/api/chat-proxy';
 
 	let val: Message = $state.raw({
 		text: '',

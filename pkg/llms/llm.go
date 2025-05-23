@@ -163,7 +163,7 @@ func (l LLMProvider) String() string {
 	case ProviderDeepseek:
 		s = "deepseek-chat"
 	case ProviderOllama:
-		s = "qwen3:30b-a3b"
+		s = "qwen3:30b"
 	case ProviderClaude:
 		s = "claude-3-5-haiku-20241022"
 	default:

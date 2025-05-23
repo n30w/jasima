@@ -14,22 +14,20 @@ func BuildRouter[T any](
 	routes ...func(context.Context, T) error,
 ) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		route := func(mCtx context.Context, msg T) error {
+		route := func(ctx context.Context, msg T) error {
+			var err error
+
 			for _, f := range routes {
 				select {
-				case <-mCtx.Done():
+				case <-ctx.Done():
 					return nil
 				default:
-					select {
-					case <-mCtx.Done():
-						return nil
-					default:
-						err := f(mCtx, msg)
-						if err != nil {
-							return err
-						}
-					}
+					err = f(ctx, msg)
 				}
+			}
+
+			if err != nil {
+				return err
 			}
 
 			return nil

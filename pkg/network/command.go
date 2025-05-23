@@ -2,9 +2,11 @@ package network
 
 import (
 	"context"
+	"sync"
 
 	"codeberg.org/n30w/jasima/pkg/agent"
 	"codeberg.org/n30w/jasima/pkg/chat"
+	"codeberg.org/n30w/jasima/pkg/utils"
 )
 
 type (
@@ -44,17 +46,25 @@ func SendCommandBuilder(
 	...MessageFor,
 ) {
 	return func(clients []*ChatClient, commands ...MessageFor) {
-		if pool == nil {
-			return
-		}
 		for _, c := range clients {
-			for _, cmd := range commands {
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func(c *ChatClient) {
+				defer wg.Done()
+				var wg2 sync.WaitGroup
 				select {
 				case <-ctx.Done():
 					return
-				case pool <- cmd(c):
+				default:
+					for _, cmd := range commands {
+						wg2.Add(1)
+						_ = utils.SendWithContext(ctx, pool, cmd(c))
+						wg2.Done()
+					}
 				}
-			}
+				wg2.Wait()
+			}(c)
+			wg.Wait()
 		}
 	}
 }

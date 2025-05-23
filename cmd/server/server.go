@@ -53,7 +53,7 @@ type ConlangServer struct {
 	config          *config
 	procedureChan   chan memory.Message
 	dictUpdatesChan chan memory.ResponseDictionaryEntries
-	procedures      chan utils.Queue[Job]
+	jobsChan        chan utils.Queue[jobs]
 	dictionary      memory.DictionaryGeneration
 	generations     utils.Queue[memory.Generation]
 	ws              *network.WebServer
@@ -164,7 +164,7 @@ func NewConlangServer(
 		// Make channel buffered with 1 spot, since it will only be used by that
 		// many concurrent processes at a time.
 		dictUpdatesChan: make(chan memory.ResponseDictionaryEntries, 1),
-		procedures:      make(chan utils.Queue[Job], 1),
+		jobsChan:        make(chan utils.Queue[[]job], 100),
 		dictionary:      dictionaryGen1,
 		config:          cfg,
 		logger:          l,
@@ -177,12 +177,9 @@ func NewConlangServer(
 
 func (s *ConlangServer) Router(ctx context.Context) {
 	var (
-		eventsRoute = func(ctx context.Context, pbMsg *chat.Message) error {
-			msg := *memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
+		msg memory.Message
 
+		eventsRoute = func(ctx context.Context, pbMsg *chat.Message) error {
 			err := s.ws.InitialData.RecentMessages.Enqueue(msg)
 			if err != nil {
 				s.logger.Errorf("failed to save message to InitialData: %v", err)
@@ -192,12 +189,7 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		}
 
 		printConsoleData = func(ctx context.Context, pbMsg *chat.Message) error {
-			msg := *memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
-
-			s.logger.Debugf("MESSAGE: %+v", msg)
+			// s.logger.Debugf("MESSAGE: %+v", msg)
 
 			if msg.Command != agent.NoCommand {
 				s.logger.Debugf(
@@ -210,64 +202,63 @@ func (s *ConlangServer) Router(ctx context.Context) {
 		}
 
 		messageRoute = func(ctx context.Context, pbMsg *chat.Message) error {
-			msg := *memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
-
 			if msg.Layer == chat.SystemLayer && msg.Receiver == s.name {
-				select {
-				case <-ctx.Done():
-					return nil
-				case s.gs.Channel.ToServer <- msg:
-					return nil
-				}
+				return nil
 			}
 
-			err := s.gs.Broadcast(&msg)
-			if err != nil {
-				return errors.Wrap(err, "failed to broadcast message to clients")
-			}
-
-			return nil
+			return s.gs.Broadcast(&msg)
 		}
 
 		procedureRoute = func(ctx context.Context, pbMsg *chat.Message) error {
-			msg := *memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
+			isAgentMsg := msg.Sender != s.name && msg.Command == agent.NoCommand
 
-			if msg.Sender != s.name {
-				select {
-				case <-ctx.Done():
-					return nil
-				case s.procedureChan <- msg:
-					s.logger.Debug("Dispatching message to procedure channel")
-					return nil
-				}
+			// Match any message solely from an agent.
+			if isAgentMsg && msg.Layer != chat.SystemLayer {
+				return utils.SendWithContext(
+					ctx,
+					s.procedureChan,
+					msg,
+					func() {
+						s.logger.Debug(
+							"Dispatching message to procedure channel",
+							"sender",
+							msg.Sender,
+							"receiver",
+							msg.Receiver,
+							"layer",
+							msg.Layer,
+						)
+					},
+				)
+			} else if isAgentMsg && msg.Layer == chat.SystemLayer {
+				return utils.SendWithContext(
+					ctx,
+					s.gs.Channel.ToServer,
+					msg,
+					func() {
+						s.logger.Debug("msg sent to system channel")
+					},
+				)
 			}
 
 			return nil
 		}
 
 		saveMessage = func(ctx context.Context, pbMsg *chat.Message) error {
-			msg := *memory.NewChatMessage(
-				pbMsg.Sender, pbMsg.Receiver,
-				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
-			)
-
-			err := saveMessageTo(ctx, s.memory, msg)
-			if err != nil {
-				return errors.Wrap(err, "failed to save message to memory")
-			}
-
-			return nil
+			return saveMessageTo(ctx, s.memory, msg)
 		}
 	)
 
 	routeMessages := chat.BuildRouter[*chat.Message](
 		s.gs.Channel.ToClients,
+		// Clever for no reason. Don't do this.
+		func(ctx context.Context, pbMsg *chat.Message) error {
+			msg = *memory.NewChatMessage(
+				pbMsg.Sender, pbMsg.Receiver,
+				pbMsg.Content, pbMsg.Layer, pbMsg.Command,
+			)
+			return nil
+		},
 		printConsoleData,
 		saveMessage,
 		messageRoute,
@@ -349,17 +340,26 @@ func (s *ConlangServer) WebEvents(ctx context.Context) {
 }
 
 func (s *ConlangServer) ProcessJobs(ctx context.Context) {
-	for jobs := range s.procedures {
-		for j, err := jobs.Dequeue(); err == nil; j, err = jobs.Dequeue() {
+	for procs := range s.jobsChan {
+		for p, err := procs.Dequeue(); err == nil; p, err = procs.Dequeue() {
 			select {
 			case <-ctx.Done():
 				s.logger.Warn("Processing context cancelled")
 				return
 			default:
-				err = j(ctx)
-				if err != nil {
-					s.errs <- err
-					return
+				for _, j := range p {
+					select {
+					case <-ctx.Done():
+						s.logger.Warn("Processing context cancelled")
+						return
+					default:
+						err = j.do(ctx)
+						if err != nil {
+							s.errs <- err
+							return
+						}
+						s.logger.Infof("job complete: %s", j)
+					}
 				}
 			}
 		}
@@ -400,28 +400,63 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 			// i keeps track of the current generation.
 			i = 0
 
-			initializeJobs = []Job{
-				s.WaitForClients(11),
+			waitForClientsProc = &procedure{
+				name: "wait-for-clients",
+				exec: s.WaitForClients(11),
 			}
 
-			evolveJobs = []Job{
-				s.iterateSpecs(i, ng),
-				s.iterateDictionary(i, ng),
-				s.iterateLogograms(i, ng),
-				s.updateGenerations(i, ng),
-				s.wait(10 * time.Second),
+			iterateSpecsProc = &procedure{
+				name: "iterate-specifications",
+				exec: s.iterateSpecs(i, ng),
 			}
 
-			exportJobs = []Job{
-				s.exportData(t),
+			iterateDictionaryProc = &procedure{
+				name: "iterate-dictionary",
+				exec: s.iterateDictionary(i, ng),
+			}
+
+			iterateLogogramsProc = &procedure{
+				name: "iterate-logograms",
+				exec: s.iterateLogograms(i, ng),
+			}
+
+			updateGenerationsProc = &procedure{
+				name: "update-generations",
+				exec: s.updateGenerations(i, ng),
+			}
+
+			waitProcedureProc = &procedure{
+				name: "wait-procedure",
+				exec: s.wait(10 * time.Second),
+			}
+
+			exportDataProc = &procedure{
+				name: "export-data",
+				exec: s.exportData(t),
+			}
+
+			initializeProcs = jobs{
+				waitForClientsProc,
+			}
+
+			evolveProcs = jobs{
+				iterateSpecsProc,
+				iterateDictionaryProc,
+				iterateLogogramsProc,
+				updateGenerationsProc,
+				waitProcedureProc,
+			}
+
+			exportProcs = jobs{
+				exportDataProc,
 			}
 		)
 
-		evolution, _ := newJobBatch(evolveJobs)
-		export, _ := newJobBatch(exportJobs)
-		init, _ := newJobBatch(initializeJobs)
+		q, _ := utils.NewStaticFixedQueue[jobs](1)
 
-		err = utils.SendWithContext(ctx, s.procedures, init)
+		_ = q.Enqueue(initializeProcs)
+
+		err = utils.SendWithContext(ctx, s.jobsChan, q)
 		if err != nil {
 			s.errs <- err
 			return
@@ -429,15 +464,23 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 
 		// Add the configured number of generation iterations to the queue.
 
+		gq, _ := utils.NewStaticFixedQueue[jobs](s.config.procedures.maxGenerations)
+
 		for range s.config.procedures.maxGenerations {
-			err = utils.SendWithContext(ctx, s.procedures, evolution)
+			_ = gq.Enqueue(evolveProcs)
+
+			err = utils.SendWithContext(ctx, s.jobsChan, gq)
 			if err != nil {
 				s.errs <- err
 				return
 			}
 		}
 
-		err = utils.SendWithContext(ctx, s.procedures, export)
+		eq, _ := utils.NewStaticFixedQueue[jobs](1)
+
+		_ = eq.Enqueue(exportProcs)
+
+		err = utils.SendWithContext(ctx, s.jobsChan, eq)
 		if err != nil {
 			s.errs <- err
 			return
@@ -491,5 +534,5 @@ func (s *ConlangServer) Run(ctx context.Context, wg *sync.WaitGroup) {
 func (s *ConlangServer) Teardown() {
 	close(s.procedureChan)
 	close(s.dictUpdatesChan)
-	close(s.procedures)
+	close(s.jobsChan)
 }
